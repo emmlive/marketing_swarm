@@ -8,7 +8,7 @@ load_dotenv(override=True)
 
 # 1. THE BRAIN: Upgraded to Gemini 2.5 Flash for superior creative reasoning
 gemini_llm = LLM(
-    model="google/gemini-2.5-flash", 
+    model="gemini/gemini-2.5-flash", 
     api_key=os.getenv("GEMINI_API_KEY"),
     temperature=0.7
 )
