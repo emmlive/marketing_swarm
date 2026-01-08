@@ -1,0 +1,20 @@
+# --- CRITICAL SECRETS (Never Upload) ---
+.streamlit/secrets.toml
+.env
+
+# --- Python / Environment ---
+.venv/
+__pycache__/
+*.py[cod]
+.python-version
+
+# --- Streamlit / App ---
+.streamlit/config.toml
+static/
+final_marketing_strategy.md
+full_7day_campaign.md
+visual_strategy.md
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
