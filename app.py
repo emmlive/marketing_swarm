@@ -12,44 +12,42 @@ from io import BytesIO
 # --- 1. CRITICAL: PAGE CONFIG MUST BE FIRST ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# --- 2. THE SaaS "ZERO-BRANDING" CSS & LOGO ---
-# Converting your Google Drive link to a direct-load URL
-LOGO_URL = "https://drive.google.com/uc?export=view&id=1Jw7XreUO4yAQxUgKAZPK4sRi4mzjw_yU"
+# --- 2. THE ULTIMATE "ZERO-BRANDING" & LOGO CSS ---
+logo_url = "https://drive.google.com/uc?export=view&id=1Jw7XreUO4yAQxUgKAZPK4sRi4mzjw_yU"
+brand_bg = "#F8F9FB" 
 
 hide_style = f"""
     <style>
-    /* HIDE ALL STREAMLIT BRANDING (TOP & BOTTOM) */
-    header, footer, .stAppDeployButton, 
-    div[data-testid="stStatusWidget"], 
-    div[data-testid="stConnectionStatus"], 
-    div[data-testid="stToolbar"],
-    #MainMenu, #stDecoration {{
+    /* Hides top header, GitHub/Fork icons, footer, and bottom-right badges */
+    header, footer, div[data-testid="stStatusWidget"], 
+    div[data-testid="stConnectionStatus"], .stAppDeployButton,
+    a[href*="streamlit.io"], #stDecoration, div[data-testid="stToolbar"] {{
         visibility: hidden !important;
         display: none !important;
     }}
 
-    /* CUSTOM BACKGROUND COLOR (Professional Soft Gray) */
+    /* Custom Background */
     .stApp {{
-        background-color: #F8F9FA;
+        background-color: {brand_bg};
     }}
 
-    /* CENTERED LOGO ABOVE LOGIN FORM */
-    [data-testid="stAppViewContainer"]::before {{
+    /* Centered Logo above the login box */
+    .stApp::before {{
         content: "";
         display: block;
-        margin: 50px auto 20px auto;
-        width: 180px;
+        margin-left: auto;
+        margin-right: auto;
+        margin-top: 50px;
+        width: 180px; 
         height: 180px;
-        background-image: url("{LOGO_URL}");
+        background-image: url("{logo_url}");
         background-size: contain;
         background-repeat: no-repeat;
-        background-position: center;
     }}
 
-    /* PUSH LOGIN BOX DOWN SLIGHTLY FOR LOGO */
-    .block-container {{
-        padding-top: 2rem !important;
-    }}
+    /* Reclaims space at the top */
+    .block-container {{ padding-top: 1.5rem !important; }}
+    #MainMenu {{ visibility: hidden !important; }}
     </style>
 """
 st.markdown(hide_style, unsafe_allow_html=True)
@@ -68,14 +66,13 @@ authenticator = stauth.Authenticate(
     st.secrets['cookie']['expiry_days']
 )
 
-# --- 4. AUTHENTICATION UI (v0.3.0+) ---
+# --- 4. AUTHENTICATION UI (v0.3.0+ Fix) ---
 authenticator.login(location='main')
 
 if st.session_state.get("authentication_status") is False:
     st.error('Username/password is incorrect')
 elif st.session_state.get("authentication_status") is None:
-    # This renders the login form with your logo above it
-    st.info('Welcome to BreatheEasy AI. Please sign in to access your dashboard.')
+    st.warning('Please enter your username and password')
     
     st.divider()
     col1, col2 = st.columns(2)
@@ -97,7 +94,29 @@ elif st.session_state.get("authentication_status") is None:
 
 # --- 5. PROTECTED DASHBOARD ---
 if st.session_state.get("authentication_status"):
+    
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+    # --- HELPER FUNCTIONS ---
+    def create_word_doc(content):
+        doc = Document()
+        doc.add_heading('BreatheEasy AI Report', 0)
+        for line in content.split('\n'):
+            if line.startswith('###'): doc.add_heading(line.replace('###', '').strip(), level=2)
+            elif line.startswith('##'): doc.add_heading(line.replace('##', '').strip(), level=1)
+            else: doc.add_paragraph(line)
+        bio = BytesIO()
+        doc.save(bio)
+        return bio.getvalue()
+
+    def create_pdf(content):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        # Clean text for PDF compatibility
+        clean = content.replace('✨', '').replace('🚀', '').replace('🌬️', '').encode('latin-1', 'ignore').decode('latin-1')
+        for line in clean.split('\n'): pdf.multi_cell(0, 10, txt=line)
+        return pdf.output(dest='S').encode('latin-1')
     
     with st.sidebar:
         st.header(f"Welcome, {st.session_state['name']}!")
@@ -109,38 +128,50 @@ if st.session_state.get("authentication_status"):
         industry_map = {
             "HVAC": ["Air Duct Cleaning", "Dryer Vent Cleaning", "Heating Repair", "AC Installation"],
             "Plumbing": ["Drain Cleaning", "Water Heater Service", "Emergency Leak Repair"],
-            "Electrical": ["Panel Upgrade", "EV Charger Installation"],
-            "Landscaping": ["Lawn Maintenance", "Sprinkler Repair"],
+            "Electrical": ["Panel Upgrade", "Wiring Inspection"],
+            "Landscaping": ["Lawn Maintenance", "Seasonal Cleanup"],
             "Custom": ["Manual Entry"]
         }
         
         main_cat = st.selectbox("Select Industry", list(industry_map.keys()))
-        target_industry = main_cat if main_cat != "Custom" else st.text_input("Enter Industry")
-        target_service = st.selectbox("Select Service", industry_map[main_cat]) if main_cat != "Custom" else st.text_input("Enter Service")
+        
+        if main_cat == "Custom":
+            target_industry = st.text_input("Enter Industry")
+            target_service = st.text_input("Enter Specific Service")
+        else:
+            target_industry = main_cat
+            target_service = st.selectbox("Select Specific Service", industry_map[main_cat])
 
         st.header("📍 Target Location")
         city_input = st.text_input("Enter City", placeholder="Naperville, IL")
         run_button = st.button("🚀 Generate Local Swarm")
 
-    st.title("🌬️ BreatheEasy AI: Dashboard")
+    st.title("🌬️ BreatheEasy AI: Multi-Service Home Launchpad")
 
-    # Helper functions for report creation
-    def create_word_doc(content):
-        doc = Document()
-        doc.add_heading('Campaign Report', 0)
-        doc.add_paragraph(content)
-        bio = BytesIO()
-        doc.save(bio)
-        return bio.getvalue()
-
-    # Execution Logic
+    # --- EXECUTION LOGIC ---
     if run_button and city_input:
-        with st.spinner(f"Building campaign for {city_input}..."):
-            result = marketing_crew.kickoff(inputs={'city': city_input, 'industry': target_industry, 'service': target_service})
+        with st.spinner(f"Building {target_service} campaign for {city_input}..."):
+            result = marketing_crew.kickoff(inputs={
+                'city': city_input,
+                'industry': target_industry,
+                'service': target_service
+            })
             st.session_state['generated'] = True
-            st.session_state['ad_copy'] = "Marketing Strategy Results Here..." # Replace with actual output file reading logic
+            
+            try:
+                with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
+                    st.session_state['ad_copy'] = f.read()
+            except FileNotFoundError:
+                st.error("Strategy files not found.")
 
+    # --- DASHBOARD DISPLAY ---
     if st.session_state.get('generated'):
         st.success(f"✨ Campaign Ready!")
-        st.markdown(st.session_state.get('ad_copy', ''))
-        st.download_button("📄 Download Report", create_word_doc(st.session_state['ad_copy']), "Report.docx")
+        tabs = st.tabs(["📝 Ad Copy", "🚀 Download"])
+        
+        with tabs[0]: st.markdown(st.session_state.get('ad_copy', 'No copy found.'))
+        with tabs[1]:
+            full_rpt = f"# {target_service} Report: {city_input}\n\n" + st.session_state.get('ad_copy', '')
+            c1, c2 = st.columns(2)
+            c1.download_button("📄 Word", create_word_doc(full_rpt), "Report.docx")
+            c2.download_button("📕 PDF", create_pdf(full_rpt), "Report.pdf")
