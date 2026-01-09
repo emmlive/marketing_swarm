@@ -5,7 +5,7 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 from openai import OpenAI
-from main import run_marketing_swarm # Using the dynamic wrapper
+from main import run_marketing_swarm 
 from docx import Document
 from fpdf import FPDF
 from io import BytesIO
@@ -51,6 +51,8 @@ init_db()
 
 # --- 4. SaaS WHITE-LABEL UI ---
 logo_url = "https://drive.google.com/uc?export=view&id=1Jw7XreUO4yAQxUgKAZPK4sRi4mzjw_yU"
+brand_blue = "#0056b3"
+brand_white = "#FFFFFF"
 brand_bg = "#F8F9FB" 
 
 st.markdown(f"""
@@ -68,6 +70,17 @@ st.markdown(f"""
     }}
     .block-container {{ padding-top: 1.5rem !important; }}
     #MainMenu {{ visibility: hidden !important; }}
+    
+    /* Brand Guide Cards */
+    .color-card {{
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        color: white;
+        font-weight: bold;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -149,10 +162,9 @@ if st.session_state.get("authentication_status"):
         html_content = f"""
         <html><body style="font-family: Arial; color: #333;">
             <div style="max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
-                <h2 style="color: #0056b3;">Welcome aboard, {new_user_name}!</h2>
+                <h2 style="color: {brand_blue};">Welcome aboard, {new_user_name}!</h2>
                 <p>You have been officially added to the <strong>BreatheEasy AI Swarm</strong>.</p>
                 <p>Log in to generate high-ticket campaigns, SEO blogs, and visual strategies.</p>
-                <p style="font-size: 0.9em; color: #777;">Contact your administrator for your login portal link.</p>
             </div>
         </body></html>
         """
@@ -200,12 +212,11 @@ if st.session_state.get("authentication_status"):
         run_button = st.button("🚀 Run AI Swarm")
 
     st.title("🌬️ BreatheEasy AI Launchpad")
-    main_tabs = st.tabs(["🔥 Generate Strategy", "📊 Lead Database"])
+    main_tabs = st.tabs(["🔥 Generate Strategy", "📊 Lead Database", "🎨 Brand Kit"])
 
     with main_tabs[0]:
         if run_button and city_input:
             with st.spinner(f"Coordinating agents for {target_service} in {city_input}..."):
-                # Call the dynamic swarm wrapper from main.py
                 run_marketing_swarm(inputs={
                     'city': city_input, 
                     'industry': main_cat, 
@@ -240,7 +251,6 @@ if st.session_state.get("authentication_status"):
         conn = sqlite3.connect('leads_history.db', check_same_thread=False)
         history_df = pd.read_sql_query("SELECT date, user, industry, service, city FROM leads ORDER BY id DESC", conn)
         conn.close()
-        
         if not history_df.empty:
             st.dataframe(history_df, use_container_width=True)
             sel_city = st.selectbox("Reload a city's report:", history_df['city'].unique())
@@ -250,5 +260,29 @@ if st.session_state.get("authentication_status"):
                 conn.close()
                 st.info(f"Report for {sel_city}")
                 st.markdown(res['content'][0])
-        else:
-            st.info("No leads generated yet.")
+        else: st.info("No leads generated yet.")
+
+    with main_tabs[2]:
+        st.header("BreatheEasy AI Style Guide")
+        st.write("Use these assets to maintain brand consistency across all marketing channels.")
+        
+        col_c1, col_c2, col_c3 = st.columns(3)
+        with col_c1:
+            st.markdown(f'<div class="color-card" style="background-color: {brand_blue};">Trust Blue<br>{brand_blue}</div>', unsafe_allow_html=True)
+            st.caption("Use for Headlines, Buttons, and Primary Logos.")
+        with col_c2:
+            st.markdown(f'<div class="color-card" style="background-color: #FFFFFF; color: #333;">Clean White<br>#FFFFFF</div>', unsafe_allow_html=True)
+            st.caption("Use for backgrounds and high-contrast text.")
+        with col_c3:
+            st.markdown(f'<div class="color-card" style="background-color: #333333;">Deep Charcoal<br>#333333</div>', unsafe_allow_html=True)
+            st.caption("Use for body text and secondary accents.")
+            
+        st.divider()
+        st.subheader("Typography")
+        st.write("**Primary Heading:** Arial Bold (Authoritative, Professional)")
+        st.write("**Body Copy:** Arial Regular (Clean, Readable)")
+        
+        st.divider()
+        st.subheader("Logo Assets")
+        st.image(logo_url, width=200)
+        st.caption("Right-click and 'Save Image As' to download for local use.")
