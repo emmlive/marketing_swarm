@@ -187,3 +187,5 @@ yarl==1.22.0
 youtube-transcript-api==1.2.3
 zipp==3.23.0
 streamlit-authenticator
+st-gsheets-connection
+
