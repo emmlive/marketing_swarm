@@ -49,10 +49,9 @@ def save_to_db(user, industry, service, city, content):
 
 init_db()
 
-# --- 4. SaaS WHITE-LABEL UI ---
+# --- 4. SaaS WHITE-LABEL UI & SOCIAL MOCKUP CSS ---
 logo_url = "https://drive.google.com/uc?export=view&id=1Jw7XreUO4yAQxUgKAZPK4sRi4mzjw_yU"
 brand_blue = "#0056b3"
-brand_white = "#FFFFFF"
 brand_bg = "#F8F9FB" 
 
 st.markdown(f"""
@@ -64,27 +63,36 @@ st.markdown(f"""
     .stApp {{ background-color: {brand_bg}; }}
     .stApp::before {{
         content: ""; display: block; margin: 40px auto 0;
-        width: 180px; height: 180px;
+        width: 150px; height: 150px;
         background-image: url("{logo_url}");
         background-size: contain; background-repeat: no-repeat;
     }}
-    .block-container {{ padding-top: 1.5rem !important; }}
-    #MainMenu {{ visibility: hidden !important; }}
+    
+    /* Social Media Mockup Styling */
+    .mockup-container {{
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 25px;
+        max-width: 500px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }}
+    .mockup-header {{ display: flex; align-items: center; margin-bottom: 10px; }}
+    .profile-pic {{ width: 40px; height: 40px; border-radius: 50%; background: #eee; margin-right: 10px; }}
+    .profile-name {{ font-weight: bold; font-size: 14px; }}
+    .mockup-text {{ font-size: 14px; line-height: 1.4; color: #1c1e21; margin-bottom: 10px; white-space: pre-wrap; }}
+    .mockup-image {{ width: 100%; height: 250px; background: #f0f2f5; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #888; border: 1px dashed #ccc; }}
+    
+    /* Facebook Specific */
+    .fb-btn {{ color: #606770; font-weight: 600; font-size: 13px; margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px; display: flex; justify-content: space-around; }}
     
     /* Brand Guide Cards */
-    .color-card {{
-        padding: 20px;
-        border-radius: 10px;
-        text-align: center;
-        color: white;
-        font-weight: bold;
-        margin-bottom: 10px;
-        border: 1px solid #ddd;
-    }}
+    .color-card {{ padding: 20px; border-radius: 10px; text-align: center; color: white; font-weight: bold; border: 1px solid #ddd; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 5. AUTHENTICATION CONFIGURATION ---
+# --- 5. AUTHENTICATION ---
 credentials = dict(st.secrets['credentials'])
 if 'usernames' in credentials:
     credentials['usernames'] = dict(credentials['usernames'])
@@ -94,8 +102,6 @@ if 'usernames' in credentials:
 authenticator = stauth.Authenticate(
     credentials, st.secrets['cookie']['name'], st.secrets['cookie']['key'], st.secrets['cookie']['expiry_days']
 )
-
-# --- 6. AUTHENTICATION UI ---
 authenticator.login(location='main')
 
 if st.session_state.get("authentication_status") is False:
@@ -104,75 +110,33 @@ elif st.session_state.get("authentication_status") is None:
     st.warning('Welcome to BreatheEasy AI. Please login to continue.')
     st.stop()
 
-# --- 7. PROTECTED DASHBOARD ---
+# --- 6. PROTECTED DASHBOARD ---
 if st.session_state.get("authentication_status"):
     
-    # --- HELPER FUNCTIONS ---
+    # Helper Functions (Word, PDF, SMTP, Welcome Email)
     def create_word_doc(content):
-        doc = Document()
-        doc.add_heading('BreatheEasy AI: Marketing Strategy', 0)
-        for line in content.split('\n'):
-            doc.add_paragraph(line)
-        bio = BytesIO()
-        doc.save(bio)
-        return bio.getvalue()
+        doc = Document(); doc.add_heading('BreatheEasy AI Report', 0)
+        for line in content.split('\n'): doc.add_paragraph(line)
+        bio = BytesIO(); doc.save(bio); return bio.getvalue()
 
     def create_pdf(content, service, city):
-        pdf = FPDF()
-        pdf.add_page()
+        pdf = FPDF(); pdf.add_page()
         try: pdf.image(logo_url, 10, 8, 30)
         except: pass
-        pdf.set_font("Arial", 'B', 15)
-        pdf.cell(80)
-        pdf.cell(30, 10, 'BreatheEasy AI Strategy Report', 0, 0, 'C')
-        pdf.ln(20)
-        pdf.set_font("Arial", 'I', 10)
-        pdf.cell(0, 10, f'Service: {service} | Location: {city} | Date: {datetime.now().strftime("%Y-%m-%d")}', 0, 1, 'R')
-        pdf.ln(10)
-        pdf.set_font("Arial", size=11)
-        clean_text = content.encode('latin-1', 'ignore').decode('latin-1')
-        pdf.multi_cell(0, 8, txt=clean_text)
+        pdf.set_font("Arial", 'B', 15); pdf.cell(80); pdf.cell(30, 10, 'BreatheEasy AI Report', 0, 0, 'C'); pdf.ln(20)
+        pdf.set_font("Arial", 'I', 10); pdf.cell(0, 10, f'{service} - {city}', 0, 1, 'R'); pdf.ln(10)
+        pdf.set_font("Arial", size=11); clean = content.encode('latin-1', 'ignore').decode('latin-1'); pdf.multi_cell(0, 8, txt=clean)
         return pdf.output(dest='S').encode('latin-1')
 
-    def send_email_via_smtp(content, target_city):
+    def send_email_via_smtp(content, city):
+        msg = MIMEMultipart(); msg["From"], msg["To"], msg["Subject"] = st.secrets["EMAIL_SENDER"], st.secrets["TEAM_EMAIL"], f"🚀 AI Report: {city}"
+        msg.attach(MIMEText(f"Campaign ready for {city}.", "plain"))
+        part = MIMEBase("application", "octet-stream"); part.set_payload(create_word_doc(content)); encoders.encode_base64(part)
+        part.add_header("Content-Disposition", f"attachment; filename=Report_{city}.docx"); msg.attach(part)
         try:
-            msg = MIMEMultipart()
-            msg["From"], msg["To"], msg["Subject"] = st.secrets["EMAIL_SENDER"], st.secrets["TEAM_EMAIL"], f"🚀 New AI Report: {target_city}"
-            msg.attach(MIMEText(f"High-ticket campaign ready for {target_city}. Word doc attached.", "plain"))
-            part = MIMEBase("application", "octet-stream")
-            part.set_payload(create_word_doc(content))
-            encoders.encode_base64(part)
-            part.add_header("Content-Disposition", f"attachment; filename=Report_{target_city}.docx")
-            msg.attach(part)
             with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
                 server.login(st.secrets["EMAIL_SENDER"], st.secrets["EMAIL_PASSWORD"])
                 server.sendmail(st.secrets["EMAIL_SENDER"], st.secrets["TEAM_EMAIL"], msg.as_string())
-            return True
-        except Exception as e:
-            st.error(f"Email failed: {e}")
-            return False
-
-    def send_welcome_email(new_user_name, new_user_email):
-        sender_email = st.secrets["EMAIL_SENDER"]
-        sender_password = st.secrets["EMAIL_PASSWORD"]
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = "🌬️ Welcome to the BreatheEasy AI Team!"
-        msg["From"] = f"BreatheEasy AI <{sender_email}>"
-        msg["To"] = new_user_email
-        html_content = f"""
-        <html><body style="font-family: Arial; color: #333;">
-            <div style="max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
-                <h2 style="color: {brand_blue};">Welcome aboard, {new_user_name}!</h2>
-                <p>You have been officially added to the <strong>BreatheEasy AI Swarm</strong>.</p>
-                <p>Log in to generate high-ticket campaigns, SEO blogs, and visual strategies.</p>
-            </div>
-        </body></html>
-        """
-        msg.attach(MIMEText(html_content, "html"))
-        try:
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                server.login(sender_email, sender_password)
-                server.sendmail(sender_email, new_user_email, msg.as_string())
             return True
         except: return False
 
@@ -181,108 +145,84 @@ if st.session_state.get("authentication_status"):
         st.header(f"Welcome, {st.session_state['name']}!")
         authenticator.logout('Logout', 'sidebar', key='unique_logout_key')
         st.divider()
-
-        # Admin Tools with Welcome Email
-        with st.expander("🛠️ Admin: Add Team Member"):
-            new_name = st.text_input("Member Name")
-            new_email = st.text_input("Member Email")
-            new_pw = st.text_input("Set Password", type="password")
-            if st.button("🚀 Authorize & Send Email"):
-                if new_name and new_email and new_pw:
-                    new_hash = stauth.Hasher([new_pw]).generate()[0]
-                    st.success("User Hash Generated!")
-                    st.code(f"password = \"{new_hash}\"", language="toml")
-                    if send_welcome_email(new_name, new_email):
-                        st.success(f"Welcome email sent to {new_email}!")
-                else: st.warning("Fill all fields.")
+        
+        industry_map = {"HVAC": ["Full System Replacement", "IAQ"], "Plumbing": ["Sewer Replacement"]}
+        main_cat = st.selectbox("Industry", list(industry_map.keys()))
+        target_service = st.selectbox("Service", industry_map[main_cat])
+        city_input = st.text_input("Target City", placeholder="e.g. Chicago, IL")
         
         st.divider()
-        industry_map = {
-            "HVAC": ["Full System Replacement", "IAQ & Filtration", "Heat Pump Upgrade"],
-            "Plumbing": ["Sewer Line Replacement", "Water Heater Service"],
-            "Custom": ["Manual Entry"]
-        }
-        main_cat = st.selectbox("Select Industry", list(industry_map.keys()))
-        target_service = st.selectbox("Select Service", industry_map[main_cat]) if main_cat != "Custom" else st.text_input("Enter Service")
-        city_input = st.text_input("Target City", placeholder="e.g. Naperville, IL")
-        
-        st.divider()
-        high_ticket = st.toggle("Focus on High-Ticket Leads", value=True)
-        include_blog = st.checkbox("Generate SEO Blog Content", value=True)
+        high_ticket = st.toggle("High-Ticket Focus", value=True)
+        include_blog = st.checkbox("SEO Blog Content", value=True)
         run_button = st.button("🚀 Run AI Swarm")
 
     st.title("🌬️ BreatheEasy AI Launchpad")
-    main_tabs = st.tabs(["🔥 Generate Strategy", "📊 Lead Database", "🎨 Brand Kit"])
+    main_tabs = st.tabs(["🔥 Generate", "📊 History", "📱 Social Preview", "🎨 Brand Kit"])
 
     with main_tabs[0]:
         if run_button and city_input:
-            with st.spinner(f"Coordinating agents for {target_service} in {city_input}..."):
-                run_marketing_swarm(inputs={
-                    'city': city_input, 
-                    'industry': main_cat, 
-                    'service': target_service, 
-                    'premium': high_ticket, 
-                    'blog': include_blog
-                })
-                
-                try:
-                    with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
-                        report_content = f.read()
-                    st.session_state['ad_copy'] = report_content
-                    st.session_state['generated'] = True
-                    save_to_db(st.session_state['name'], main_cat, target_service, city_input, report_content)
-                except:
-                    st.error("Error reading strategy file.")
+            with st.spinner("Analyzing..."):
+                run_marketing_swarm(inputs={'city': city_input, 'industry': main_cat, 'service': target_service, 'premium': high_ticket, 'blog': include_blog})
+                with open("final_marketing_strategy.md", "r", encoding="utf-8") as f: content = f.read()
+                st.session_state['ad_copy'] = content
+                st.session_state['generated'] = True
+                save_to_db(st.session_state['name'], main_cat, target_service, city_input, content)
 
         if st.session_state.get('generated'):
             st.success("✨ Campaign Ready!")
             full_rpt = st.session_state.get('ad_copy', '')
             c1, c2, c3 = st.columns(3)
-            with c1: st.download_button("📄 Word Report", create_word_doc(full_rpt), f"{city_input}_Report.docx")
-            with c2: st.download_button("📕 Branded PDF", create_pdf(full_rpt, target_service, city_input), f"{city_input}_Report.pdf")
+            with c1: st.download_button("📄 Word", create_word_doc(full_rpt), "Report.docx")
+            with c2: st.download_button("📕 PDF", create_pdf(full_rpt, target_service, city_input), "Report.pdf")
             with c3:
                 if st.button("📧 Email Team"):
                     if send_email_via_smtp(full_rpt, city_input): st.success("Sent!")
-            st.divider()
             st.markdown(full_rpt)
 
     with main_tabs[1]:
-        st.header("Lead History Database")
         conn = sqlite3.connect('leads_history.db', check_same_thread=False)
-        history_df = pd.read_sql_query("SELECT date, user, industry, service, city FROM leads ORDER BY id DESC", conn)
+        history_df = pd.read_sql_query("SELECT date, city, service FROM leads ORDER BY id DESC", conn)
+        st.dataframe(history_df, use_container_width=True)
         conn.close()
-        if not history_df.empty:
-            st.dataframe(history_df, use_container_width=True)
-            sel_city = st.selectbox("Reload a city's report:", history_df['city'].unique())
-            if st.button("Load History Content"):
-                conn = sqlite3.connect('leads_history.db', check_same_thread=False)
-                res = pd.read_sql_query(f"SELECT content FROM leads WHERE city='{sel_city}' LIMIT 1", conn)
-                conn.close()
-                st.info(f"Report for {sel_city}")
-                st.markdown(res['content'][0])
-        else: st.info("No leads generated yet.")
 
     with main_tabs[2]:
-        st.header("BreatheEasy AI Style Guide")
-        st.write("Use these assets to maintain brand consistency across all marketing channels.")
-        
-        col_c1, col_c2, col_c3 = st.columns(3)
-        with col_c1:
-            st.markdown(f'<div class="color-card" style="background-color: {brand_blue};">Trust Blue<br>{brand_blue}</div>', unsafe_allow_html=True)
-            st.caption("Use for Headlines, Buttons, and Primary Logos.")
-        with col_c2:
-            st.markdown(f'<div class="color-card" style="background-color: #FFFFFF; color: #333;">Clean White<br>#FFFFFF</div>', unsafe_allow_html=True)
-            st.caption("Use for backgrounds and high-contrast text.")
-        with col_c3:
-            st.markdown(f'<div class="color-card" style="background-color: #333333;">Deep Charcoal<br>#333333</div>', unsafe_allow_html=True)
-            st.caption("Use for body text and secondary accents.")
+        st.header("Social Media Live Preview")
+        if not st.session_state.get('generated'):
+            st.info("Run a swarm to see previews of your ads.")
+        else:
+            ad_text = st.session_state.get('ad_copy', "Sample Ad Copy Content")
             
-        st.divider()
-        st.subheader("Typography")
-        st.write("**Primary Heading:** Arial Bold (Authoritative, Professional)")
-        st.write("**Body Copy:** Arial Regular (Clean, Readable)")
-        
-        st.divider()
-        st.subheader("Logo Assets")
+            p_c1, p_c2 = st.columns(2)
+            
+            with p_c1:
+                st.subheader("Facebook Ad Mockup")
+                st.markdown(f"""
+                <div class="mockup-container">
+                    <div class="mockup-header">
+                        <img src="{logo_url}" class="profile-pic">
+                        <div class="profile-name">BreatheEasy {main_cat} Services</div>
+                    </div>
+                    <div class="mockup-text">{ad_text[:300]}...</div>
+                    <div class="mockup-image">AI Generated Visual Placeholder</div>
+                    <div class="fb-btn"><span>👍 Like</span><span>💬 Comment</span><span>🔗 Share</span></div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with p_c2:
+                st.subheader("Instagram Mockup")
+                st.markdown(f"""
+                <div class="mockup-container" style="max-width: 400px;">
+                    <div class="mockup-header">
+                        <img src="{logo_url}" class="profile-pic">
+                        <div class="profile-name">breatheeasy_ai</div>
+                    </div>
+                    <div class="mockup-image" style="height: 400px;"></div>
+                    <div style="padding: 10px 0; font-size: 20px;">❤️ 💬 ✈️</div>
+                    <div class="mockup-text"><b>breatheeasy_ai</b> {ad_text[:150]}... #hvac #premium</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    with main_tabs[3]:
+        st.header("Brand Assets")
+        st.markdown(f'<div class="color-card" style="background-color: {brand_blue};">Trust Blue: {brand_blue}</div>', unsafe_allow_html=True)
         st.image(logo_url, width=200)
-        st.caption("Right-click and 'Save Image As' to download for local use.")
