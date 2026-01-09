@@ -13,13 +13,22 @@ from io import BytesIO
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
 # --- 2. THE SaaS GATEKEEPER CSS ---
-# Hides the GitHub icon, Fork button, 3-dots menu, and footer
+# Hides Header (GitHub/Fork/Menu), Footer, and Bottom-Right Status Widget
 hide_style = """
     <style>
+    /* Hides the top header bar entirely */
     header { visibility: hidden !important; }
+    
+    /* Hides the 'Hosted with Streamlit' red badge & status indicators at bottom-right */
     div[data-testid="stStatusWidget"] { visibility: hidden !important; }
+    
+    /* Hides the toolbar/pencil icon at the top right */
     div[data-testid="stToolbar"] { visibility: hidden !important; }
+    
+    /* Hides the 'Made with Streamlit' footer at bottom-center */
     footer { visibility: hidden !important; }
+    
+    /* Adjusts padding to fill the space left by the hidden header */
     .block-container { padding-top: 2rem !important; }
     </style>
 """
@@ -41,8 +50,7 @@ authenticator = stauth.Authenticate(
 )
 
 # --- 4. AUTHENTICATION UI (v0.3.0+ Fix) ---
-# In newer versions, .login() returns only the status; 
-# user details are stored in st.session_state automatically.
+# .login() returns only the status; user details are in st.session_state automatically.
 authentication_status = authenticator.login(location='main')
 
 if st.session_state.get("authentication_status") is False:
@@ -62,7 +70,6 @@ elif st.session_state.get("authentication_status") is None:
             st.error(f"Registration Error: {e}")
     with col2:
         try:
-            # Captures return to handle password reset
             if authenticator.forgot_password(location='main')[0]:
                 st.success('Temporary password generated. Please contact admin.')
         except Exception as e:
@@ -72,7 +79,6 @@ elif st.session_state.get("authentication_status") is None:
     st.stop()
 
 # --- 5. PROTECTED SaaS DASHBOARD ---
-# This block only runs if authentication_status is True
 if st.session_state.get("authentication_status"):
     
     # Initialize API Client
