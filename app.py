@@ -22,30 +22,25 @@ if "GEMINI_API_KEY" in st.secrets:
 
 # --- 2. PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="BreatheEasy AI | Marketing Swarm",
+    page_title="BreatheEasy AI | Multi-Industry Swarm",
     page_icon="🌬️",
     layout="wide"
 )
 
-# --- 3. DATABASE INITIALIZATION (Corrected Hasher Logic) ---
+# --- 3. DATABASE INITIALIZATION ---
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
-    # Marketing Leads Table
     c.execute('''CREATE TABLE IF NOT EXISTS leads 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, service TEXT, city TEXT, content TEXT)''')
-    # Users Table
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT)''')
     
-    # Check if admin exists
     c.execute("SELECT * FROM users WHERE username='admin'")
     if not c.fetchone():
-        # --- FIXED HASHER SYNTAX FOR v0.3.x+ ---
         hashed_pw = stauth.Hasher.hash('admin123')
         c.execute("INSERT INTO users (username, email, name, password, role) VALUES (?, ?, ?, ?, ?)",
                   ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin'))
-    
     conn.commit()
     conn.close()
 
@@ -80,7 +75,6 @@ def save_lead_to_db(user, industry, service, city, content):
     conn.commit()
     conn.close()
 
-# Run Database Init
 init_db()
 
 # --- 4. SaaS PREMIUM UI CUSTOMIZATION ---
@@ -101,26 +95,18 @@ st.markdown(f"""
     }}
     .block-container {{ padding-top: 1.5rem !important; }}
     .mockup-container {{ background: white; border: 1px solid #ddd; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); max-width: 500px; }}
-    .mockup-header {{ display: flex; align-items: center; margin-bottom: 12px; }}
     .profile-pic {{ width: 42px; height: 42px; border-radius: 50%; background: #f0f2f5; margin-right: 12px; }}
     .profile-name {{ font-weight: 700; font-size: 14px; color: #1c1e21; }}
-    .mockup-text {{ font-size: 14px; color: #1c1e21; margin-bottom: 12px; line-height: 1.5; }}
-    .mockup-image {{ width: 100%; height: 220px; background: #f0f2f5; border-radius: 8px; border: 1px dashed #ccc; display: flex; align-items: center; justify-content: center; color: #90949c; }}
-    .fb-btn-row {{ display: flex; justify-content: space-around; border-top: 1px solid #eee; margin-top: 10px; padding-top: 8px; color: #606770; font-size: 13px; font-weight: 600; }}
     .color-card {{ padding: 15px; border-radius: 8px; text-align: center; color: white; font-weight: bold; margin-bottom: 5px; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 5. AUTHENTICATION (Database Driven) ---
+# --- 5. AUTHENTICATION ---
 db_credentials = get_users_from_db()
 authenticator = stauth.Authenticate(
-    db_credentials, 
-    st.secrets['cookie']['name'], 
-    st.secrets['cookie']['key'], 
-    st.secrets['cookie']['expiry_days']
+    db_credentials, st.secrets['cookie']['name'], st.secrets['cookie']['key'], st.secrets['cookie']['expiry_days']
 )
 
-# Render Login
 authenticator.login(location='main')
 
 if st.session_state["authentication_status"] is False:
@@ -129,18 +115,14 @@ if st.session_state["authentication_status"] is False:
         authenticator.forgot_password()
 
 elif st.session_state["authentication_status"] is None:
-    st.info('🛡️ Welcome. Please authenticate to access the Marketing Swarm.')
+    st.info('🛡️ Welcome. Please authenticate to access the Launchpad.')
     with st.expander("Register Team Account"):
         try:
-            # We only use the widget to collect data
             res = authenticator.register_user(pre_authorization=False)
             if res:
                 email, username, name = res
                 if email:
-                    # Capture the password directly and hash it for DB storage
-                    # This prevents the list-access TypeError
                     temp_pw = authenticator.credentials['usernames'][username]['password']
-                    # Re-hash ensure it's saved in the exact format needed
                     db_ready_pw = stauth.Hasher.hash(temp_pw)
                     if add_user_to_db(username, email, name, db_ready_pw):
                         st.success('✅ Account Created. You may now login.')
@@ -163,17 +145,32 @@ if st.session_state["authentication_status"]:
         pdf.set_font("Arial", size=11); clean = content.encode('latin-1', 'ignore').decode('latin-1')
         pdf.multi_cell(0, 8, txt=clean); return pdf.output(dest='S').encode('latin-1')
 
-    # --- SIDEBAR ---
+    # --- SIDEBAR: RESTORED INDUSTRY & SERVICE MAPPING ---
     with st.sidebar:
-        st.markdown(f"### 👋 {st.session_state['name']}")
+        st.markdown(f"### 👋 Hello, {st.session_state['name']}")
         authenticator.logout('Sign Out', 'sidebar')
         st.divider()
         
         st.subheader("🎯 Campaign Settings")
-        industry_map = {"HVAC": ["System Replacement", "IAQ"], "Plumbing": ["Sewer Repair", "Water Heaters"]}
-        main_cat = st.selectbox("Industry", list(industry_map.keys()))
-        target_service = st.selectbox("Service", industry_map[main_cat])
-        city_input = st.text_input("Target City", placeholder="e.g. Phoenix, AZ")
+        
+        # RESTORED FULL INDUSTRY MAP
+        industry_map = {
+            "HVAC": ["Full System Replacement", "IAQ & Filtration", "Heat Pump Upgrade", "Duct Cleaning"],
+            "Plumbing": ["Sewer Line Replacement", "Tankless Water Heaters", "Whole-Home Repiping"],
+            "Restoration": ["Mold Remediation", "Water Damage Recovery", "Fire & Smoke Restoration"],
+            "Roofing": ["Full Roof Replacement", "Storm Damage Repair", "Commercial Coating"],
+            "Solar": ["Residential Solar Grid", "Battery Backup Install", "Solar Maintenance"],
+            "Custom": ["Manual Entry"]
+        }
+        
+        main_cat = st.selectbox("Select Industry", list(industry_map.keys()))
+        
+        if main_cat == "Custom":
+            target_service = st.text_input("Enter Custom Service", placeholder="e.g. Luxury Landscaping")
+        else:
+            target_service = st.selectbox("Select Service", industry_map[main_cat])
+            
+        city_input = st.text_input("Target City", placeholder="e.g. Naperville, IL")
         
         st.divider()
         high_ticket = st.toggle("🚀 High-Ticket Focus", value=True)
@@ -182,16 +179,20 @@ if st.session_state["authentication_status"]:
         run_button = st.button("🚀 LAUNCH SWARM", use_container_width=True, type="primary")
 
     # --- MAIN CONTENT TABS ---
-    t_gen, t_db, t_social, t_brand = st.tabs(["🔥 Launchpad", "📊 Database", "📱 Preview", "🎨 Brand Kit"])
+    t_gen, t_db, t_social, t_brand = st.tabs(["🔥 Launchpad", "📊 Lead Database", "📱 Social Preview", "🎨 Brand Kit"])
 
     with t_gen:
         if run_button and city_input:
             with st.spinner("🤖 Coordinating AI Agents..."):
                 run_marketing_swarm({'city': city_input, 'industry': main_cat, 'service': target_service, 'premium': high_ticket, 'blog': include_blog})
-                with open("final_marketing_strategy.md", "r", encoding="utf-8") as f: content = f.read()
-                st.session_state['ad_copy'] = content
-                st.session_state['generated'] = True
-                save_lead_to_db(st.session_state['name'], main_cat, target_service, city_input, content)
+                try:
+                    with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
+                        content = f.read()
+                    st.session_state['ad_copy'] = content
+                    st.session_state['generated'] = True
+                    save_lead_to_db(st.session_state['name'], main_cat, target_service, city_input, content)
+                except:
+                    st.error("Error retrieving strategy file.")
 
         if st.session_state.get('generated'):
             st.success("✨ Strategy Generated Successfully")
@@ -199,15 +200,15 @@ if st.session_state["authentication_status"]:
             
             c1, c2 = st.columns(2)
             with c1: st.download_button("📥 Download Word", create_word_doc(copy), f"{city_input}_Report.docx", use_container_width=True)
-            with c2: st.download_button("📥 Download PDF", create_pdf(copy, target_service, city_input), f"{city_input}_Report.pdf", use_container_width=True)
+            with c2: st.download_button("📕 Download PDF", create_pdf(copy, target_service, city_input), f"{city_input}_Report.pdf", use_container_width=True)
             
             st.divider()
             st.markdown(copy)
 
     with t_db:
-        st.subheader("Lead Intelligence History")
+        st.subheader("Historical Lead Intelligence")
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
-        db_df = pd.read_sql_query("SELECT date, city, service, user FROM leads ORDER BY id DESC", conn)
+        db_df = pd.read_sql_query("SELECT date, city, industry, service, user FROM leads ORDER BY id DESC", conn)
         st.dataframe(db_df, use_container_width=True, hide_index=True)
         conn.close()
 
@@ -224,11 +225,10 @@ if st.session_state["authentication_status"]:
                     </div>
                     <div class="mockup-text">{ad_text[:350]}...</div>
                     <div class="mockup-image">AI Visual Content Rendering</div>
-                    <div class="fb-btn-row"><span>👍 Like</span><span>💬 Comment</span><span>🔗 Share</span></div>
                 </div>
             """, unsafe_allow_html=True)
         else:
-            st.info("💡 Generate a campaign to view social media mockups.")
+            st.info("💡 Run a campaign to view social media mockups.")
 
     with t_brand:
         st.header("Brand Assets")
