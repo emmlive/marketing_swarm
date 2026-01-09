@@ -63,7 +63,6 @@ class MarketingTasks:
             ),
             expected_output="A final, polished version of the marketing strategy and blog in Markdown format.",
             agent=agent,
-            # We save the output to a file that app.py reads
             output_file="final_marketing_strategy.md"
         )
 
@@ -79,16 +78,31 @@ class MarketingTasks:
             context=[context_task]
         )
 
-    # Task 5: Vision Inspector - AI Prompts
+    # Task 5: Vision Inspector - AI Prompts (Refined for Multi-Industry Specifics)
     def vision_task(self, agent, city, industry, service, context_tasks):
+        # Dynamic equipment/scenario suggestions based on industry
+        industry_specific_visuals = {
+            "HVAC": "modern heat pumps, technicians maintaining air ducts, happy families enjoying climate-controlled homes",
+            "Plumbing": "clean, professional plumbers with advanced leak detection tools, sparkling new water heaters, pristine bathrooms after repiping",
+            "Restoration": "before-and-after scenes of restored homes, state-of-the-art dehumidifiers, technicians in protective gear cleaning up damage",
+            "Roofing": "drone shots of newly installed roofs, close-ups of durable shingles, technicians safely repairing storm damage",
+            "Solar": "sleek solar panels on rooftops, glowing battery storage units, happy homeowners looking at energy monitors",
+            "Custom": f"visuals representing cutting-edge {service} in {industry}, highlighting professional service and client satisfaction"
+        }
+        
+        visual_suggestions = industry_specific_visuals.get(industry, industry_specific_visuals["Custom"])
+
         return Task(
             description=(
-                f"Review the total strategy for {service} in {city}. "
-                "Generate 3 DALL-E 3 Image Prompts brand-locked to 'BreatheEasy'. "
-                "MANDATORY: Use 'Trust Blue' (#0056b3), bright natural lighting, and photorealistic 8k aesthetics. "
-                "Show clean professionals performing {service} or happy homeowners."
+                f"Review the total marketing strategy for {service} in {city}. "
+                f"Generate 3 distinct DALL-E 3 Image Prompts brand-locked to 'BreatheEasy'. "
+                f"MANDATORY: Each prompt MUST start with 'AI Image Prompt: ' and be between 50-80 words. "
+                f"Aesthetics: Photorealistic 8k, vibrant natural lighting, cinematic composition. "
+                f"Theme: Show clean, professional scenes that convey trust, expertise, and homeowner satisfaction. "
+                f"Include specific visuals related to {visual_suggestions}. "
+                f"Brand Color: Emphasize 'Trust Blue' (#0056b3) subtly in professional uniforms or equipment."
             ),
-            expected_output="A visual strategy guide with 3 consistent, brand-aligned image prompts.",
+            expected_output="A visual strategy guide with 3 consistent, highly detailed, brand-aligned image prompts.",
             agent=agent,
             context=context_tasks
         )
