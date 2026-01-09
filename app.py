@@ -87,16 +87,35 @@ credentials = dict(st.secrets['credentials'])
 authenticator = stauth.Authenticate(
     credentials, st.secrets['cookie']['name'], st.secrets['cookie']['key'], st.secrets['cookie']['expiry_days']
 )
+
+# Login widget with self-service options
 authenticator.login(location='main')
 
-if st.session_state.get("authentication_status") is False:
+if st.session_state["authentication_status"] is False:
     st.error('Username/password is incorrect')
-elif st.session_state.get("authentication_status") is None:
+    # Forgot Password Logic
+    with st.expander("Forgot Password?"):
+        try:
+            username_to_reset, email_to_reset, new_password = authenticator.forgot_password()
+            if username_to_reset:
+                st.success('A new password has been generated. Please check your system logs or contact admin.')
+        except Exception as e:
+            st.error(e)
+
+elif st.session_state["authentication_status"] is None:
+    # Sign Up Logic for New Users
     st.warning('Please login to access the Launchpad')
+    with st.expander("New User? Register Here"):
+        try:
+            email_of_registered_user, username_of_registered_user, name_of_registered_user = authenticator.register_user(pre_authorization=False)
+            if email_of_registered_user:
+                st.success('Registration successful! Please contact admin to authorize your account in the secrets file.')
+        except Exception as e:
+            st.error(e)
     st.stop()
 
 # --- 6. PROTECTED DASHBOARD ---
-if st.session_state.get("authentication_status"):
+if st.session_state["authentication_status"]:
     
     # --- HELPER FUNCTIONS ---
     def create_word_doc(content):
