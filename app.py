@@ -12,18 +12,20 @@ from io import BytesIO
 # --- 1. CRITICAL: PAGE CONFIG MUST BE FIRST ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# --- 2. THE TOTAL WHITE-LABEL CSS GATEKEEPER ---
-# This version targets the newest 'Hosted with Streamlit' badge and deploy buttons
+# --- 2. THE ULTIMATE "ZERO-BRANDING" CSS GATEKEEPER ---
+# This targets the top-right tools, bottom-right icons, and all deployment badges.
 hide_style = """
     <style>
     /* Hides the top header entirely (GitHub/Fork/3-dots) */
     header { visibility: hidden !important; }
     
-    /* Hides the 'Hosted with Streamlit' red badge & status indicators at bottom-right */
+    /* Hides the entire bottom-right status area and 'Hosted with Streamlit' badge */
     div[data-testid="stStatusWidget"], 
     div[data-testid="stConnectionStatus"],
     .stAppDeployButton,
-    a[href*="streamlit.io"] { 
+    div[class*="stDeployButton"],
+    a[href*="streamlit.io"],
+    #stDecoration { 
         display: none !important; 
         visibility: hidden !important; 
     }
@@ -34,10 +36,12 @@ hide_style = """
     /* Hides the 'Made with Streamlit' footer at bottom-center */
     footer { visibility: hidden !important; }
     
-    /* SaaS Branding: Removes top space and hides hamburger menu */
+    /* White-label branding: Removes top padding and hides hamburger menu */
     .block-container { padding-top: 1.5rem !important; }
     #MainMenu { visibility: hidden !important; }
-    #stDecoration { display: none !important; }
+    
+    /* Hides the small 'Running...' or 'Casting...' indicator at the top right */
+    div[data-testid="stStatusWidget"] { display: none !important; }
     </style>
 """
 st.markdown(hide_style, unsafe_allow_html=True)
@@ -56,8 +60,8 @@ authenticator = stauth.Authenticate(
     st.secrets['cookie']['expiry_days']
 )
 
-# --- 4. AUTHENTICATION UI (v0.3.0+ Return Fix) ---
-# authenticator.login handles session state internally in v0.3.x
+# --- 4. AUTHENTICATION UI (v0.3.0+) ---
+# status is stored in st.session_state automatically.
 authenticator.login(location='main')
 
 if st.session_state.get("authentication_status") is False:
@@ -82,12 +86,13 @@ elif st.session_state.get("authentication_status") is None:
         except Exception as e:
             st.error(f"Reset Error: {e}")
 
-    # STOP unauthenticated users here
+    # CRITICAL: Prevent the rest of the app from loading
     st.stop()
 
 # --- 5. PROTECTED SaaS DASHBOARD ---
 if st.session_state.get("authentication_status"):
     
+    # Initialize API Client
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     
     with st.sidebar:
@@ -101,7 +106,7 @@ if st.session_state.get("authentication_status"):
         industry_map = {
             "HVAC": ["Air Duct Cleaning", "Dryer Vent Cleaning", "Heating Repair", "AC Installation"],
             "Plumbing": ["Drain Cleaning", "Water Heater Service", "Emergency Leak Repair", "Pipe Bursting"],
-            "Electrical": ["Panel Upgrades", "EV Charger Installation", "Wiring Inspection"],
+            "Electrical": ["Panel Upgrade", "EV Charger Installation", "Wiring Inspection"],
             "Landscaping": ["Lawn Maintenance", "Sprinkler Repair", "Seasonal Cleanup"],
             "Custom": ["Manual Entry"]
         }
@@ -155,9 +160,9 @@ if st.session_state.get("authentication_status"):
                 with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
                     st.session_state['ad_copy'] = f.read()
             except FileNotFoundError:
-                st.error("Report files not found.")
+                st.error("Strategy files not found.")
 
-    # --- DISPLAY ---
+    # --- DASHBOARD DISPLAY ---
     if st.session_state.get('generated'):
         st.success(f"✨ Campaign Ready!")
         tabs = st.tabs(["📝 Ad Copy", "🚀 Download"])
