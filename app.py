@@ -122,8 +122,20 @@ if st.session_state.get("authentication_status"):
         st.header(f"Welcome, {st.session_state['name']}!")
         authenticator.logout('Logout', 'sidebar', key='unique_logout_key')
         st.divider()
-        st.caption("🟢 System Status: Active")
+
+        # --- HIDDEN ADMIN TOOL ---
+        with st.expander("🛠️ Admin Tools (Internal Only)"):
+            st.write("Generate password hashes for the Google Sheet:")
+            new_pw = st.text_input("Enter New User Password", type="password")
+            if st.button("Generate Hash"):
+                if new_pw:
+                    hashed_pw = stauth.Hasher([new_pw]).generate()[0]
+                    st.code(hashed_pw, language="text")
+                    st.success("Copy the code above and paste it into the 'password' column of your Google Sheet.")
+                else:
+                    st.warning("Please enter a password first.")
         
+        st.divider()
         st.header("🏢 Business Category")
         industry_map = {
             "HVAC": ["Air Duct Cleaning", "Dryer Vent Cleaning", "Heating Repair", "AC Installation"],
@@ -154,7 +166,6 @@ if st.session_state.get("authentication_status"):
             st.session_state['generated'] = True
             
             try:
-                # Assuming main.py generates this file locally
                 with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
                     st.session_state['ad_copy'] = f.read()
             except FileNotFoundError:
