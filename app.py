@@ -5,19 +5,19 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 from openai import OpenAI
-from main import marketing_crew  # Ensure main.py exists in your repo
+from main import marketing_crew
 from docx import Document
 from fpdf import FPDF
 from io import BytesIO
 
-# SMTP Libraries for Gmail
+# SMTP Libraries
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 
-# --- 1. PRE-IMPORT KEY MAPPING (Fixes KeyError) ---
+# --- 1. PRE-IMPORT KEY MAPPING (Fixes KeyErrors) ---
 if "GEMINI_API_KEY" in st.secrets:
     os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
     os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
@@ -27,18 +27,14 @@ if "OPENAI_API_KEY" in st.secrets:
 # --- 2. PAGE CONFIGURATION ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# --- 3. DATABASE INITIALIZATION (Lead History) ---
+# --- 3. DATABASE INITIALIZATION ---
 def init_db():
     conn = sqlite3.connect('leads_history.db', check_same_thread=False)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS leads 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  date TEXT, 
-                  user TEXT, 
-                  industry TEXT, 
-                  service TEXT, 
-                  city TEXT, 
-                  content TEXT)''')
+                  date TEXT, user TEXT, industry TEXT, 
+                  service TEXT, city TEXT, content TEXT)''')
     conn.commit()
     conn.close()
 
@@ -53,7 +49,7 @@ def save_to_db(user, industry, service, city, content):
 
 init_db()
 
-# --- 4. SaaS WHITE-LABEL UI & CSS ---
+# --- 4. SaaS WHITE-LABEL UI ---
 logo_url = "https://drive.google.com/uc?export=view&id=1Jw7XreUO4yAQxUgKAZPK4sRi4mzjw_yU"
 brand_bg = "#F8F9FB" 
 
@@ -83,10 +79,7 @@ if 'usernames' in credentials:
         credentials['usernames'][user] = dict(credentials['usernames'][user])
 
 authenticator = stauth.Authenticate(
-    credentials,
-    st.secrets['cookie']['name'],
-    st.secrets['cookie']['key'],
-    st.secrets['cookie']['expiry_days']
+    credentials, st.secrets['cookie']['name'], st.secrets['cookie']['key'], st.secrets['cookie']['expiry_days']
 )
 
 # --- 6. AUTHENTICATION UI ---
@@ -102,7 +95,7 @@ elif st.session_state.get("authentication_status") is None:
 if st.session_state.get("authentication_status"):
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     
-    # --- HELPER FUNCTIONS ---
+    # --- HELPER FUNCTIONS (Word, PDF, SMTP) ---
     def create_word_doc(content):
         doc = Document()
         doc.add_heading('BreatheEasy AI: Marketing Strategy', 0)
@@ -112,34 +105,41 @@ if st.session_state.get("authentication_status"):
         doc.save(bio)
         return bio.getvalue()
 
-    def create_pdf(content):
+    def create_pdf(content, service, city):
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        clean = content.encode('latin-1', 'ignore').decode('latin-1')
-        for line in clean.split('\n'):
-            pdf.multi_cell(0, 10, txt=line)
+        # Add Header branding
+        try: pdf.image(logo_url, 10, 8, 30)
+        except: pass
+        pdf.set_font("Arial", 'B', 15)
+        pdf.cell(80)
+        pdf.cell(30, 10, 'BreatheEasy AI Strategy Report', 0, 0, 'C')
+        pdf.ln(20)
+        pdf.set_font("Arial", 'I', 10)
+        pdf.cell(0, 10, f'Service: {service} | Location: {city} | Date: {datetime.now().strftime("%Y-%m-%d")}', 0, 1, 'R')
+        pdf.ln(10)
+        # Content
+        pdf.set_font("Arial", size=11)
+        clean_text = content.encode('latin-1', 'ignore').decode('latin-1')
+        pdf.multi_cell(0, 8, txt=clean_text)
         return pdf.output(dest='S').encode('latin-1')
 
     def send_email_via_smtp(content, target_city):
-        sender_email = st.secrets["EMAIL_SENDER"]
-        sender_password = st.secrets["EMAIL_PASSWORD"]
-        receiver_email = st.secrets["TEAM_EMAIL"]
-        message = MIMEMultipart()
-        message["From"], message["To"], message["Subject"] = sender_email, receiver_email, f"🚀 New Report: {target_city}"
-        message.attach(MIMEText(f"The AI Swarm has completed the report for {target_city}.", "plain"))
-        part = MIMEBase("application", "octet-stream")
-        part.set_payload(create_word_doc(content))
-        encoders.encode_base64(part)
-        part.add_header("Content-Disposition", f"attachment; filename=Report_{target_city}.docx")
-        message.attach(part)
         try:
+            msg = MIMEMultipart()
+            msg["From"], msg["To"], msg["Subject"] = st.secrets["EMAIL_SENDER"], st.secrets["TEAM_EMAIL"], f"🚀 New AI Report: {target_city}"
+            msg.attach(MIMEText(f"High-ticket campaign ready for {target_city}. Word doc attached.", "plain"))
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(create_word_doc(content))
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", f"attachment; filename=Report_{target_city}.docx")
+            msg.attach(part)
             with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                server.login(sender_email, sender_password)
-                server.sendmail(sender_email, receiver_email, message.as_string())
+                server.login(st.secrets["EMAIL_SENDER"], st.secrets["EMAIL_PASSWORD"])
+                server.sendmail(st.secrets["EMAIL_SENDER"], st.secrets["TEAM_EMAIL"], msg.as_string())
             return True
         except Exception as e:
-            st.error(f"Email Error: {e}")
+            st.error(f"Email failed: {e}")
             return False
 
     # --- SIDEBAR ---
@@ -147,81 +147,56 @@ if st.session_state.get("authentication_status"):
         st.header(f"Welcome, {st.session_state['name']}!")
         authenticator.logout('Logout', 'sidebar', key='unique_logout_key')
         st.divider()
-        
-        st.header("🎯 Targeting")
         industry_map = {
-            "HVAC": ["Full System Replacement", "IAQ & Filtration", "Commercial", "Heat Pump Upgrade"],
-            "Plumbing": ["Water Heater Service", "Sewer Line Replacement", "Emergency Repair"],
+            "HVAC": ["Full System Replacement", "IAQ & Filtration", "Heat Pump Upgrade"],
+            "Plumbing": ["Sewer Line Replacement", "Water Heater Service"],
             "Custom": ["Manual Entry"]
         }
         main_cat = st.selectbox("Select Industry", list(industry_map.keys()))
         target_service = st.selectbox("Select Service", industry_map[main_cat]) if main_cat != "Custom" else st.text_input("Enter Service")
         city_input = st.text_input("Target City", placeholder="e.g. Naperville, IL")
-        
         st.divider()
         high_ticket = st.toggle("Focus on High-Ticket Leads", value=True)
         include_blog = st.checkbox("Generate SEO Blog Content", value=True)
         run_button = st.button("🚀 Run AI Swarm")
 
     st.title("🌬️ BreatheEasy AI Launchpad")
-
-    # --- MAIN UI TABS ---
     main_tabs = st.tabs(["🔥 Generate Strategy", "📊 Lead Database"])
 
     with main_tabs[0]:
         if run_button and city_input:
             with st.spinner(f"Coordinating agents for {target_service} in {city_input}..."):
-                result = marketing_crew.kickoff(inputs={
-                    'city': city_input, 
-                    'industry': main_cat, 
-                    'service': target_service,
-                    'premium_focus': high_ticket,
-                    'blog': include_blog
-                })
-                try:
-                    with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
-                        report_content = f.read()
-                    st.session_state['ad_copy'] = report_content
-                    st.session_state['generated'] = True
-                    # Save to Local DB
-                    save_to_db(st.session_state['name'], main_cat, target_service, city_input, report_content)
-                except:
-                    st.error("Error retrieving report file.")
+                marketing_crew.kickoff(inputs={'city': city_input, 'industry': main_cat, 'service': target_service, 'premium': high_ticket, 'blog': include_blog})
+                with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
+                    report_content = f.read()
+                st.session_state['ad_copy'] = report_content
+                st.session_state['generated'] = True
+                save_to_db(st.session_state['name'], main_cat, target_service, city_input, report_content)
 
         if st.session_state.get('generated'):
             st.success("✨ Campaign Ready!")
             full_rpt = st.session_state.get('ad_copy', '')
-            
             c1, c2, c3 = st.columns(3)
-            with c1:
-                st.download_button("📄 Word", create_word_doc(full_rpt), f"{city_input}_Report.docx")
-            with c2:
-                st.download_button("📕 PDF", create_pdf(full_rpt), f"{city_input}_Report.pdf")
+            with c1: st.download_button("📄 Word Report", create_word_doc(full_rpt), f"{city_input}_Report.docx")
+            with c2: st.download_button("📕 Branded PDF", create_pdf(full_rpt, target_service, city_input), f"{city_input}_Report.pdf")
             with c3:
                 if st.button("📧 Email Team"):
-                    with st.spinner("Sending..."):
-                        if send_email_via_smtp(full_rpt, city_input):
-                            st.success("Sent!")
-            
+                    if send_email_via_smtp(full_rpt, city_input): st.success("Sent!")
             st.divider()
             st.markdown(full_rpt)
 
     with main_tabs[1]:
-        st.header("Campaign History & Leads")
+        st.header("Lead History Database")
         conn = sqlite3.connect('leads_history.db', check_same_thread=False)
         history_df = pd.read_sql_query("SELECT date, user, industry, service, city FROM leads ORDER BY id DESC", conn)
         conn.close()
-        
         if not history_df.empty:
             st.dataframe(history_df, use_container_width=True)
-            st.divider()
-            st.subheader("View Previous Report")
-            selected_city = st.selectbox("Select a city to reload:", history_df['city'].unique())
-            if st.button("View History Content"):
+            sel_city = st.selectbox("Reload a city's report:", history_df['city'].unique())
+            if st.button("Load History Content"):
                 conn = sqlite3.connect('leads_history.db', check_same_thread=False)
-                selected_content = pd.read_sql_query(f"SELECT content FROM leads WHERE city='{selected_city}' LIMIT 1", conn)
+                res = pd.read_sql_query(f"SELECT content FROM leads WHERE city='{sel_city}' LIMIT 1", conn)
                 conn.close()
-                st.info(f"Report for {selected_city}")
-                st.markdown(selected_content['content'][0])
-        else:
-            st.info("No leads generated yet.")
+                st.info(f"Report for {sel_city}")
+                st.markdown(res['content'][0])
+        else: st.info("No leads generated yet.")
