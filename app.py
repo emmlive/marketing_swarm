@@ -3,22 +3,44 @@ import streamlit_authenticator as stauth
 import os
 import re
 import base64
-from openai import OpenAI, BadRequestError
+from openai import OpenAI
 from main import marketing_crew
 from docx import Document
 from fpdf import FPDF
 from io import BytesIO
 
-# --- 1. AUTHENTICATION CONFIGURATION (FROM SECRETS) ---
-# We must convert st.secrets to a mutable dict to avoid:
-# "TypeError: Secrets does not support item assignment"
-credentials = dict(st.secrets['credentials'])
+# --- 1. CRITICAL: PAGE CONFIG MUST BE THE FIRST STREAMLIT COMMAND ---
+st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# Ensure nested 'usernames' is also a mutable dictionary
+# --- 2. THE SaaS GATEKEEPER CSS ---
+# This hides the GitHub/Fork icons, the 3-dots menu, the footer, and the toolbar
+hide_style = """
+    <style>
+    /* Hides the top header bar entirely (GitHub icon, Fork, 3-dots) */
+    header { visibility: hidden !important; }
+    
+    /* Hides the 'Manage app' button and running status widgets */
+    div[data-testid="stStatusWidget"] { visibility: hidden !important; }
+    
+    /* Hides the toolbar/pencil icon used for developer edits */
+    div[data-testid="stToolbar"] { visibility: hidden !important; }
+    
+    /* Hides the 'Made with Streamlit' footer */
+    footer { visibility: hidden !important; }
+    
+    /* Removes extra padding at the top for a cleaner white-label look */
+    .block-container { padding-top: 2rem !important; }
+    </style>
+"""
+st.markdown(hide_style, unsafe_allow_html=True)
+
+# --- 3. AUTHENTICATION CONFIGURATION ---
+# Convert Secrets to mutable dicts for processing
+credentials = dict(st.secrets['credentials'])
 if 'usernames' in credentials:
     credentials['usernames'] = dict(credentials['usernames'])
-    for username in credentials['usernames']:
-        credentials['usernames'][username] = dict(credentials['usernames'][username])
+    for user in credentials['usernames']:
+        credentials['usernames'][user] = dict(credentials['usernames'][user])
 
 authenticator = stauth.Authenticate(
     credentials,
@@ -27,48 +49,47 @@ authenticator = stauth.Authenticate(
     st.secrets['cookie']['expiry_days']
 )
 
-# --- 2. AUTHENTICATION UI ---
-auth_status = st.session_state.get("authentication_status")
+# --- 4. AUTHENTICATION UI ---
+#Capture return values for v0.3.x session management
+name, authentication_status, username = authenticator.login(location='main')
 
-if not auth_status:
+if authentication_status is False:
+    st.error('Username/password is incorrect')
+elif authentication_status is None:
+    st.warning('Please enter your username and password')
+    
+    # Registration & Reset Options (Only visible to non-logged users)
+    st.divider()
     col1, col2 = st.columns(2)
     with col1:
         try:
-            # Pull preauthorized emails from secrets
             preauth_list = st.secrets.get('preauthorized', {}).get('emails', [])
-            
-            # New location for pre_authorized parameter in version 0.3.x
             if authenticator.register_user(location='main', pre_authorized=preauth_list):
                 st.success('Registration successful! Please contact admin to finalize.')
         except Exception as e:
             st.error(f"Registration Error: {e}")
-            
     with col2:
         try:
-            user_forgot, email_forgot, new_pw = authenticator.forgot_password(location='main')
-            if user_forgot:
+            if authenticator.forgot_password(location='main')[0]:
                 st.success('Temporary password generated. Please contact admin.')
         except Exception as e:
             st.error(f"Reset Error: {e}")
 
-    authenticator.login(location='main')
+    # STOP execution here so unauthenticated users see nothing else
+    st.stop()
 
-# --- 3. THE PROTECTED APP DASHBOARD ---
-if auth_status:
-    
-    # --- SECURE API KEY INITIALIZATION ---
+# --- 5. PROTECTED SaaS DASHBOARD (Only runs if status is True) ---
+if authentication_status:
+    # Initialize API Client only after successful login
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-    st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
     
-    # --- SIDEBAR: LOGOUT & CONNECTION STATUS ---
     with st.sidebar:
         st.header(f"Welcome, {st.session_state['name']}!")
         authenticator.logout('Logout', 'sidebar', key='unique_logout_key')
         st.divider()
         st.caption("🟢 System Status: OpenAI Connected")
-            
-        st.divider()
+        
+        # --- Industry Selection Logic ---
         st.header("🏢 Business Category")
         industry_map = {
             "HVAC": ["Air Duct Cleaning", "Dryer Vent Cleaning", "Heating Repair", "AC Installation"],
@@ -81,7 +102,7 @@ if auth_status:
         main_cat = st.selectbox("Select Industry", list(industry_map.keys()))
         
         if main_cat == "Custom":
-            target_industry = st.text_input("Enter Industry (e.g., Solar)")
+            target_industry = st.text_input("Enter Industry")
             target_service = st.text_input("Enter Specific Service")
         else:
             target_industry = main_cat
@@ -91,9 +112,10 @@ if auth_status:
         city_input = st.text_input("Enter City", placeholder="Naperville, IL")
         run_button = st.button("🚀 Generate Local Swarm")
 
+    # Main App Header
     st.title("🌬️ BreatheEasy AI: Multi-Service Home Launchpad")
 
-    # (Helper functions remain the same)
+    # --- HELPER FUNCTIONS ---
     def create_word_doc(content):
         doc = Document()
         doc.add_heading('BreatheEasy AI: Campaign Report', 0)
@@ -119,23 +141,7 @@ if auth_status:
             return response.data[0].url
         except Exception: return None
 
-    def analyze_inspection_photo(image_bytes, user_prompt):
-        base64_image = base64.b64encode(image_bytes).decode('utf-8')
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "user", "content": [
-                        {"type": "text", "text": user_prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                    ]}
-                ],
-                max_tokens=500,
-            )
-            return response.choices[0].message.content
-        except Exception as e: return f"Error: {str(e)}"
-
-    # --- EXECUTION ---
+    # --- EXECUTION LOGIC ---
     if run_button and city_input:
         with st.spinner(f"Building {target_service} campaign for {city_input}..."):
             result = marketing_crew.kickoff(inputs={
@@ -144,26 +150,28 @@ if auth_status:
                 'service': target_service
             })
             st.session_state['generated'] = True
-            st.session_state['city'] = city_input
-            st.session_state['service'] = target_service
             
-            with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
-                st.session_state['ad_copy'] = f.read()
-            with open("full_7day_campaign.md", "r", encoding="utf-8") as f:
-                st.session_state['schedule'] = f.read()
-            with open("visual_strategy.md", "r", encoding="utf-8") as f:
-                st.session_state['vision'] = f.read()
+            # Simulated File Loading (Adjust based on your CrewAI output files)
+            try:
+                with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
+                    st.session_state['ad_copy'] = f.read()
+                with open("full_7day_campaign.md", "r", encoding="utf-8") as f:
+                    st.session_state['schedule'] = f.read()
+                with open("visual_strategy.md", "r", encoding="utf-8") as f:
+                    st.session_state['vision'] = f.read()
+            except FileNotFoundError:
+                st.error("Report files not found. Ensure CrewAI is saving strategy files correctly.")
 
     # --- DISPLAY DASHBOARD ---
     if st.session_state.get('generated'):
         st.success(f"✨ Campaign Ready!")
-        tabs = st.tabs(["📝 Ad Copy", "🗓️ Schedule", "🖼️ Visual Assets", "🚀 Push to Ads", "🔬 Diagnostic Lab"])
+        tabs = st.tabs(["📝 Ad Copy", "🗓️ Schedule", "🖼️ Visual Assets", "🚀 Download"])
         
-        with tabs[0]: st.markdown(st.session_state['ad_copy'])
-        with tabs[1]: st.markdown(st.session_state['schedule'])
+        with tabs[0]: st.markdown(st.session_state.get('ad_copy', 'No copy generated.'))
+        with tabs[1]: st.markdown(st.session_state.get('schedule', 'No schedule generated.'))
         with tabs[2]:
             st.header("Visual Concepts")
-            prompts = re.findall(r"AI Image Prompt: (.*)", st.session_state['vision'])
+            prompts = re.findall(r"AI Image Prompt: (.*)", st.session_state.get('vision', ''))
             if prompts:
                 for idx, p in enumerate(prompts[:3]):
                     with st.expander(f"Concept {idx+1}"):
@@ -171,31 +179,10 @@ if auth_status:
                         if st.button(f"Paint Ad {idx+1}", key=f"pnt_{idx}"):
                             url = generate_ad_image(p)
                             if url: st.image(url)
+        
         with tabs[3]:
             st.header("Platform Payloads")
-            variations = re.split(r'### Facebook Ad Variation \d:', st.session_state['ad_copy'])
-            variations = [v.strip() for v in variations if len(v.strip()) > 50]
-            for i, ad_text in enumerate(variations):
-                with st.expander(f"Meta Payload {i+1}"):
-                    h = re.search(r"\*\*Headline:\*\*\s*(.*)", ad_text)
-                    b = re.search(r"\*\*Body Copy:\*\*\s*([\s\S]*?)(?=\*\*Call to Action:|\Z)", ad_text)
-                    st.code(b.group(1).strip() if b else ad_text, language="text")
-                    st.code(h.group(1) if h else "Local Pro", language="text")
-        with tabs[4]:
-            st.header("Diagnostic Lab")
-            up_file = st.file_uploader("Upload Inspection Photo", type=['jpg', 'jpeg', 'png'])
-            if up_file:
-                st.image(up_file, width=400)
-                if st.button("🔍 Run Inspection"):
-                    report = analyze_inspection_photo(up_file.getvalue(), "Analyze for debris and safety risks.")
-                    st.markdown(report)
-
-        st.divider()
-        full_rpt = f"# {st.session_state['service']} Report: {st.session_state['city']}\n\n" + st.session_state['ad_copy']
-        c1, c2, c3 = st.columns(3)
-        c1.download_button("📄 Word", create_word_doc(full_rpt), "Report.docx", key="dl_w")
-        c2.download_button("📕 PDF", create_pdf(full_rpt), "Report.pdf", key="dl_p")
-        c3.download_button("📝 Markdown", full_rpt, "Report.md", key="dl_m")
-
-elif auth_status is False:
-    st.error('Username/password is incorrect')
+            full_rpt = f"# {target_service} Report: {city_input}\n\n" + st.session_state.get('ad_copy', '')
+            c1, c2 = st.columns(2)
+            c1.download_button("📄 Word", create_word_doc(full_rpt), "Report.docx")
+            c2.download_button("📕 PDF", create_pdf(full_rpt), "Report.pdf")
