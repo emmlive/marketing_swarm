@@ -12,17 +12,20 @@ from io import BytesIO
 # --- 1. CRITICAL: PAGE CONFIG MUST BE FIRST ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# --- 2. THE ULTIMATE SaaS GATEKEEPER CSS (Aggressive Version) ---
-# Targets top-right tools, bottom-right badges, and the 'Manage app' button
+# --- 2. TOTAL WHITE-LABEL SaaS GATEKEEPER CSS ---
+# This targets the top header, the toolbar, the footer, and the 
+# persistent bottom-right 'Hosted with Streamlit' badge.
 hide_style = """
     <style>
     /* Hides the top header entirely (GitHub/Fork/3-dots) */
     header { visibility: hidden !important; }
     
-    /* Hides the bottom-right status widget & connection status for everyone */
+    /* Hides the bottom-right status widget & connection status */
+    /* Also targets any link containing 'streamlit.io' to remove branding */
     div[data-testid="stStatusWidget"], 
     div[data-testid="stConnectionStatus"],
-    .stAppDeployButton { 
+    .stAppDeployButton,
+    a[href*="streamlit.io"] { 
         display: none !important; 
         visibility: hidden !important; 
     }
@@ -33,17 +36,14 @@ hide_style = """
     /* Hides the 'Made with Streamlit' footer */
     footer { visibility: hidden !important; }
     
-    /* White-label branding: Removes extra top space */
+    /* White-label branding: Removes top gap and hides hamburger menu */
     .block-container { padding-top: 1.5rem !important; }
-    
-    /* Hides the main menu (hamburger) if it still persists */
     #MainMenu { visibility: hidden !important; }
     </style>
 """
 st.markdown(hide_style, unsafe_allow_html=True)
 
 # --- 3. AUTHENTICATION CONFIGURATION ---
-# Convert Secrets to mutable dicts for processing
 credentials = dict(st.secrets['credentials'])
 if 'usernames' in credentials:
     credentials['usernames'] = dict(credentials['usernames'])
@@ -57,11 +57,10 @@ authenticator = stauth.Authenticate(
     st.secrets['cookie']['expiry_days']
 )
 
-# --- 4. AUTHENTICATION UI (Updated for v0.3.0+) ---
-# Simply call .login(); status is stored in st.session_state automatically.
+# --- 4. AUTHENTICATION UI (v0.3.0+ Fix) ---
+# Status is automatically handled in st.session_state
 authenticator.login(location='main')
 
-# Logic for unauthenticated or failed login
 if st.session_state.get("authentication_status") is False:
     st.error('Username/password is incorrect')
 elif st.session_state.get("authentication_status") is None:
@@ -84,13 +83,12 @@ elif st.session_state.get("authentication_status") is None:
         except Exception as e:
             st.error(f"Reset Error: {e}")
 
-    # CRITICAL: Prevent the rest of the app from loading
+    # STOP unauthenticated users
     st.stop()
 
 # --- 5. PROTECTED SaaS DASHBOARD ---
 if st.session_state.get("authentication_status"):
     
-    # Initialize API Client
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     
     with st.sidebar:
@@ -160,7 +158,7 @@ if st.session_state.get("authentication_status"):
             except FileNotFoundError:
                 st.error("Strategy files not found. Check CrewAI output names.")
 
-    # --- DASHBOARD DISPLAY ---
+    # --- DISPLAY ---
     if st.session_state.get('generated'):
         st.success(f"✨ Campaign Ready!")
         tabs = st.tabs(["📝 Ad Copy", "🚀 Download"])
