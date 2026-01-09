@@ -8,16 +8,15 @@ from fpdf import FPDF
 from io import BytesIO
 from streamlit_gsheets import GSheetsConnection
 
-# --- 1. CRITICAL: MUST BE THE FIRST STREAMLIT COMMAND ---
+# --- 1. PAGE CONFIG (Must be first) ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# --- 2. THE 2026 SaaS BRANDING & SELECTORS ---
+# --- 2. THE TOTAL SaaS BRANDING (Nuclear CSS) ---
 logo_url = "https://drive.google.com/uc?export=view&id=1Jw7XreUO4yAQxUgKAZPK4sRi4mzjw_yU"
 brand_bg = "#F8F9FB"
 
 st.markdown(f"""
     <style>
-    /* Force hide all Streamlit platform indicators */
     header, footer, .stAppDeployButton, #stDecoration, 
     div[data-testid="stStatusWidget"], div[data-testid="stConnectionStatus"],
     div[data-testid="stToolbar"] {{
@@ -35,28 +34,29 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DYNAMIC AUTHENTICATION (GSheets Connector) ---
-# Map Gemini key to Google key for underlying libraries
-os.environ["GOOGLE_API_KEY"] = st.secrets.get("GEMINI_API_KEY", "")
-os.environ["GEMINI_API_KEY"] = st.secrets.get("GEMINI_API_KEY", "")
+# --- 3. DYNAMIC AUTHENTICATION & KEY MAPPING ---
+# This fixes the KeyError by ensuring both names point to your secret
+if "GEMINI_API_KEY" in st.secrets:
+    os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+    os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
 
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(ttl="0") # No cache for instant user updates
+    df = conn.read(ttl="0") 
     
     user_data = {}
     for _, row in df.iterrows():
         user_data[str(row['username'])] = {
             "name": str(row['name']),
             "email": str(row['email']),
-            "password": str(row['password']) # Must be pre-hashed in sheet
+            "password": str(row['password'])
         }
     credentials = {"usernames": user_data}
 except Exception as e:
-    st.error("Database Connection Failed. Check Secrets and Sheet Permissions.")
+    st.error("User Database Connection Failed. Please check your Secrets and GSheet sharing.")
     st.stop()
 
-# Initialize Authenticator 0.4.2
+# Initialize Authenticator for v0.4.2
 authenticator = stauth.Authenticate(
     credentials,
     st.secrets['cookie']['name'],
@@ -64,8 +64,8 @@ authenticator = stauth.Authenticate(
     float(st.secrets['cookie']['expiry_days'])
 )
 
-# --- 4. LOGIN LOGIC (v0.4.2 Syntax: Location is the 1st argument) ---
-# In 0.4.2, result is returned as (name, authentication_status, username)
+# --- 4. LOGIN LOGIC ---
+# Updated syntax for 0.4.2
 authenticator.login(location='main')
 
 if st.session_state["authentication_status"] is False:
@@ -109,7 +109,6 @@ if st.session_state["authentication_status"]:
             new_pw = st.text_input("Plain Text Password", type="password")
             if st.button("Generate Hash"):
                 if new_pw:
-                    # In 0.4.2, Hasher is used like this:
                     hashed = stauth.Hasher([new_pw]).generate()[0]
                     st.code(hashed)
                     st.info("Paste this into your Google Sheet.")
@@ -137,7 +136,6 @@ if st.session_state["authentication_status"]:
                 'service': target_service
             })
             st.session_state['generated'] = True
-            # Assuming main.py creates this file locally
             try:
                 with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
                     st.session_state['ad_copy'] = f.read()
