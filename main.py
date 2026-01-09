@@ -1,28 +1,30 @@
 import os
 
-# 1. Silence telemetry to prevent signal errors in Streamlit
+# 1. SILENCE TELEMETRY - Must stay at the top
 os.environ["OTEL_SDK_DISABLED"] = "true"
 
 from crewai import Crew, Process
 import agents 
-from tasks import MarketingTasks  # Import the Class, not just the file
+from tasks import MarketingTasks 
 
-# Instantiate the Task Factory
+# Instantiate the Task Factory globally for the module
 tasks = MarketingTasks()
 
 def create_marketing_crew(city, industry, service, premium, blog):
     """
     Dynamically assembles the Crew based on user inputs.
-    This ensures variables like 'premium' and 'blog' are injected into the task descriptions.
+    Injects 'premium' and 'blog' flags into the agent task descriptions.
     """
     
-    # Define Tasks using the factory class and passing variables
-    # We pass the specific agent to each task function
+    # Initialize tasks by calling the methods from our MarketingTasks class
+    # This ensures the LLM 'sees' the specific city and premium focus
     t1 = tasks.research_task(agents.market_analyst, city, industry, service, premium)
     t2 = tasks.creative_task(agents.creative_director, city, industry, service, premium, blog)
     t3 = tasks.review_task(agents.proofreader, city, industry, service)
-    t4 = tasks.campaign_task(agents.social_media_manager, city, industry, service, t3) # t3 is context
-    t5 = tasks.vision_task(agents.vision_inspector, city, industry, service, [t3, t4]) # t3/t4 are context
+    
+    # Task 4 & 5 use 'context' so they work on the POLISHED version from Task 3
+    t4 = tasks.campaign_task(agents.social_media_manager, city, industry, service, t3) 
+    t5 = tasks.vision_task(agents.vision_inspector, city, industry, service, [t3, t4]) 
 
     return Crew(
         agents=[
@@ -40,48 +42,36 @@ def create_marketing_crew(city, industry, service, premium, blog):
         max_rpm=2 
     )
 
-# --- GLOBAL WRAPPER FOR app.py ---
+# --- GLOBAL WRAPPER: This is what app.py calls ---
 def run_marketing_swarm(inputs):
     """
-    This is the function app.py calls.
-    It unpacks the inputs and initializes the dynamic crew.
+    Unpacks the inputs and kicks off the execution.
     """
     crew_instance = create_marketing_crew(
-        city=inputs.get('city'),
-        industry=inputs.get('industry'),
-        service=inputs.get('service'),
+        city=inputs.get('city', 'Naperville, IL'),
+        industry=inputs.get('industry', 'HVAC'),
+        service=inputs.get('service', 'Service'),
         premium=inputs.get('premium', True),
         blog=inputs.get('blog', True)
     )
+    # Return the raw result so app.py can parse or save it
     return crew_instance.kickoff()
 
-# --------------------------------------------
-
+# --- FOR MANUAL TERMINAL TESTING ---
 def main():
-    """Terminal entry point for manual testing."""
     print("🌬️ BreatheEasy AI: High-Ticket Engine Initialized.")
 
-    # Manual Inputs for Testing
-    target_industry = input("Industry: ") or "HVAC"
-    target_service = input("Service: ") or "Full System Replacement"
-    target_city = input("City: ") or "Naperville, IL"
-    is_premium = input("Premium Focus? (y/n): ").lower() == 'y'
-    is_blog = input("Include Blog? (y/n): ").lower() == 'y'
-
     inputs = {
-        'city': target_city,
-        'industry': target_industry,
-        'service': target_service,
-        'premium': is_premium,
-        'blog': is_blog
+        'city': input("City: ") or "Naperville, IL",
+        'industry': input("Industry: ") or "HVAC",
+        'service': input("Service: ") or "Full System Replacement",
+        'premium': input("Premium (y/n): ").lower() == 'y',
+        'blog': input("Include Blog (y/n): ").lower() == 'y'
     }
 
-    print(f"\n🚀 Launching Swarm for {target_city}...")
+    print(f"\n🚀 Launching Swarm for {inputs['city']}...")
     result = run_marketing_swarm(inputs)
-
-    print("\n##############################")
-    print("✅ CAMPAIGN COMPLETE!")
-    print("##############################")
+    print("\n✅ CAMPAIGN COMPLETE!")
 
 if __name__ == "__main__":
     main()
