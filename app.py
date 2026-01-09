@@ -21,24 +21,29 @@ if "GEMINI_API_KEY" in st.secrets:
     os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
 
 # --- 2. PAGE CONFIGURATION ---
-st.set_page_config(page_title="BreatheEasy AI | Enterprise", page_icon="🌬️", layout="wide")
+st.set_page_config(page_title="BreatheEasy AI | Enterprise Swarm", page_icon="🌬️", layout="wide")
 
-# --- 3. DATABASE INITIALIZATION (Expanded for Packages) ---
+# --- 3. DATABASE INITIALIZATION ---
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS leads 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, service TEXT, city TEXT, content TEXT)''')
-    # Added 'package' column for Tiered Access
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT, package TEXT)''')
     
     c.execute("SELECT * FROM users WHERE username='admin'")
     if not c.fetchone():
         hashed_pw = stauth.Hasher.hash('admin123')
-        # Admin defaults to 'Unlimited'
         c.execute("INSERT INTO users (username, email, name, password, role, package) VALUES (?, ?, ?, ?, ?, ?)",
                   ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin', 'Unlimited'))
+    conn.commit()
+    conn.close()
+
+def update_user_package(username, new_package):
+    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("UPDATE users SET package = ? WHERE username = ?", (new_package, username))
     conn.commit()
     conn.close()
 
@@ -50,7 +55,7 @@ def get_users_from_db():
     for _, row in df.iterrows():
         user_dict['usernames'][row['username']] = {
             'email': row['email'], 'name': row['name'], 'password': row['password'],
-            'package': row.get('package', 'Basic') # Store package in auth dict
+            'package': row.get('package', 'Basic')
         }
     return user_dict
 
@@ -64,6 +69,15 @@ def add_user_to_db(username, email, name, hashed_password, package='Basic'):
         return True
     except: return False
     finally: conn.close()
+
+def save_lead_to_db(user, industry, service, city, content):
+    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+    c = conn.cursor()
+    date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.execute("INSERT INTO leads (date, user, industry, service, city, content) VALUES (?, ?, ?, ?, ?, ?)",
+              (date_str, user, industry, service, city, content))
+    conn.commit()
+    conn.close()
 
 init_db()
 
@@ -85,6 +99,7 @@ st.markdown(f"""
     }}
     .block-container {{ padding-top: 1.5rem !important; }}
     .tier-badge {{ padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; background: {brand_blue}; color: white; }}
+    .pricing-card {{ border: 1px solid #ddd; padding: 20px; border-radius: 10px; text-align: center; background: white; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -104,7 +119,6 @@ if st.session_state["authentication_status"] is None:
             if res:
                 email, username, name = res
                 if email:
-                    # Logic: New signups start on 'Basic'
                     db_ready_pw = stauth.Hasher.hash(authenticator.credentials['usernames'][username]['password'])
                     if add_user_to_db(username, email, name, db_ready_pw, package='Basic'):
                         st.success('✅ Registered! Login to start your Basic plan.')
@@ -114,82 +128,100 @@ if st.session_state["authentication_status"] is None:
 
 # --- 6. PROTECTED DASHBOARD ---
 if st.session_state["authentication_status"]:
-    
-    # FETCH USER TIER
-    # Authenticator puts user info into st.session_state after login
     username = st.session_state["username"]
-    user_tier = db_credentials['usernames'][username].get('package', 'Basic')
+    current_db_data = get_users_from_db()
+    user_tier = current_db_data['usernames'][username].get('package', 'Basic')
 
-    # PACKAGE DEFINITIONS
     PACKAGE_CONFIG = {
         "Basic": {"allowed_industries": ["HVAC", "Plumbing"], "blog": False, "max_files": 1},
         "Pro": {"allowed_industries": ["HVAC", "Plumbing", "Restoration", "Roofing"], "blog": True, "max_files": 5},
         "Unlimited": {"allowed_industries": ["HVAC", "Plumbing", "Restoration", "Roofing", "Solar", "Custom"], "blog": True, "max_files": 20}
     }
 
-    # --- SIDEBAR & MULTI-FILE UPLOAD ---
+    # Helper Functions
+    def create_word_doc(content):
+        doc = Document(); doc.add_heading('BreatheEasy AI Strategy', 0)
+        for line in content.split('\n'): doc.add_paragraph(line)
+        bio = BytesIO(); doc.save(bio); return bio.getvalue()
+
+    def create_pdf(content, service, city):
+        pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", 'B', 15)
+        pdf.cell(0, 10, 'BreatheEasy AI Strategy Report', 0, 1, 'C')
+        pdf.set_font("Arial", size=11); clean = content.encode('latin-1', 'ignore').decode('latin-1')
+        pdf.multi_cell(0, 8, txt=clean); return pdf.output(dest='S').encode('latin-1')
+
+    # --- SIDEBAR & ASSETS ---
     with st.sidebar:
         st.markdown(f"### 👋 {st.session_state['name']} <span class='tier-badge'>{user_tier}</span>", unsafe_allow_html=True)
         authenticator.logout('Sign Out', 'sidebar')
         st.divider()
 
+        if user_tier == "Basic":
+            with st.expander("🎟️ Redeem Coupon"):
+                coupon_code = st.text_input("Promo Code")
+                if st.button("Apply"):
+                    if coupon_code == "BreatheFree2026":
+                        update_user_package(username, "Pro")
+                        st.success("Upgraded to PRO!")
+                        st.rerun()
+                    else: st.error("Invalid Code")
+
         st.subheader("📁 Asset Manager")
         max_f = PACKAGE_CONFIG[user_tier]["max_files"]
-        uploaded_media = st.file_uploader(f"Reference Photos/Videos (Max {max_f})", 
-                                         accept_multiple_files=True, 
-                                         type=['png', 'jpg', 'mp4'])
-        
-        if len(uploaded_media) > max_f:
-            st.error(f"⚠️ Your {user_tier} plan only allows {max_f} files. Please remove some.")
+        uploaded_media = st.file_uploader(f"Max {max_f} assets", accept_multiple_files=True, type=['png', 'jpg', 'mp4'])
         
         st.divider()
-        st.subheader("🎯 Campaign Settings")
-        
-        # INDUSTRY GATING
         full_map = {
-            "HVAC": ["Full System Replacement", "IAQ"],
-            "Plumbing": ["Sewer Repair", "Tankless Heaters"],
-            "Restoration": ["Water Damage", "Mold Remediation"],
-            "Roofing": ["Roof Replacement", "Storm Damage"],
-            "Solar": ["Solar Grid Install"],
-            "Custom": ["Manual Entry"]
+            "HVAC": ["Full System Replacement", "IAQ"], "Plumbing": ["Sewer Repair", "Tankless Heaters"],
+            "Restoration": ["Water Damage", "Mold Remediation"], "Roofing": ["Roof Replacement", "Storm Damage"],
+            "Solar": ["Solar Grid Install"], "Custom": ["Manual Entry"]
         }
-        
         allowed = PACKAGE_CONFIG[user_tier]["allowed_industries"]
         main_cat = st.selectbox("Industry", [i for i in full_map.keys() if i in allowed])
-        target_service = st.selectbox("Service", full_map[main_cat]) if main_cat != "Custom" else st.text_input("Custom Service")
-        city_input = st.text_input("City", placeholder="e.g. Naperville, IL")
+        target_service = st.selectbox("Service", full_map[main_cat]) if main_cat != "Custom" else st.text_input("Service")
+        city_input = st.text_input("City", placeholder="Naperville, IL")
 
-        # FEATURE GATING (Blog)
-        if PACKAGE_CONFIG[user_tier]["blog"]:
-            include_blog = st.toggle("📝 SEO Blog Content", value=True)
-        else:
-            st.info("🔒 Upgrade to Pro for SEO Blogs")
-            include_blog = False
+        include_blog = st.toggle("📝 SEO Blog Content", value=True) if PACKAGE_CONFIG[user_tier]["blog"] else False
+        if not PACKAGE_CONFIG[user_tier]["blog"]: st.info("🔒 Upgrade for SEO Blogs")
 
         run_button = st.button("🚀 LAUNCH SWARM", type="primary", use_container_width=True)
 
     # --- MAIN TABS ---
-    t_gen, t_db, t_social, t_brand = st.tabs(["🔥 Launchpad", "📊 Database", "📱 Social", "🎨 Brand Kit"])
+    t_gen, t_db, t_social, t_price = st.tabs(["🔥 Launchpad", "📊 Database", "📱 Social Preview", "💎 Pricing"])
 
     with t_gen:
         if run_button and city_input:
             if len(uploaded_media) <= max_f:
-                with st.spinner(f"Agent Swarm active on {user_tier} Tier..."):
-                    # Process Swarm
+                with st.spinner(f"Swarm active on {user_tier} Tier..."):
                     run_marketing_swarm({'city': city_input, 'industry': main_cat, 'service': target_service, 'premium': True, 'blog': include_blog})
                     with open("final_marketing_strategy.md", "r", encoding="utf-8") as f: content = f.read()
                     st.session_state['ad_copy'] = content
                     st.session_state['generated'] = True
-            else:
-                st.error("Too many files uploaded for your plan.")
+                    save_lead_to_db(username, main_cat, target_service, city_input, content)
+            else: st.error("Too many files.")
 
         if st.session_state.get('generated'):
-            st.success(f"✨ {user_tier} Campaign Ready!")
-            st.markdown(st.session_state['ad_copy'])
+            st.success("✨ Strategy Ready!")
+            copy = st.session_state['ad_copy']
+            c1, c2 = st.columns(2)
+            with c1: st.download_button("📄 Word", create_word_doc(copy), f"{city_input}.docx")
+            with c2: st.download_button("📕 PDF", create_pdf(copy, target_service, city_input), f"{city_input}.pdf")
+            st.markdown(copy)
 
-    with t_brand:
-        st.header("SaaS Identity")
-        if user_tier == "Basic":
-            st.warning("Want to add Solar or Custom Industries? [Click here to Upgrade to Pro](https://your-stripe-link.com)")
-        st.image(logo_url, width=150)
+    with t_db:
+        conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+        df = pd.read_sql_query("SELECT date, user, industry, service, city FROM leads ORDER BY id DESC", conn)
+        st.dataframe(df, use_container_width=True)
+        conn.close()
+
+    with t_price:
+        st.title("💎 Plan Comparison")
+        p1, p2, p3 = st.columns(3)
+        with p1: 
+            st.markdown('<div class="pricing-card"><h3>Basic</h3><h1>$0</h1><p>HVAC/Plumb only<br>1 Asset<br>No Blogs</p></div>', unsafe_allow_html=True)
+        with p2:
+            st.markdown('<div class="pricing-card" style="border: 2px solid #0056b3;"><h3>Pro</h3><h1>$49</h1><p>4 Industries<br>5 Assets<br>SEO Blogs</p></div>', unsafe_allow_html=True)
+            st.link_button("Upgrade Now", "https://buy.stripe.com/pro_link", type="primary", use_container_width=True)
+        with p3:
+            st.markdown('<div class="pricing-card"><h3>Unlimited</h3><h1>$99</h1><p>All Industries<br>20 Assets<br>Custom niches</p></div>', unsafe_allow_html=True)
+            st.link_button("Go Unlimited", "https://buy.stripe.com/unlimited_link", use_container_width=True)
