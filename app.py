@@ -9,26 +9,17 @@ from docx import Document
 from fpdf import FPDF
 from io import BytesIO
 
-# --- 1. CRITICAL: PAGE CONFIG MUST BE THE FIRST STREAMLIT COMMAND ---
+# --- 1. CRITICAL: PAGE CONFIG MUST BE FIRST ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
 # --- 2. THE SaaS GATEKEEPER CSS ---
-# This hides the GitHub/Fork icons, the 3-dots menu, the footer, and the toolbar
+# Hides the GitHub icon, Fork button, 3-dots menu, and footer
 hide_style = """
     <style>
-    /* Hides the top header bar entirely (GitHub icon, Fork, 3-dots) */
     header { visibility: hidden !important; }
-    
-    /* Hides the 'Manage app' button and running status widgets */
     div[data-testid="stStatusWidget"] { visibility: hidden !important; }
-    
-    /* Hides the toolbar/pencil icon used for developer edits */
     div[data-testid="stToolbar"] { visibility: hidden !important; }
-    
-    /* Hides the 'Made with Streamlit' footer */
     footer { visibility: hidden !important; }
-    
-    /* Removes extra padding at the top for a cleaner white-label look */
     .block-container { padding-top: 2rem !important; }
     </style>
 """
@@ -49,16 +40,17 @@ authenticator = stauth.Authenticate(
     st.secrets['cookie']['expiry_days']
 )
 
-# --- 4. AUTHENTICATION UI ---
-#Capture return values for v0.3.x session management
-name, authentication_status, username = authenticator.login(location='main')
+# --- 4. AUTHENTICATION UI (v0.3.0+ Fix) ---
+# In newer versions, .login() returns only the status; 
+# user details are stored in st.session_state automatically.
+authentication_status = authenticator.login(location='main')
 
-if authentication_status is False:
+if st.session_state.get("authentication_status") is False:
     st.error('Username/password is incorrect')
-elif authentication_status is None:
+elif st.session_state.get("authentication_status") is None:
     st.warning('Please enter your username and password')
     
-    # Registration & Reset Options (Only visible to non-logged users)
+    # Registration & Reset Options
     st.divider()
     col1, col2 = st.columns(2)
     with col1:
@@ -70,17 +62,20 @@ elif authentication_status is None:
             st.error(f"Registration Error: {e}")
     with col2:
         try:
+            # Captures return to handle password reset
             if authenticator.forgot_password(location='main')[0]:
                 st.success('Temporary password generated. Please contact admin.')
         except Exception as e:
             st.error(f"Reset Error: {e}")
 
-    # STOP execution here so unauthenticated users see nothing else
+    # STOP unauthenticated users from seeing the app
     st.stop()
 
-# --- 5. PROTECTED SaaS DASHBOARD (Only runs if status is True) ---
-if authentication_status:
-    # Initialize API Client only after successful login
+# --- 5. PROTECTED SaaS DASHBOARD ---
+# This block only runs if authentication_status is True
+if st.session_state.get("authentication_status"):
+    
+    # Initialize API Client
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     
     with st.sidebar:
@@ -89,7 +84,7 @@ if authentication_status:
         st.divider()
         st.caption("🟢 System Status: OpenAI Connected")
         
-        # --- Industry Selection Logic ---
+        # --- Industry Selection ---
         st.header("🏢 Business Category")
         industry_map = {
             "HVAC": ["Air Duct Cleaning", "Dryer Vent Cleaning", "Heating Repair", "AC Installation"],
@@ -112,7 +107,6 @@ if authentication_status:
         city_input = st.text_input("Enter City", placeholder="Naperville, IL")
         run_button = st.button("🚀 Generate Local Swarm")
 
-    # Main App Header
     st.title("🌬️ BreatheEasy AI: Multi-Service Home Launchpad")
 
     # --- HELPER FUNCTIONS ---
@@ -135,12 +129,6 @@ if authentication_status:
         for line in clean.split('\n'): pdf.multi_cell(0, 10, txt=line)
         return pdf.output(dest='S').encode('latin-1')
 
-    def generate_ad_image(prompt):
-        try:
-            response = client.images.generate(model="dall-e-3", prompt=prompt, n=1)
-            return response.data[0].url
-        except Exception: return None
-
     # --- EXECUTION LOGIC ---
     if run_button and city_input:
         with st.spinner(f"Building {target_service} campaign for {city_input}..."):
@@ -151,37 +139,23 @@ if authentication_status:
             })
             st.session_state['generated'] = True
             
-            # Simulated File Loading (Adjust based on your CrewAI output files)
+            # File handling
             try:
                 with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
                     st.session_state['ad_copy'] = f.read()
                 with open("full_7day_campaign.md", "r", encoding="utf-8") as f:
                     st.session_state['schedule'] = f.read()
-                with open("visual_strategy.md", "r", encoding="utf-8") as f:
-                    st.session_state['vision'] = f.read()
             except FileNotFoundError:
-                st.error("Report files not found. Ensure CrewAI is saving strategy files correctly.")
+                st.error("Strategy files not found. Check CrewAI output names.")
 
-    # --- DISPLAY DASHBOARD ---
+    # --- DISPLAY ---
     if st.session_state.get('generated'):
         st.success(f"✨ Campaign Ready!")
-        tabs = st.tabs(["📝 Ad Copy", "🗓️ Schedule", "🖼️ Visual Assets", "🚀 Download"])
+        tabs = st.tabs(["📝 Ad Copy", "🗓️ Schedule", "🚀 Download"])
         
-        with tabs[0]: st.markdown(st.session_state.get('ad_copy', 'No copy generated.'))
-        with tabs[1]: st.markdown(st.session_state.get('schedule', 'No schedule generated.'))
+        with tabs[0]: st.markdown(st.session_state.get('ad_copy', 'No copy found.'))
+        with tabs[1]: st.markdown(st.session_state.get('schedule', 'No schedule found.'))
         with tabs[2]:
-            st.header("Visual Concepts")
-            prompts = re.findall(r"AI Image Prompt: (.*)", st.session_state.get('vision', ''))
-            if prompts:
-                for idx, p in enumerate(prompts[:3]):
-                    with st.expander(f"Concept {idx+1}"):
-                        st.write(p)
-                        if st.button(f"Paint Ad {idx+1}", key=f"pnt_{idx}"):
-                            url = generate_ad_image(p)
-                            if url: st.image(url)
-        
-        with tabs[3]:
-            st.header("Platform Payloads")
             full_rpt = f"# {target_service} Report: {city_input}\n\n" + st.session_state.get('ad_copy', '')
             c1, c2 = st.columns(2)
             c1.download_button("📄 Word", create_word_doc(full_rpt), "Report.docx")
