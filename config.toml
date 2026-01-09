@@ -1,0 +1,21 @@
+[client]
+# "viewer" mode removes the "Manage App" and "Deploy" buttons for non-owners
+toolbarMode = "viewer"
+# Hides the default sidebar navigation if you are using custom logic
+showSidebarNavigation = false
+
+[browser]
+# Disables the tracking of usage stats which can trigger UI elements
+gatherUsageStats = false
+
+[ui]
+# Officially hides the top header bar in modern Streamlit versions
+hideTopBar = true
+
+[theme]
+# Ensures the app follows a clean light theme regardless of user settings
+primaryColor = "#F8F9FB"
+backgroundColor = "#F8F9FB"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#31333F"
+font = "sans serif"
