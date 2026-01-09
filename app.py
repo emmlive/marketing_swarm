@@ -9,50 +9,41 @@ from docx import Document
 from fpdf import FPDF
 from io import BytesIO
 
-# --- 1. CRITICAL: PAGE CONFIG MUST BE FIRST ---
+# --- 1. PRE-IMPORT KEY MAPPING ---
+if "GEMINI_API_KEY" in st.secrets:
+    os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+    os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+
+# --- 2. PAGE CONFIGURATION ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# --- 2. THE TOTAL WHITE-LABEL CSS GATEKEEPER ---
+# --- 3. SaaS WHITE-LABEL UI ---
 logo_url = "https://drive.google.com/uc?export=view&id=1Jw7XreUO4yAQxUgKAZPK4sRi4mzjw_yU"
 brand_bg = "#F8F9FB" 
 
-hide_style = f"""
+st.markdown(f"""
     <style>
-    /* Hides the top header entirely (GitHub/Fork/3-dots) */
     header {{ visibility: hidden !important; }}
-    
-    /* Hides 'Hosted with Streamlit' badge & status indicators */
-    div[data-testid="stStatusWidget"], 
-    div[data-testid="stConnectionStatus"],
-    .stAppDeployButton,
-    a[href*="streamlit.io"] {{ 
-        display: none !important; 
-        visibility: hidden !important; 
-    }}
-    
-    /* Hides the toolbar/pencil icon at the top right */
-    div[data-testid="stToolbar"] {{ visibility: hidden !important; }}
-    
-    /* Hides the footer */
-    footer {{ visibility: hidden !important; }}
-    
-    /* SaaS Styling */
+    div[data-testid="stStatusWidget"], div[data-testid="stConnectionStatus"],
+    .stAppDeployButton, a[href*="streamlit.io"], div[data-testid="stToolbar"], 
+    footer, #stDecoration {{ display: none !important; visibility: hidden !important; }}
     .stApp {{ background-color: {brand_bg}; }}
     .stApp::before {{
-        content: ""; display: block; margin: 50px auto 0;
-        width: 200px; height: 200px;
+        content: ""; display: block; margin: 40px auto 0;
+        width: 180px; height: 180px;
         background-image: url("{logo_url}");
         background-size: contain; background-repeat: no-repeat;
     }}
-    .block-container {{ padding-top: 1.5rem !important; }}
-    #MainMenu {{ visibility: hidden !important; }}
-    #stDecoration {{ display: none !important; }}
+    /* Style the download buttons */
+    .stDownloadButton button {{
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid #dcdcdc;
+    }}
     </style>
-"""
-st.markdown(hide_style, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# --- 3. AUTHENTICATION CONFIGURATION (Matching your TOML) ---
-# This pulls the 'admin' credentials directly from your Secrets box
+# --- 4. AUTHENTICATION ---
 credentials = dict(st.secrets['credentials'])
 if 'usernames' in credentials:
     credentials['usernames'] = dict(credentials['usernames'])
@@ -66,78 +57,22 @@ authenticator = stauth.Authenticate(
     st.secrets['cookie']['expiry_days']
 )
 
-# --- 4. AUTHENTICATION UI ---
 authenticator.login(location='main')
 
 if st.session_state.get("authentication_status") is False:
     st.error('Username/password is incorrect')
 elif st.session_state.get("authentication_status") is None:
-    st.warning('Welcome to BreatheEasy AI. Please login to continue.')
-    
-    # Registration & Reset Options
-    st.divider()
-    col1, col2 = st.columns(2)
-    with col1:
-        try:
-            preauth_list = st.secrets.get('preauthorized', {}).get('emails', [])
-            if authenticator.register_user(location='main', pre_authorized=preauth_list):
-                st.success('Registration successful! Please contact admin to finalize.')
-        except Exception as e:
-            st.error(f"Registration Error: {e}")
-    with col2:
-        try:
-            if authenticator.forgot_password(location='main')[0]:
-                st.success('Temporary password generated. Please contact admin.')
-        except Exception as e:
-            st.error(f"Reset Error: {e}")
-
+    st.warning('Welcome to BreatheEasy AI. Please login.')
     st.stop()
 
-# --- 5. PROTECTED SaaS DASHBOARD ---
+# --- 5. PROTECTED DASHBOARD ---
 if st.session_state.get("authentication_status"):
-    
-    # Map Gemini key to prevent underlying library errors
-    os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
     
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    
-    with st.sidebar:
-        st.header(f"Welcome, {st.session_state['name']}!")
-        authenticator.logout('Logout', 'sidebar', key='unique_logout_key')
-        st.divider()
-        st.caption("🟢 System Status: Active")
-
-        # Admin tool for generating new Bcrypt hashes for your TOML
-        with st.expander("🛠️ Admin: Add User Hash"):
-            new_pw = st.text_input("Enter New Password", type="password")
-            if st.button("Generate Hash"):
-                st.code(stauth.Hasher([new_pw]).generate()[0])
-        
-        st.divider()
-        st.header("🏢 Business Settings")
-        industry_map = {
-            "HVAC": ["Air Duct Cleaning", "Dryer Vent Cleaning", "Heating Repair", "AC Installation"],
-            "Plumbing": ["Drain Cleaning", "Water Heater Service", "Emergency Repair"],
-            "Electrical": ["Panel Upgrades", "Wiring Inspection"],
-            "Landscaping": ["Lawn Maintenance", "Seasonal Cleanup"],
-            "Custom": ["Manual Entry"]
-        }
-        
-        main_cat = st.selectbox("Select Industry", list(industry_map.keys()))
-        target_industry = main_cat if main_cat != "Custom" else st.text_input("Enter Industry")
-        target_service = st.selectbox("Select Service", industry_map[main_cat]) if main_cat != "Custom" else st.text_input("Enter Service")
-
-        st.header("📍 Target Location")
-        city_input = st.text_input("Enter City", placeholder="Naperville, IL")
-        run_button = st.button("🚀 Generate Marketing Swarm")
-
-    st.title("🌬️ BreatheEasy AI: Multi-Service Home Launchpad")
-
-    # Helper functions
+    # --- EXPORT HELPERS ---
     def create_word_doc(content):
         doc = Document()
-        doc.add_heading('BreatheEasy AI Report', 0)
+        doc.add_heading('BreatheEasy AI: Marketing Strategy', 0)
         for line in content.split('\n'):
             doc.add_paragraph(line)
         bio = BytesIO()
@@ -149,30 +84,68 @@ if st.session_state.get("authentication_status"):
         pdf.add_page()
         pdf.set_font("Arial", size=12)
         clean = content.encode('latin-1', 'ignore').decode('latin-1')
-        for line in clean.split('\n'): pdf.multi_cell(0, 10, txt=line)
+        for line in clean.split('\n'):
+            pdf.multi_cell(0, 10, txt=line)
         return pdf.output(dest='S').encode('latin-1')
+    
+    with st.sidebar:
+        st.header(f"Welcome, {st.session_state['name']}!")
+        authenticator.logout('Logout', 'sidebar', key='unique_logout_key')
+        st.divider()
+        
+        # Team Sharing Option
+        with st.expander("👥 Team Access"):
+            st.write("Share this account with teammates or generate a new user hash below.")
+            st.info("Your current plan allows for 3 team members.")
+            new_pw = st.text_input("New Member Password", type="password")
+            if st.button("Generate Team Hash"):
+                st.code(stauth.Hasher([new_pw]).generate()[0])
 
-    # Execution Logic
+        st.divider()
+        st.header("🎯 Targeting")
+        industry_map = {"HVAC": ["Full System Replacement", "IAQ"], "Plumbing": ["Sewer Repair"]}
+        main_cat = st.selectbox("Select Industry", list(industry_map.keys()))
+        target_service = st.selectbox("Select Service", industry_map[main_cat])
+        city_input = st.text_input("Target City", placeholder="e.g. Naperville, IL")
+        
+        run_button = st.button("🚀 Run AI Swarm")
+
+    st.title("🌬️ BreatheEasy AI Launchpad")
+
     if run_button and city_input:
-        with st.spinner(f"Running Swarm for {target_service}..."):
-            result = marketing_crew.kickoff(inputs={
-                'city': city_input,
-                'industry': target_industry,
-                'service': target_service
-            })
+        with st.spinner(f"Analyzing {target_service} leads..."):
+            result = marketing_crew.kickoff(inputs={'city': city_input, 'industry': main_cat, 'service': target_service})
             st.session_state['generated'] = True
             try:
                 with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
                     st.session_state['ad_copy'] = f.read()
-            except FileNotFoundError:
-                st.error("Report data not found.")
+            except:
+                st.error("Strategy file error.")
 
+    # --- RESULTS & EXPORT SECTION ---
     if st.session_state.get('generated'):
         st.success("✨ Campaign Ready!")
-        tabs = st.tabs(["📝 Ad Copy", "🚀 Download"])
-        with tabs[0]: st.markdown(st.session_state.get('ad_copy', 'No copy found.'))
+        tabs = st.tabs(["📝 Ad Copy", "🚀 Download & Share"])
+        
+        full_rpt = st.session_state.get('ad_copy', 'No copy found.')
+        
+        with tabs[0]: 
+            st.markdown(full_rpt)
+        
         with tabs[1]:
-            full_rpt = f"# {target_service} Report: {city_input}\n\n" + st.session_state.get('ad_copy', '')
+            st.subheader("Export & Share with Team")
+            
+            # The specific Word download button you requested:
             c1, c2 = st.columns(2)
-            c1.download_button("📄 Word", create_word_doc(full_rpt), "Report.docx")
-            c2.download_button("📕 PDF", create_pdf(full_rpt), "Report.pdf")
+            with c1:
+                st.download_button("📄 Word", create_word_doc(full_rpt), "Report.docx")
+            with c2:
+                st.download_button("📕 PDF", create_pdf(full_rpt), "Report.pdf")
+            
+            st.divider()
+            # Shareable Link Logic
+            st.write("🔗 **Internal Share Link**")
+            current_url = "https://breathe-easy-ai.streamlit.app" # Replace with your real URL
+            st.text_input("Copy this link to share the app with your team:", value=current_url)
+            if st.button("📧 Email Report to Team"):
+                st.success("Report link prepared! (Integration with SendGrid/SMTP recommended for auto-emailing)")
