@@ -31,29 +31,46 @@ def init_db():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, service TEXT, city TEXT, content TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT, package TEXT)''')
+    # NEW: Audit Logs Table
+    c.execute('''CREATE TABLE IF NOT EXISTS audit_logs 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, admin_user TEXT, action TEXT, target_user TEXT, details TEXT)''')
     
     c.execute("SELECT * FROM users WHERE username='admin'")
     if not c.fetchone():
-        hasher = stauth.Hasher(['admin123'])
-        hashed_pw = hasher.generate()[0]
+        hashed_pw = stauth.Hasher.hash('admin123')
         c.execute("INSERT INTO users (username, email, name, password, role, package) VALUES (?, ?, ?, ?, ?, ?)",
                   ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin', 'Unlimited'))
     conn.commit()
     conn.close()
 
-def update_user_package(username, new_package):
+def log_action(admin_user, action, target_user, details=""):
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute("UPDATE users SET package = ? WHERE username = ?", (new_package, username))
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    c.execute("INSERT INTO audit_logs (timestamp, admin_user, action, target_user, details) VALUES (?, ?, ?, ?, ?)",
+              (timestamp, admin_user, action, target_user, details))
     conn.commit()
     conn.close()
 
-def delete_user(username):
+def update_user_package(username, new_package, admin_name):
+    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+    c = conn.cursor()
+    # Fetch old package for logging
+    c.execute("SELECT package FROM users WHERE username = ?", (username,))
+    old_package = c.fetchone()[0]
+    
+    c.execute("UPDATE users SET package = ? WHERE username = ?", (new_package, username))
+    conn.commit()
+    conn.close()
+    log_action(admin_name, "UPDATE_TIER", username, f"Changed from {old_package} to {new_package}")
+
+def delete_user(username, admin_name):
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
     c.execute("DELETE FROM users WHERE username = ?", (username,))
     conn.commit()
     conn.close()
+    log_action(admin_name, "DELETE_USER", username, "Permanently removed user account")
 
 def get_users_from_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -63,21 +80,9 @@ def get_users_from_db():
     for _, row in df.iterrows():
         user_dict['usernames'][row['username']] = {
             'email': row['email'], 'name': row['name'], 'password': row['password'],
-            'package': row.get('package', 'Basic'),
-            'role': row.get('role', 'member')
+            'package': row.get('package', 'Basic')
         }
     return user_dict
-
-def add_user_to_db(username, email, name, hashed_password, package='Basic'):
-    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
-    c = conn.cursor()
-    try:
-        c.execute("INSERT INTO users (username, email, name, password, role, package) VALUES (?, ?, ?, ?, ?, ?)",
-                  (username, email, name, hashed_password, 'member', package))
-        conn.commit()
-        return True
-    except: return False
-    finally: conn.close()
 
 def save_lead_to_db(user, industry, service, city, content):
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -107,7 +112,7 @@ st.markdown(f"""
     .block-container {{ padding-top: 1.5rem !important; }}
     .tier-badge {{ padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; background: {brand_blue}; color: white; }}
     .pricing-card {{ border: 1px solid #ddd; padding: 20px; border-radius: 10px; text-align: center; background: white; height: 100%; }}
-    .admin-card {{ border-left: 5px solid #0056b3; background: white; padding: 15px; border-radius: 5px; margin-bottom: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }}
+    .admin-card {{ border-left: 5px solid {brand_blue}; background: white; padding: 15px; border-radius: 5px; margin-bottom: 10px; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -127,11 +132,16 @@ if st.session_state["authentication_status"] is None:
             if res:
                 email, username, name = res
                 if email:
-                    hasher = stauth.Hasher([authenticator.credentials['usernames'][username]['password']])
-                    db_ready_pw = hasher.generate()[0]
-                    if add_user_to_db(username, email, name, db_ready_pw, package='Basic'):
-                        st.success('✅ Registered! Login to start your Basic plan.')
-                        st.rerun()
+                    db_ready_pw = stauth.Hasher.hash(authenticator.credentials['usernames'][username]['password'])
+                    # Initial package creation is NOT an admin action, so we don't log it here (or you can if you wish)
+                    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+                    c = conn.cursor()
+                    c.execute("INSERT INTO users (username, email, name, password, role, package) VALUES (?, ?, ?, ?, ?, ?)",
+                              (username, email, name, db_ready_pw, 'member', 'Basic'))
+                    conn.commit()
+                    conn.close()
+                    st.success('✅ Registered! Login to start your Basic plan.')
+                    st.rerun()
         except Exception as e: st.error(e)
     st.stop()
 
@@ -139,8 +149,7 @@ if st.session_state["authentication_status"] is None:
 if st.session_state["authentication_status"]:
     username = st.session_state["username"]
     current_db_data = get_users_from_db()
-    user_info = current_db_data['usernames'].get(username, {})
-    user_tier = user_info.get('package', 'Basic')
+    user_tier = current_db_data['usernames'][username].get('package', 'Basic')
 
     PACKAGE_CONFIG = {
         "Basic": {"allowed_industries": ["HVAC", "Plumbing"], "blog": False, "max_files": 1},
@@ -171,10 +180,10 @@ if st.session_state["authentication_status"]:
                 coupon_code = st.text_input("Promo Code")
                 if st.button("Apply"):
                     if coupon_code == "BreatheFree2026":
-                        update_user_package(username, "Pro")
+                        update_user_package(username, "Pro", "SELF_REDEEM")
                         st.success("Upgraded!")
                         st.rerun()
-        
+
         st.subheader("📁 Asset Manager")
         max_f = PACKAGE_CONFIG[user_tier]["max_files"]
         uploaded_media = st.file_uploader(f"Max {max_f} assets", accept_multiple_files=True, type=['png', 'jpg', 'mp4'])
@@ -209,7 +218,7 @@ if st.session_state["authentication_status"]:
                     st.session_state['ad_copy'] = content
                     st.session_state['generated'] = True
                     save_lead_to_db(username, main_cat, target_service, city_input, content)
-            else: st.error("Too many files for your plan.")
+            else: st.error("Too many files.")
 
         if st.session_state.get('generated'):
             st.success("✨ Strategy Ready!")
@@ -236,44 +245,45 @@ if st.session_state["authentication_status"]:
             st.markdown('<div class="pricing-card"><h3>Unlimited</h3><h1>$99</h1><p>All Industries<br>20 Asset Uploads<br>Custom Services</p></div>', unsafe_allow_html=True)
             st.link_button("Go Unlimited", "https://buy.stripe.com/unlimited_link", use_container_width=True)
 
-    # --- 🛠️ ADMIN PANEL (With Delete User Feature) ---
+    # --- 🛠️ ADMIN PANEL (With Audit Log) ---
     if username == "admin":
         with tabs[-1]:
-            st.header("🛠️ System Administration")
-            all_users = get_users_from_db()['usernames']
+            admin_sub_tabs = st.tabs(["👥 User Management", "📜 Activity Log"])
             
-            for u_name, u_data in all_users.items():
-                if u_name == "admin": continue
-                
-                with st.container():
-                    st.markdown(f"""
-                        <div class='admin-card'>
-                            <strong>Name:</strong> {u_data['name']} | <strong>Username:</strong> {u_name} | <strong>Tier:</strong> {u_data['package']}
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    c1, c2, c3 = st.columns([2, 1, 1])
-                    with c1:
-                        new_p = st.selectbox(f"Change Tier", ["Basic", "Pro", "Unlimited"], 
-                                             index=["Basic", "Pro", "Unlimited"].index(u_data['package']),
-                                             key=f"select_{u_name}")
-                    with c2:
-                        if st.button(f"Update", key=f"upd_{u_name}", use_container_width=True):
-                            update_user_package(u_name, new_p)
-                            st.success(f"Updated {u_name}")
-                            st.rerun()
-                    with c3:
-                        # Delete with confirmation
-                        if st.button(f"🗑️ Delete", key=f"del_{u_name}", use_container_width=True, type="secondary"):
-                            st.session_state[f"confirm_delete_{u_name}"] = True
-                        
-                        if st.session_state.get(f"confirm_delete_{u_name}"):
-                            st.warning(f"Delete {u_name} permanently?")
-                            if st.button("Confirm Delete", key=f"real_del_{u_name}", type="primary"):
-                                delete_user(u_name)
-                                st.success("User removed.")
-                                del st.session_state[f"confirm_delete_{u_name}"]
+            with admin_sub_tabs[0]:
+                st.header("User Access Control")
+                all_users = get_users_from_db()['usernames']
+                for u_name, u_data in all_users.items():
+                    if u_name == "admin": continue
+                    with st.container():
+                        st.markdown(f"<div class='admin-card'><strong>{u_data['name']}</strong> (@{u_name}) - {u_data['package']} Tier</div>", unsafe_allow_html=True)
+                        c1, c2, c3 = st.columns([2, 1, 1])
+                        with c1:
+                            new_p = st.selectbox(f"Select Tier", ["Basic", "Pro", "Unlimited"], 
+                                                 index=["Basic", "Pro", "Unlimited"].index(u_data['package']),
+                                                 key=f"adm_{u_name}")
+                        with c2:
+                            if st.button(f"Update", key=f"upbtn_{u_name}"):
+                                update_user_package(u_name, new_p, st.session_state['name'])
+                                st.success(f"Updated {u_name}")
                                 st.rerun()
-            
-            st.divider()
-            st.write(f"Active Users: {len(all_users) - 1}")
+                        with c3:
+                            if st.button(f"🗑️ Delete", key=f"delbtn_{u_name}"):
+                                st.session_state[f"confirm_del_{u_name}"] = True
+                            
+                            if st.session_state.get(f"confirm_del_{u_name}"):
+                                if st.button(f"Confirm Delete {u_name}", key=f"real_del_{u_name}", type="primary"):
+                                    delete_user(u_name, st.session_state['name'])
+                                    st.success("User removed.")
+                                    st.rerun()
+
+            with admin_sub_tabs[1]:
+                st.header("📜 Activity Log")
+                conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+                logs_df = pd.read_sql_query("SELECT timestamp, admin_user, action, target_user, details FROM audit_logs ORDER BY id DESC", conn)
+                st.dataframe(logs_df, use_container_width=True)
+                if st.button("🗑️ Clear Logs"):
+                    conn.cursor().execute("DELETE FROM audit_logs")
+                    conn.commit()
+                    st.rerun()
+                conn.close()
