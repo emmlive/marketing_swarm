@@ -21,7 +21,7 @@ if "GEMINI_API_KEY" in st.secrets:
     os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
 
 # --- 2. PAGE CONFIGURATION ---
-st.set_page_config(page_title="BreatheEasy AI | Enterprise Swarm", page_icon="🌬️", layout="wide")
+st.set_page_config(page_title="BreatheEasy AI | Enterprise", page_icon="🌬️", layout="wide")
 
 # --- 3. DATABASE INITIALIZATION ---
 def init_db():
@@ -34,7 +34,8 @@ def init_db():
     
     c.execute("SELECT * FROM users WHERE username='admin'")
     if not c.fetchone():
-        hashed_pw = stauth.Hasher.hash('admin123')
+        hasher = stauth.Hasher(['admin123'])
+        hashed_pw = hasher.generate()[0]
         c.execute("INSERT INTO users (username, email, name, password, role, package) VALUES (?, ?, ?, ?, ?, ?)",
                   ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin', 'Unlimited'))
     conn.commit()
@@ -47,6 +48,13 @@ def update_user_package(username, new_package):
     conn.commit()
     conn.close()
 
+def delete_user(username):
+    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("DELETE FROM users WHERE username = ?", (username,))
+    conn.commit()
+    conn.close()
+
 def get_users_from_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     df = pd.read_sql_query("SELECT * FROM users", conn)
@@ -55,7 +63,8 @@ def get_users_from_db():
     for _, row in df.iterrows():
         user_dict['usernames'][row['username']] = {
             'email': row['email'], 'name': row['name'], 'password': row['password'],
-            'package': row.get('package', 'Basic')
+            'package': row.get('package', 'Basic'),
+            'role': row.get('role', 'member')
         }
     return user_dict
 
@@ -92,18 +101,17 @@ st.markdown(f"""
     div[data-testid="stStatusWidget"], .stAppDeployButton, footer, #stDecoration {{ display: none !important; }}
     .stApp {{ background-color: {brand_bg}; }}
     .stApp::before {{
-        content: ""; display: block; margin: 30px auto 0;
-        width: 140px; height: 140px;
-        background-image: url("{logo_url}");
-        background-size: contain; background-repeat: no-repeat;
+        content: ""; display: block; margin: 30px auto 0; width: 140px; height: 140px;
+        background-image: url("{logo_url}"); background-size: contain; background-repeat: no-repeat;
     }}
     .block-container {{ padding-top: 1.5rem !important; }}
     .tier-badge {{ padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; background: {brand_blue}; color: white; }}
-    .pricing-card {{ border: 1px solid #ddd; padding: 20px; border-radius: 10px; text-align: center; background: white; }}
+    .pricing-card {{ border: 1px solid #ddd; padding: 20px; border-radius: 10px; text-align: center; background: white; height: 100%; }}
+    .admin-card {{ border-left: 5px solid #0056b3; background: white; padding: 15px; border-radius: 5px; margin-bottom: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 5. AUTHENTICATION & TIER CHECK ---
+# --- 5. AUTHENTICATION ---
 db_credentials = get_users_from_db()
 authenticator = stauth.Authenticate(
     db_credentials, st.secrets['cookie']['name'], st.secrets['cookie']['key'], st.secrets['cookie']['expiry_days']
@@ -119,7 +127,8 @@ if st.session_state["authentication_status"] is None:
             if res:
                 email, username, name = res
                 if email:
-                    db_ready_pw = stauth.Hasher.hash(authenticator.credentials['usernames'][username]['password'])
+                    hasher = stauth.Hasher([authenticator.credentials['usernames'][username]['password']])
+                    db_ready_pw = hasher.generate()[0]
                     if add_user_to_db(username, email, name, db_ready_pw, package='Basic'):
                         st.success('✅ Registered! Login to start your Basic plan.')
                         st.rerun()
@@ -130,7 +139,8 @@ if st.session_state["authentication_status"] is None:
 if st.session_state["authentication_status"]:
     username = st.session_state["username"]
     current_db_data = get_users_from_db()
-    user_tier = current_db_data['usernames'][username].get('package', 'Basic')
+    user_info = current_db_data['usernames'].get(username, {})
+    user_tier = user_info.get('package', 'Basic')
 
     PACKAGE_CONFIG = {
         "Basic": {"allowed_industries": ["HVAC", "Plumbing"], "blog": False, "max_files": 1},
@@ -150,7 +160,7 @@ if st.session_state["authentication_status"]:
         pdf.set_font("Arial", size=11); clean = content.encode('latin-1', 'ignore').decode('latin-1')
         pdf.multi_cell(0, 8, txt=clean); return pdf.output(dest='S').encode('latin-1')
 
-    # --- SIDEBAR & ASSETS ---
+    # --- SIDEBAR ---
     with st.sidebar:
         st.markdown(f"### 👋 {st.session_state['name']} <span class='tier-badge'>{user_tier}</span>", unsafe_allow_html=True)
         authenticator.logout('Sign Out', 'sidebar')
@@ -162,10 +172,9 @@ if st.session_state["authentication_status"]:
                 if st.button("Apply"):
                     if coupon_code == "BreatheFree2026":
                         update_user_package(username, "Pro")
-                        st.success("Upgraded to PRO!")
+                        st.success("Upgraded!")
                         st.rerun()
-                    else: st.error("Invalid Code")
-
+        
         st.subheader("📁 Asset Manager")
         max_f = PACKAGE_CONFIG[user_tier]["max_files"]
         uploaded_media = st.file_uploader(f"Max {max_f} assets", accept_multiple_files=True, type=['png', 'jpg', 'mp4'])
@@ -182,14 +191,16 @@ if st.session_state["authentication_status"]:
         city_input = st.text_input("City", placeholder="Naperville, IL")
 
         include_blog = st.toggle("📝 SEO Blog Content", value=True) if PACKAGE_CONFIG[user_tier]["blog"] else False
-        if not PACKAGE_CONFIG[user_tier]["blog"]: st.info("🔒 Upgrade for SEO Blogs")
-
         run_button = st.button("🚀 LAUNCH SWARM", type="primary", use_container_width=True)
 
     # --- MAIN TABS ---
-    t_gen, t_db, t_social, t_price = st.tabs(["🔥 Launchpad", "📊 Database", "📱 Social Preview", "💎 Pricing"])
+    tab_list = ["🔥 Launchpad", "📊 Database", "📱 Social Preview", "💎 Pricing"]
+    if username == "admin":
+        tab_list.append("🛠️ Admin Panel")
+    
+    tabs = st.tabs(tab_list)
 
-    with t_gen:
+    with tabs[0]:
         if run_button and city_input:
             if len(uploaded_media) <= max_f:
                 with st.spinner(f"Swarm active on {user_tier} Tier..."):
@@ -198,7 +209,7 @@ if st.session_state["authentication_status"]:
                     st.session_state['ad_copy'] = content
                     st.session_state['generated'] = True
                     save_lead_to_db(username, main_cat, target_service, city_input, content)
-            else: st.error("Too many files.")
+            else: st.error("Too many files for your plan.")
 
         if st.session_state.get('generated'):
             st.success("✨ Strategy Ready!")
@@ -208,20 +219,61 @@ if st.session_state["authentication_status"]:
             with c2: st.download_button("📕 PDF", create_pdf(copy, target_service, city_input), f"{city_input}.pdf")
             st.markdown(copy)
 
-    with t_db:
+    with tabs[1]:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
         df = pd.read_sql_query("SELECT date, user, industry, service, city FROM leads ORDER BY id DESC", conn)
         st.dataframe(df, use_container_width=True)
         conn.close()
 
-    with t_price:
+    with tabs[3]:
         st.title("💎 Plan Comparison")
         p1, p2, p3 = st.columns(3)
-        with p1: 
-            st.markdown('<div class="pricing-card"><h3>Basic</h3><h1>$0</h1><p>HVAC/Plumb only<br>1 Asset<br>No Blogs</p></div>', unsafe_allow_html=True)
+        with p1: st.markdown('<div class="pricing-card"><h3>Basic</h3><h1>$0</h1><p>HVAC/Plumbing<br>1 Asset Upload<br>No Blogs</p></div>', unsafe_allow_html=True)
         with p2:
-            st.markdown('<div class="pricing-card" style="border: 2px solid #0056b3;"><h3>Pro</h3><h1>$49</h1><p>4 Industries<br>5 Assets<br>SEO Blogs</p></div>', unsafe_allow_html=True)
-            st.link_button("Upgrade Now", "https://buy.stripe.com/pro_link", type="primary", use_container_width=True)
+            st.markdown('<div class="pricing-card" style="border: 2px solid #0056b3;"><h3>Pro</h3><h1>$49</h1><p>4 Industries<br>5 Asset Uploads<br>SEO Blogs</p></div>', unsafe_allow_html=True)
+            st.link_button("Upgrade Now", "https://buy.stripe.com/pro_link", use_container_width=True, type="primary")
         with p3:
-            st.markdown('<div class="pricing-card"><h3>Unlimited</h3><h1>$99</h1><p>All Industries<br>20 Assets<br>Custom niches</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="pricing-card"><h3>Unlimited</h3><h1>$99</h1><p>All Industries<br>20 Asset Uploads<br>Custom Services</p></div>', unsafe_allow_html=True)
             st.link_button("Go Unlimited", "https://buy.stripe.com/unlimited_link", use_container_width=True)
+
+    # --- 🛠️ ADMIN PANEL (With Delete User Feature) ---
+    if username == "admin":
+        with tabs[-1]:
+            st.header("🛠️ System Administration")
+            all_users = get_users_from_db()['usernames']
+            
+            for u_name, u_data in all_users.items():
+                if u_name == "admin": continue
+                
+                with st.container():
+                    st.markdown(f"""
+                        <div class='admin-card'>
+                            <strong>Name:</strong> {u_data['name']} | <strong>Username:</strong> {u_name} | <strong>Tier:</strong> {u_data['package']}
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    c1, c2, c3 = st.columns([2, 1, 1])
+                    with c1:
+                        new_p = st.selectbox(f"Change Tier", ["Basic", "Pro", "Unlimited"], 
+                                             index=["Basic", "Pro", "Unlimited"].index(u_data['package']),
+                                             key=f"select_{u_name}")
+                    with c2:
+                        if st.button(f"Update", key=f"upd_{u_name}", use_container_width=True):
+                            update_user_package(u_name, new_p)
+                            st.success(f"Updated {u_name}")
+                            st.rerun()
+                    with c3:
+                        # Delete with confirmation
+                        if st.button(f"🗑️ Delete", key=f"del_{u_name}", use_container_width=True, type="secondary"):
+                            st.session_state[f"confirm_delete_{u_name}"] = True
+                        
+                        if st.session_state.get(f"confirm_delete_{u_name}"):
+                            st.warning(f"Delete {u_name} permanently?")
+                            if st.button("Confirm Delete", key=f"real_del_{u_name}", type="primary"):
+                                delete_user(u_name)
+                                st.success("User removed.")
+                                del st.session_state[f"confirm_delete_{u_name}"]
+                                st.rerun()
+            
+            st.divider()
+            st.write(f"Active Users: {len(all_users) - 1}")
