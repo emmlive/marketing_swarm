@@ -12,16 +12,14 @@ from io import BytesIO
 # --- 1. CRITICAL: PAGE CONFIG MUST BE FIRST ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# --- 2. TOTAL WHITE-LABEL SaaS GATEKEEPER CSS ---
-# This targets the top header, the toolbar, the footer, and the 
-# persistent bottom-right 'Hosted with Streamlit' badge.
+# --- 2. THE TOTAL WHITE-LABEL CSS GATEKEEPER ---
+# This version targets the newest 'Hosted with Streamlit' badge and deploy buttons
 hide_style = """
     <style>
     /* Hides the top header entirely (GitHub/Fork/3-dots) */
     header { visibility: hidden !important; }
     
-    /* Hides the bottom-right status widget & connection status */
-    /* Also targets any link containing 'streamlit.io' to remove branding */
+    /* Hides the 'Hosted with Streamlit' red badge & status indicators at bottom-right */
     div[data-testid="stStatusWidget"], 
     div[data-testid="stConnectionStatus"],
     .stAppDeployButton,
@@ -33,12 +31,13 @@ hide_style = """
     /* Hides the toolbar/pencil icon at the top right */
     div[data-testid="stToolbar"] { visibility: hidden !important; }
     
-    /* Hides the 'Made with Streamlit' footer */
+    /* Hides the 'Made with Streamlit' footer at bottom-center */
     footer { visibility: hidden !important; }
     
-    /* White-label branding: Removes top gap and hides hamburger menu */
+    /* SaaS Branding: Removes top space and hides hamburger menu */
     .block-container { padding-top: 1.5rem !important; }
     #MainMenu { visibility: hidden !important; }
+    #stDecoration { display: none !important; }
     </style>
 """
 st.markdown(hide_style, unsafe_allow_html=True)
@@ -57,8 +56,8 @@ authenticator = stauth.Authenticate(
     st.secrets['cookie']['expiry_days']
 )
 
-# --- 4. AUTHENTICATION UI (v0.3.0+ Fix) ---
-# Status is automatically handled in st.session_state
+# --- 4. AUTHENTICATION UI (v0.3.0+ Return Fix) ---
+# authenticator.login handles session state internally in v0.3.x
 authenticator.login(location='main')
 
 if st.session_state.get("authentication_status") is False:
@@ -83,7 +82,7 @@ elif st.session_state.get("authentication_status") is None:
         except Exception as e:
             st.error(f"Reset Error: {e}")
 
-    # STOP unauthenticated users
+    # STOP unauthenticated users here
     st.stop()
 
 # --- 5. PROTECTED SaaS DASHBOARD ---
@@ -102,7 +101,7 @@ if st.session_state.get("authentication_status"):
         industry_map = {
             "HVAC": ["Air Duct Cleaning", "Dryer Vent Cleaning", "Heating Repair", "AC Installation"],
             "Plumbing": ["Drain Cleaning", "Water Heater Service", "Emergency Leak Repair", "Pipe Bursting"],
-            "Electrical": ["Panel Upgrade", "EV Charger Installation", "Wiring Inspection"],
+            "Electrical": ["Panel Upgrades", "EV Charger Installation", "Wiring Inspection"],
             "Landscaping": ["Lawn Maintenance", "Sprinkler Repair", "Seasonal Cleanup"],
             "Custom": ["Manual Entry"]
         }
@@ -156,7 +155,7 @@ if st.session_state.get("authentication_status"):
                 with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
                     st.session_state['ad_copy'] = f.read()
             except FileNotFoundError:
-                st.error("Strategy files not found. Check CrewAI output names.")
+                st.error("Report files not found.")
 
     # --- DISPLAY ---
     if st.session_state.get('generated'):
