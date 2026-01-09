@@ -12,45 +12,50 @@ from io import BytesIO
 # --- 1. CRITICAL: PAGE CONFIG MUST BE FIRST ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# --- 2. THE ULTIMATE "ZERO-BRANDING" & LOGO CSS ---
+# --- 2. THE TOTAL SaaS BRANDING & "NUCLEAR" CSS ---
+# Logo link converted to direct-view format
 logo_url = "https://drive.google.com/uc?export=view&id=1Jw7XreUO4yAQxUgKAZPK4sRi4mzjw_yU"
-brand_bg = "#F8F9FB" 
+brand_bg = "#F8F9FB" # Premium off-white SaaS background
 
-hide_style = f"""
+hide_and_brand_style = f"""
     <style>
-    /* Hides top header, GitHub/Fork icons, footer, and bottom-right badges */
+    /* NUCLEAR HIDE: Hides top header, GitHub/Fork, footer, and bottom-right badges */
     header, footer, div[data-testid="stStatusWidget"], 
     div[data-testid="stConnectionStatus"], .stAppDeployButton,
-    a[href*="streamlit.io"], #stDecoration, div[data-testid="stToolbar"] {{
+    a[href*="streamlit.io"], #stDecoration, div[data-testid="stToolbar"],
+    [data-testid="stDecoration"] {{
         visibility: hidden !important;
         display: none !important;
     }}
 
-    /* Custom Background */
+    /* CUSTOM SaaS BACKGROUND */
     .stApp {{
         background-color: {brand_bg};
     }}
 
-    /* Centered Logo above the login box */
+    /* CENTERED LOGO INJECTION: Adds logo above login box */
     .stApp::before {{
         content: "";
         display: block;
         margin-left: auto;
         margin-right: auto;
         margin-top: 50px;
-        width: 180px; 
-        height: 180px;
+        width: 220px; 
+        height: 220px;
         background-image: url("{logo_url}");
         background-size: contain;
         background-repeat: no-repeat;
     }}
 
-    /* Reclaims space at the top */
+    /* CLEAN UI: Adjust padding and hide hamburger menu */
     .block-container {{ padding-top: 1.5rem !important; }}
     #MainMenu {{ visibility: hidden !important; }}
+    
+    /* Force hide the 'Running...' status widget */
+    [data-testid="stStatusWidget"] {{ display: none !important; }}
     </style>
 """
-st.markdown(hide_style, unsafe_allow_html=True)
+st.markdown(hide_and_brand_style, unsafe_allow_html=True)
 
 # --- 3. AUTHENTICATION CONFIGURATION ---
 credentials = dict(st.secrets['credentials'])
@@ -72,7 +77,7 @@ authenticator.login(location='main')
 if st.session_state.get("authentication_status") is False:
     st.error('Username/password is incorrect')
 elif st.session_state.get("authentication_status") is None:
-    st.warning('Please enter your username and password')
+    st.warning('Welcome to BreatheEasy AI. Please enter your credentials.')
     
     st.divider()
     col1, col2 = st.columns(2)
@@ -113,7 +118,6 @@ if st.session_state.get("authentication_status"):
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
-        # Clean text for PDF compatibility
         clean = content.replace('✨', '').replace('🚀', '').replace('🌬️', '').encode('latin-1', 'ignore').decode('latin-1')
         for line in clean.split('\n'): pdf.multi_cell(0, 10, txt=line)
         return pdf.output(dest='S').encode('latin-1')
@@ -127,26 +131,21 @@ if st.session_state.get("authentication_status"):
         st.header("🏢 Business Category")
         industry_map = {
             "HVAC": ["Air Duct Cleaning", "Dryer Vent Cleaning", "Heating Repair", "AC Installation"],
-            "Plumbing": ["Drain Cleaning", "Water Heater Service", "Emergency Leak Repair"],
+            "Plumbing": ["Drain Cleaning", "Water Heater Service", "Emergency Repair"],
             "Electrical": ["Panel Upgrade", "Wiring Inspection"],
             "Landscaping": ["Lawn Maintenance", "Seasonal Cleanup"],
             "Custom": ["Manual Entry"]
         }
         
         main_cat = st.selectbox("Select Industry", list(industry_map.keys()))
-        
-        if main_cat == "Custom":
-            target_industry = st.text_input("Enter Industry")
-            target_service = st.text_input("Enter Specific Service")
-        else:
-            target_industry = main_cat
-            target_service = st.selectbox("Select Specific Service", industry_map[main_cat])
+        target_industry = main_cat if main_cat != "Custom" else st.text_input("Enter Industry")
+        target_service = st.selectbox("Select Service", industry_map[main_cat]) if main_cat != "Custom" else st.text_input("Enter Service")
 
         st.header("📍 Target Location")
         city_input = st.text_input("Enter City", placeholder="Naperville, IL")
-        run_button = st.button("🚀 Generate Local Swarm")
+        run_button = st.button("🚀 Generate Marketing Swarm")
 
-    st.title("🌬️ BreatheEasy AI: Multi-Service Home Launchpad")
+    st.title("🌬️ BreatheEasy AI: Local Service Launchpad")
 
     # --- EXECUTION LOGIC ---
     if run_button and city_input:
@@ -164,7 +163,7 @@ if st.session_state.get("authentication_status"):
             except FileNotFoundError:
                 st.error("Strategy files not found.")
 
-    # --- DASHBOARD DISPLAY ---
+    # --- DISPLAY ---
     if st.session_state.get('generated'):
         st.success(f"✨ Campaign Ready!")
         tabs = st.tabs(["📝 Ad Copy", "🚀 Download"])
