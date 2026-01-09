@@ -8,14 +8,15 @@ from main import marketing_crew
 from docx import Document
 from fpdf import FPDF
 from io import BytesIO
+from streamlit_gsheets import GSheetsConnection
 
 # --- 1. CRITICAL: PAGE CONFIG MUST BE FIRST ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
 # --- 2. THE TOTAL SaaS BRANDING & "NUCLEAR" CSS ---
-# Logo link converted to direct-view format
+# Your logo link from Google Drive
 logo_url = "https://drive.google.com/uc?export=view&id=1Jw7XreUO4yAQxUgKAZPK4sRi4mzjw_yU"
-brand_bg = "#F8F9FB" # Premium off-white SaaS background
+brand_bg = "#F8F9FB" 
 
 hide_and_brand_style = f"""
     <style>
@@ -57,44 +58,39 @@ hide_and_brand_style = f"""
 """
 st.markdown(hide_and_brand_style, unsafe_allow_html=True)
 
-# --- 3. AUTHENTICATION CONFIGURATION ---
-credentials = dict(st.secrets['credentials'])
-if 'usernames' in credentials:
-    credentials['usernames'] = dict(credentials['usernames'])
-    for user in credentials['usernames']:
-        credentials['usernames'][user] = dict(credentials['usernames'][user])
+# --- 3. DYNAMIC AUTHENTICATION (Google Sheets Connection) ---
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # ttl="0" ensures that adding a user to the sheet works immediately without caching
+    df = conn.read(ttl="0")
+    
+    user_data = {}
+    for _, row in df.iterrows():
+        user_data[str(row['username'])] = {
+            "name": str(row['name']),
+            "email": str(row['email']),
+            "password": str(row['password'])
+        }
+    
+    credentials = {"usernames": user_data}
+except Exception as e:
+    st.error("Error connecting to User Database. Please check Google Sheets permissions.")
+    st.stop()
 
 authenticator = stauth.Authenticate(
     credentials,
     st.secrets['cookie']['name'],
     st.secrets['cookie']['key'],
-    st.secrets['cookie']['expiry_days']
+    int(st.secrets['cookie']['expiry_days'])
 )
 
-# --- 4. AUTHENTICATION UI (v0.3.0+ Fix) ---
+# --- 4. AUTHENTICATION UI ---
 authenticator.login(location='main')
 
 if st.session_state.get("authentication_status") is False:
     st.error('Username/password is incorrect')
 elif st.session_state.get("authentication_status") is None:
     st.warning('Welcome to BreatheEasy AI. Please enter your credentials.')
-    
-    st.divider()
-    col1, col2 = st.columns(2)
-    with col1:
-        try:
-            preauth_list = st.secrets.get('preauthorized', {}).get('emails', [])
-            if authenticator.register_user(location='main', pre_authorized=preauth_list):
-                st.success('Registration successful! Please contact admin to finalize.')
-        except Exception as e:
-            st.error(f"Registration Error: {e}")
-    with col2:
-        try:
-            if authenticator.forgot_password(location='main')[0]:
-                st.success('Temporary password generated. Please contact admin.')
-        except Exception as e:
-            st.error(f"Reset Error: {e}")
-
     st.stop()
 
 # --- 5. PROTECTED DASHBOARD ---
@@ -145,7 +141,7 @@ if st.session_state.get("authentication_status"):
         city_input = st.text_input("Enter City", placeholder="Naperville, IL")
         run_button = st.button("🚀 Generate Marketing Swarm")
 
-    st.title("🌬️ BreatheEasy AI: Local Service Launchpad")
+    st.title("🌬️ BreatheEasy AI: Multi-Service Home Launchpad")
 
     # --- EXECUTION LOGIC ---
     if run_button and city_input:
@@ -158,10 +154,11 @@ if st.session_state.get("authentication_status"):
             st.session_state['generated'] = True
             
             try:
+                # Assuming main.py generates this file locally
                 with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
                     st.session_state['ad_copy'] = f.read()
             except FileNotFoundError:
-                st.error("Strategy files not found.")
+                st.error("Strategy data file not found.")
 
     # --- DISPLAY ---
     if st.session_state.get('generated'):
