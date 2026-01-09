@@ -12,24 +12,32 @@ from io import BytesIO
 # --- 1. CRITICAL: PAGE CONFIG MUST BE FIRST ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# --- 2. THE SaaS GATEKEEPER CSS ---
-# Hides Header (GitHub/Fork/Menu), Footer, and Bottom-Right Status Widget
+# --- 2. THE ULTIMATE SaaS GATEKEEPER CSS (Aggressive Version) ---
+# Targets top-right tools, bottom-right badges, and the 'Manage app' button
 hide_style = """
     <style>
-    /* Hides the top header bar entirely */
+    /* Hides the top header entirely (GitHub/Fork/3-dots) */
     header { visibility: hidden !important; }
     
-    /* Hides the 'Hosted with Streamlit' red badge & status indicators at bottom-right */
-    div[data-testid="stStatusWidget"] { visibility: hidden !important; }
+    /* Hides the bottom-right status widget & connection status for everyone */
+    div[data-testid="stStatusWidget"], 
+    div[data-testid="stConnectionStatus"],
+    .stAppDeployButton { 
+        display: none !important; 
+        visibility: hidden !important; 
+    }
     
     /* Hides the toolbar/pencil icon at the top right */
     div[data-testid="stToolbar"] { visibility: hidden !important; }
     
-    /* Hides the 'Made with Streamlit' footer at bottom-center */
+    /* Hides the 'Made with Streamlit' footer */
     footer { visibility: hidden !important; }
     
-    /* Adjusts padding to fill the space left by the hidden header */
-    .block-container { padding-top: 2rem !important; }
+    /* White-label branding: Removes extra top space */
+    .block-container { padding-top: 1.5rem !important; }
+    
+    /* Hides the main menu (hamburger) if it still persists */
+    #MainMenu { visibility: hidden !important; }
     </style>
 """
 st.markdown(hide_style, unsafe_allow_html=True)
@@ -49,10 +57,11 @@ authenticator = stauth.Authenticate(
     st.secrets['cookie']['expiry_days']
 )
 
-# --- 4. AUTHENTICATION UI (v0.3.0+ Fix) ---
-# .login() returns only the status; user details are in st.session_state automatically.
-authentication_status = authenticator.login(location='main')
+# --- 4. AUTHENTICATION UI (Updated for v0.3.0+) ---
+# Simply call .login(); status is stored in st.session_state automatically.
+authenticator.login(location='main')
 
+# Logic for unauthenticated or failed login
 if st.session_state.get("authentication_status") is False:
     st.error('Username/password is incorrect')
 elif st.session_state.get("authentication_status") is None:
@@ -75,7 +84,7 @@ elif st.session_state.get("authentication_status") is None:
         except Exception as e:
             st.error(f"Reset Error: {e}")
 
-    # STOP unauthenticated users from seeing the app
+    # CRITICAL: Prevent the rest of the app from loading
     st.stop()
 
 # --- 5. PROTECTED SaaS DASHBOARD ---
@@ -88,14 +97,14 @@ if st.session_state.get("authentication_status"):
         st.header(f"Welcome, {st.session_state['name']}!")
         authenticator.logout('Logout', 'sidebar', key='unique_logout_key')
         st.divider()
-        st.caption("🟢 System Status: OpenAI Connected")
+        st.caption("🟢 System Status: Active")
         
         # --- Industry Selection ---
         st.header("🏢 Business Category")
         industry_map = {
             "HVAC": ["Air Duct Cleaning", "Dryer Vent Cleaning", "Heating Repair", "AC Installation"],
             "Plumbing": ["Drain Cleaning", "Water Heater Service", "Emergency Leak Repair", "Pipe Bursting"],
-            "Electrical": ["Panel Upgrades", "EV Charger Installation", "Wiring Inspection"],
+            "Electrical": ["Panel Upgrade", "EV Charger Installation", "Wiring Inspection"],
             "Landscaping": ["Lawn Maintenance", "Sprinkler Repair", "Seasonal Cleanup"],
             "Custom": ["Manual Entry"]
         }
@@ -118,7 +127,7 @@ if st.session_state.get("authentication_status"):
     # --- HELPER FUNCTIONS ---
     def create_word_doc(content):
         doc = Document()
-        doc.add_heading('BreatheEasy AI: Campaign Report', 0)
+        doc.add_heading('BreatheEasy AI Report', 0)
         for line in content.split('\n'):
             if line.startswith('###'): doc.add_heading(line.replace('###', '').strip(), level=2)
             elif line.startswith('##'): doc.add_heading(line.replace('##', '').strip(), level=1)
@@ -145,23 +154,19 @@ if st.session_state.get("authentication_status"):
             })
             st.session_state['generated'] = True
             
-            # File handling
             try:
                 with open("final_marketing_strategy.md", "r", encoding="utf-8") as f:
                     st.session_state['ad_copy'] = f.read()
-                with open("full_7day_campaign.md", "r", encoding="utf-8") as f:
-                    st.session_state['schedule'] = f.read()
             except FileNotFoundError:
                 st.error("Strategy files not found. Check CrewAI output names.")
 
-    # --- DISPLAY ---
+    # --- DASHBOARD DISPLAY ---
     if st.session_state.get('generated'):
         st.success(f"✨ Campaign Ready!")
-        tabs = st.tabs(["📝 Ad Copy", "🗓️ Schedule", "🚀 Download"])
+        tabs = st.tabs(["📝 Ad Copy", "🚀 Download"])
         
         with tabs[0]: st.markdown(st.session_state.get('ad_copy', 'No copy found.'))
-        with tabs[1]: st.markdown(st.session_state.get('schedule', 'No schedule found.'))
-        with tabs[2]:
+        with tabs[1]:
             full_rpt = f"# {target_service} Report: {city_input}\n\n" + st.session_state.get('ad_copy', '')
             c1, c2 = st.columns(2)
             c1.download_button("📄 Word", create_word_doc(full_rpt), "Report.docx")
