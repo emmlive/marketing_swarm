@@ -11,7 +11,13 @@ from streamlit_gsheets import GSheetsConnection
 # --- 1. PAGE CONFIG (Must be first) ---
 st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
 
-# --- 2. THE TOTAL SaaS BRANDING (Nuclear CSS) ---
+# --- 2. GLOBAL KEY INJECTOR (Prevents KeyError) ---
+# This maps your secrets to environment variables before 'agents.py' is imported
+if "GEMINI_API_KEY" in st.secrets:
+    os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+    os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+
+# --- 3. THE TOTAL SaaS BRANDING (Nuclear CSS) ---
 logo_url = "https://drive.google.com/uc?export=view&id=1Jw7XreUO4yAQxUgKAZPK4sRi4mzjw_yU"
 brand_bg = "#F8F9FB"
 
@@ -34,12 +40,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DYNAMIC AUTHENTICATION & KEY MAPPING ---
-# This fixes the KeyError by ensuring both names point to your secret
-if "GEMINI_API_KEY" in st.secrets:
-    os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
-    os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
-
+# --- 4. DYNAMIC AUTHENTICATION (GSheets) ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(ttl="0") 
@@ -53,10 +54,10 @@ try:
         }
     credentials = {"usernames": user_data}
 except Exception as e:
-    st.error("User Database Connection Failed. Please check your Secrets and GSheet sharing.")
+    st.error("User Database Connection Failed. Please check Secrets and Sheet permissions.")
     st.stop()
 
-# Initialize Authenticator for v0.4.2
+# Initialize Authenticator (v0.4.2 syntax)
 authenticator = stauth.Authenticate(
     credentials,
     st.secrets['cookie']['name'],
@@ -64,26 +65,24 @@ authenticator = stauth.Authenticate(
     float(st.secrets['cookie']['expiry_days'])
 )
 
-# --- 4. LOGIN LOGIC ---
-# Updated syntax for 0.4.2
+# --- 5. LOGIN LOGIC ---
 authenticator.login(location='main')
 
 if st.session_state["authentication_status"] is False:
     st.error('Username/password is incorrect')
 elif st.session_state["authentication_status"] is None:
-    st.warning('Please enter your credentials to access the launchpad')
+    st.warning('Welcome to BreatheEasy AI. Please login to continue.')
     st.stop()
 
-# --- 5. SaaS DASHBOARD (Access Granted) ---
+# --- 6. SaaS DASHBOARD (Access Granted) ---
 if st.session_state["authentication_status"]:
     
-    # Initialize OpenAI with Secret Key
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
     # Helper Functions
     def create_word_doc(content):
         doc = Document()
-        doc.add_heading('BreatheEasy AI Strategy', 0)
+        doc.add_heading('BreatheEasy AI Report', 0)
         for line in content.split('\n'):
             doc.add_paragraph(line)
         bio = BytesIO()
@@ -98,7 +97,7 @@ if st.session_state["authentication_status"]:
         pdf.multi_cell(0, 10, txt=clean)
         return pdf.output(dest='S').encode('latin-1')
 
-    # Sidebar Navigation & Tools
+    # Sidebar
     with st.sidebar:
         st.header(f"Welcome, {st.session_state['name']}!")
         authenticator.logout('Logout', 'sidebar')
@@ -125,11 +124,10 @@ if st.session_state["authentication_status"]:
         city_input = st.text_input("Target City", placeholder="Naperville, IL")
         run_button = st.button("🚀 Run Marketing Swarm")
 
-    # Main Application View
     st.title("🌬️ BreatheEasy AI: Multi-Service Launchpad")
     
     if run_button and city_input:
-        with st.spinner(f"Coordinating Crew for {target_service} in {city_input}..."):
+        with st.spinner(f"Running Marketing Swarm for {target_service}..."):
             result = marketing_crew.kickoff(inputs={
                 'city': city_input,
                 'industry': main_cat,
