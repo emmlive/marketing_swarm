@@ -5,7 +5,7 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 from openai import OpenAI
-from main import run_marketing_swarm  # Updated to use the dynamic wrapper
+from main import run_marketing_swarm # Using the dynamic wrapper
 from docx import Document
 from fpdf import FPDF
 from io import BytesIO
@@ -17,7 +17,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 
-# --- 1. CRITICAL: PRE-IMPORT KEY MAPPING ---
+# --- 1. PRE-IMPORT KEY MAPPING ---
 if "GEMINI_API_KEY" in st.secrets:
     os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
     os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
@@ -93,7 +93,6 @@ elif st.session_state.get("authentication_status") is None:
 
 # --- 7. PROTECTED DASHBOARD ---
 if st.session_state.get("authentication_status"):
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     
     # --- HELPER FUNCTIONS ---
     def create_word_doc(content):
@@ -126,7 +125,7 @@ if st.session_state.get("authentication_status"):
         try:
             msg = MIMEMultipart()
             msg["From"], msg["To"], msg["Subject"] = st.secrets["EMAIL_SENDER"], st.secrets["TEAM_EMAIL"], f"🚀 New AI Report: {target_city}"
-            msg.attach(MIMEText(f"High-ticket campaign ready for {target_city}.", "plain"))
+            msg.attach(MIMEText(f"High-ticket campaign ready for {target_city}. Word doc attached.", "plain"))
             part = MIMEBase("application", "octet-stream")
             part.set_payload(create_word_doc(content))
             encoders.encode_base64(part)
@@ -140,12 +139,52 @@ if st.session_state.get("authentication_status"):
             st.error(f"Email failed: {e}")
             return False
 
+    def send_welcome_email(new_user_name, new_user_email):
+        sender_email = st.secrets["EMAIL_SENDER"]
+        sender_password = st.secrets["EMAIL_PASSWORD"]
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "🌬️ Welcome to the BreatheEasy AI Team!"
+        msg["From"] = f"BreatheEasy AI <{sender_email}>"
+        msg["To"] = new_user_email
+        html_content = f"""
+        <html><body style="font-family: Arial; color: #333;">
+            <div style="max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
+                <h2 style="color: #0056b3;">Welcome aboard, {new_user_name}!</h2>
+                <p>You have been officially added to the <strong>BreatheEasy AI Swarm</strong>.</p>
+                <p>Log in to generate high-ticket campaigns, SEO blogs, and visual strategies.</p>
+                <p style="font-size: 0.9em; color: #777;">Contact your administrator for your login portal link.</p>
+            </div>
+        </body></html>
+        """
+        msg.attach(MIMEText(html_content, "html"))
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(sender_email, sender_password)
+                server.sendmail(sender_email, new_user_email, msg.as_string())
+            return True
+        except: return False
+
     # --- SIDEBAR ---
     with st.sidebar:
         st.header(f"Welcome, {st.session_state['name']}!")
         authenticator.logout('Logout', 'sidebar', key='unique_logout_key')
         st.divider()
+
+        # Admin Tools with Welcome Email
+        with st.expander("🛠️ Admin: Add Team Member"):
+            new_name = st.text_input("Member Name")
+            new_email = st.text_input("Member Email")
+            new_pw = st.text_input("Set Password", type="password")
+            if st.button("🚀 Authorize & Send Email"):
+                if new_name and new_email and new_pw:
+                    new_hash = stauth.Hasher([new_pw]).generate()[0]
+                    st.success("User Hash Generated!")
+                    st.code(f"password = \"{new_hash}\"", language="toml")
+                    if send_welcome_email(new_name, new_email):
+                        st.success(f"Welcome email sent to {new_email}!")
+                else: st.warning("Fill all fields.")
         
+        st.divider()
         industry_map = {
             "HVAC": ["Full System Replacement", "IAQ & Filtration", "Heat Pump Upgrade"],
             "Plumbing": ["Sewer Line Replacement", "Water Heater Service"],
@@ -166,7 +205,7 @@ if st.session_state.get("authentication_status"):
     with main_tabs[0]:
         if run_button and city_input:
             with st.spinner(f"Coordinating agents for {target_service} in {city_input}..."):
-                # Call the dynamic swarm wrapper
+                # Call the dynamic swarm wrapper from main.py
                 run_marketing_swarm(inputs={
                     'city': city_input, 
                     'industry': main_cat, 
@@ -182,7 +221,7 @@ if st.session_state.get("authentication_status"):
                     st.session_state['generated'] = True
                     save_to_db(st.session_state['name'], main_cat, target_service, city_input, report_content)
                 except:
-                    st.error("Error reading generated file. Check server logs.")
+                    st.error("Error reading strategy file.")
 
         if st.session_state.get('generated'):
             st.success("✨ Campaign Ready!")
