@@ -20,9 +20,9 @@ if "GEMINI_API_KEY" in st.secrets:
     os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
 
 # --- 2. PAGE CONFIGURATION ---
-st.set_page_config(page_title="BreatheEasy AI | Enterprise Command", page_icon="🌬️", layout="wide")
+st.set_page_config(page_title="BreatheEasy AI | Enterprise", page_icon="🌬️", layout="wide")
 
-# --- 3. DATABASE INITIALIZATION ---
+# --- 3. DATABASE CORE & RESET LOGIC ---
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
@@ -33,14 +33,27 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS audit_logs 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, admin_user TEXT, action TEXT, target_user TEXT, details TEXT)''')
     
-    c.execute("SELECT * FROM users WHERE username='admin'")
+    # Check for admin to prevent IntegrityError
+    c.execute("SELECT username FROM users WHERE username='admin'")
     if not c.fetchone():
         hashed_pw = stauth.Hasher.hash('admin123')
         c.execute("INSERT INTO users (username, email, name, password, role, package) VALUES (?, ?, ?, ?, ?, ?)",
                   ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin', 'Unlimited'))
-    conn.commit(); conn.close()
+    conn.commit()
+    conn.close()
 
-# --- 4. CORE DATABASE & UTILITIES ---
+def reset_database():
+    """Wipes all data and re-initializes with admin user"""
+    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("DROP TABLE IF EXISTS leads")
+    c.execute("DROP TABLE IF EXISTS users")
+    c.execute("DROP TABLE IF EXISTS audit_logs")
+    conn.commit()
+    conn.close()
+    init_db()
+
+# --- 4. UTILITY FUNCTIONS ---
 def log_action(admin_user, action, target_user, details=""):
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -60,7 +73,7 @@ def get_users_from_db():
         }
     return u_dict
 
-# --- 5. EXPORT GENERATORS ---
+# --- 5. DOCUMENT GENERATORS ---
 def create_word_doc(content, logo_path=None):
     doc = Document()
     if logo_path and os.path.exists(logo_path):
@@ -75,25 +88,12 @@ def create_pdf(content, service, city, logo_path=None):
     if logo_path and os.path.exists(logo_path):
         try: pdf.image(logo_path, 10, 8, 33); pdf.ln(20)
         except: pass
-    pdf.set_font("Arial", 'B', 16); pdf.cell(0, 10, f'Marketing: {service}', 0, 1, 'C')
+    pdf.set_font("Arial", 'B', 16); pdf.cell(0, 10, f'Report: {service} in {city}', 0, 1, 'C')
     pdf.set_font("Arial", size=11); clean = content.encode('latin-1', 'ignore').decode('latin-1')
     pdf.multi_cell(0, 8, txt=clean); return pdf.output(dest='S').encode('latin-1')
 
+# --- 6. STARTUP & AUTH ---
 init_db()
-
-# --- 6. UI STYLING ---
-st.markdown("""
-    <style>
-    header { visibility: hidden !important; }
-    .stApp { background-color: #F8F9FB; }
-    .tier-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; background: #0056b3; color: white; }
-    .mockup-container { background: white; border: 1px solid #ddd; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-    .google-title { color: #1a0dab; font-size: 19px; text-decoration: none; font-family: arial; }
-    .buffer-card { border-left: 5px solid #2c3e50; padding-left: 15px; }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- 7. AUTHENTICATION & LOGIN FLOW ---
 db_credentials = get_users_from_db()
 authenticator = stauth.Authenticate(db_credentials, st.secrets['cookie']['name'], st.secrets['cookie']['key'], st.secrets['cookie']['expiry_days'])
 
@@ -103,7 +103,7 @@ authenticator.login(location='main')
 if st.session_state["authentication_status"] is None:
     st.markdown("<h1 style='text-align: center;'>🌬️ BreatheEasy AI</h1>", unsafe_allow_html=True)
     
-    # FORGOT PASSWORD
+    # Forgot Password Flow
     try:
         username_forgot_pw, email_forgot_password, new_random_password = authenticator.forgot_password('Forgot password')
         if username_forgot_pw:
@@ -111,25 +111,26 @@ if st.session_state["authentication_status"] is None:
             conn = sqlite3.connect('breatheeasy.db')
             conn.cursor().execute("UPDATE users SET password = ? WHERE username = ?", (hashed_pw, username_forgot_pw))
             conn.commit(); conn.close()
-            st.success('✅ A new password has been generated. Check your email.')
+            st.success('✅ Temporary password generated. Check email.')
     except Exception as e: st.error(e)
 
-    with st.expander("New User? Register Here"):
+    with st.expander("Register New Account"):
         res = authenticator.register_user(pre_authorization=False)
         if res:
             email, username, name = res
             if email:
-                db_ready_pw = stauth.Hasher.hash(authenticator.credentials['usernames'][username]['password'])
-                conn = sqlite3.connect('breatheeasy.db')
-                conn.cursor().execute("INSERT INTO users (username, email, name, password, role, package) VALUES (?, ?, ?, ?, ?, ?)",
-                                      (username, email, name, db_ready_pw, 'member', 'Basic'))
-                conn.commit(); conn.close(); st.success('✅ Registered!'); st.rerun()
+                try:
+                    hashed_reg = stauth.Hasher.hash(authenticator.credentials['usernames'][username]['password'])
+                    conn = sqlite3.connect('breatheeasy.db')
+                    conn.cursor().execute("INSERT INTO users (username, email, name, password, role, package) VALUES (?, ?, ?, ?, ?, ?)",
+                                          (username, email, name, hashed_reg, 'member', 'Basic'))
+                    conn.commit(); conn.close(); st.success('✅ Registered!'); st.rerun()
+                except sqlite3.IntegrityError: st.error("Username taken.")
     st.stop()
 
-# --- 8. PROTECTED DASHBOARD ---
-@st.dialog("🎓 Strategy Masterclass")
+# --- 7. DASHBOARD & UI ---
+@st.dialog("🎓 Masterclass")
 def video_tutorial():
-    st.write("How to close high-ticket clients with these reports.")
     st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
     if st.button("Close"): st.rerun()
 
@@ -139,33 +140,28 @@ if st.session_state["authentication_status"]:
     user_tier = user_info.get('package', 'Basic')
     user_logo = user_info.get('logo_path')
 
+    # Sidebar
     with st.sidebar:
-        st.markdown(f"### 👋 {st.session_state['name']} <span class='tier-badge'>{user_tier}</span>", unsafe_allow_html=True)
+        st.markdown(f"### 👋 {st.session_state['name']} <span style='background:#0056b3;color:white;padding:2px 8px;border-radius:10px;font-size:12px;'>{user_tier}</span>", unsafe_allow_html=True)
         if st.button("🎓 Tutorial"): video_tutorial()
         
-        # CHANGE PASSWORD MODAL
+        # Change Password
         if st.button("🔑 Change Password"):
-            try:
-                if authenticator.reset_password(username, 'Reset password'):
-                    # Sync new password to DB
-                    new_hashed = stauth.Hasher.hash(authenticator.credentials['usernames'][username]['password'])
-                    conn = sqlite3.connect('breatheeasy.db')
-                    conn.cursor().execute("UPDATE users SET password = ? WHERE username = ?", (new_hashed, username))
-                    conn.commit(); conn.close()
-                    st.success('Password modified successfully')
-            except Exception as e: st.error(e)
+            if authenticator.reset_password(username, 'Reset password'):
+                new_h = stauth.Hasher.hash(authenticator.credentials['usernames'][username]['password'])
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.cursor().execute("UPDATE users SET password = ? WHERE username = ?", (new_h, username))
+                conn.commit(); conn.close(); st.success('Modified!')
 
         authenticator.logout('Sign Out', 'sidebar')
         st.divider()
-
-        # INDUSTRY GATING
-        industries = ["HVAC", "Solar", "Restoration", "Roofing", "Plumbing", "Law Firm", "Medical", "Custom Business"]
+        industries = ["HVAC", "Solar", "Restoration", "Roofing", "Plumbing", "Law Firm", "Medical", "Custom"]
         main_cat = st.selectbox("Industry", industries)
-        target_service = st.text_input("Service") if main_cat == "Custom Business" else st.selectbox("Service", ["General", "Premium", "Installation"])
-        city_input = st.text_input("City", placeholder="Chicago, IL")
-        run_button = st.button("🚀 GENERATE OMNI-STRATEGY", type="primary", use_container_width=True)
+        target_service = st.text_input("Service")
+        city_input = st.text_input("City")
+        run_button = st.button("🚀 LAUNCH SWARM", type="primary", use_container_width=True)
 
-    tabs = st.tabs(["🔥 Strategy", "📊 Platform Previews", "💎 Tiers", "🛠️ Admin" if username == "admin" else "ℹ️ Support"])
+    tabs = st.tabs(["🔥 Strategy", "📊 Previews", "💎 Tiers", "🛠️ Admin" if username == "admin" else "ℹ️ Support"])
 
     with tabs[0]: # STRATEGY & DOWNLOADS
         if run_button and city_input:
@@ -179,33 +175,34 @@ if st.session_state["authentication_status"]:
         if st.session_state.get('generated'):
             copy = st.session_state['ad_copy']
             c1, c2 = st.columns(2)
-            c1.download_button("📥 Word", create_word_doc(copy, user_logo), f"Strategy_{city_input}.docx", use_container_width=True)
-            c2.download_button("📕 PDF", create_pdf(copy, target_service, city_input, user_logo), f"Strategy_{city_input}.pdf", use_container_width=True)
+            c1.download_button("📥 Word", create_word_doc(copy, user_logo), f"Report_{city_input}.docx", use_container_width=True)
+            c2.download_button("📕 PDF", create_pdf(copy, target_service, city_input, user_logo), f"Report_{city_input}.pdf", use_container_width=True)
             st.markdown(copy)
 
-    with tabs[1]: # MOCKUPS & FB PUBLISH
+    with tabs[1]: # MOCKUPS
         if st.session_state.get('generated'):
             copy = st.session_state['ad_copy']
-            st.markdown("### 🌐 Google Search Mockup")
-            
-            st.markdown(f"<div class='mockup-container'><div style='color:#202124; font-size:13px;'>https://www.breatheeasy.ai/{main_cat.lower()}</div><div class='google-title'>Top Rated {target_service} in {city_input}</div><div style='color:#4d5156;'>{copy[:150]}...</div></div>", unsafe_allow_html=True)
-            
+            st.markdown("### 🌐 Google Ad Preview")
+            st.markdown(f"<div style='border:1px solid #ddd;padding:15px;border-radius:8px;'><div style='color:#1a0dab;font-size:18px;'>Top Rated {target_service} in {city_input}</div><div style='color:#4d5156;'>{copy[:150]}...</div></div>", unsafe_allow_html=True)
             st.markdown("### 📅 Buffer Queue Preview")
-            st.markdown(f"<div class='mockup-container buffer-card'><strong>Tomorrow @ 9:00 AM</strong><br>{copy[:100]}...</div>", unsafe_allow_html=True)
-            
-            st.subheader("🚀 Facebook Direct Publish")
-            pid = st.text_input("Page ID")
-            tok = st.text_input("Access Token", type="password")
-            if st.button("Publish Now"):
-                requests.post(f"https://graph.facebook.com/v18.0/{pid}/feed", data={'message': copy, 'access_token': tok})
-                st.success("API Call Sent!")
-        else:
-            st.info("💡 Run a strategy to unlock previews.")
+            st.markdown(f"<div style='border-left:5px solid #2c3e50;padding-left:10px;'><strong>Tomorrow @ 9:00 AM</strong><br>{copy[:100]}...</div>", unsafe_allow_html=True)
+        else: st.info("Run strategy first.")
 
     if username == "admin":
         with tabs[-1]:
-            adm_tabs = st.tabs(["👥 Users", "📜 Audit Logs", "📈 Revenue"])
-            with adm_tabs[2]:
-                if st.button("📧 Send Revenue Report"):
-                    st.success("Report emailed to admin.")
-                    log_action("admin", "MONTHLY_REPORT", "SYSTEM")
+            st.subheader("🛠️ Admin Suite")
+            # --- DATABASE RESET BUTTON ---
+            st.warning("⚠️ **Danger Zone**: Resetting the database will delete all users, leads, and logs.")
+            if st.button("💣 RESET DATABASE"):
+                st.session_state['confirm_reset'] = True
+            
+            if st.session_state.get('confirm_reset'):
+                st.error("ARE YOU ABSOLUTELY SURE? This cannot be undone.")
+                if st.button("YES, DELETE EVERYTHING"):
+                    reset_database()
+                    st.session_state['confirm_reset'] = False
+                    st.success("Database wiped. Refreshing...")
+                    st.rerun()
+                if st.button("NO, CANCEL"):
+                    st.session_state['confirm_reset'] = False
+                    st.rerun()
