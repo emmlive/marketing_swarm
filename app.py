@@ -22,7 +22,7 @@ st.set_page_config(page_title="BreatheEasy AI | Enterprise Command", page_icon="
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
-    # Maintenance & Settings
+    # Settings & Maintenance
     c.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('maintenance_mode', 'OFF')")
     # User Table with SaaS Analytics
@@ -39,6 +39,15 @@ def init_db():
         c.execute("INSERT INTO users (username, email, name, password, role, package, last_login) VALUES (?, ?, ?, ?, ?, ?, ?)",
                   ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin', 'Unlimited', datetime.now().strftime("%Y-%m-%d %H:%M")))
     conn.commit(); conn.close()
+
+def reset_database():
+    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute("DROP TABLE IF EXISTS leads")
+    c.execute("DROP TABLE IF EXISTS users")
+    c.execute("DROP TABLE IF EXISTS settings")
+    conn.commit(); conn.close()
+    init_db()
 
 def get_maintenance_status():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -78,27 +87,47 @@ def get_creds():
 
 authenticator = stauth.Authenticate(get_creds(), st.secrets['cookie']['name'], st.secrets['cookie']['key'], st.secrets['cookie']['expiry_days'])
 
-# --- 5. UI STYLING ---
+# --- 5. UI STYLING (Whitelabel + Custom Buttons) ---
 st.markdown("""
     <style>
+    /* HIDE STREAMLIT BRANDING (GITHUB, FORK, 3 DOTS) */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stDeployButton {display:none;}
+    
     .tier-badge { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; background: #0056b3; color: white; }
     .mockup-container { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 10px; }
-    .google-title { color: #1a0dab; font-size: 19px; text-decoration: none; font-family: arial; }
     .pricing-card { border: 1px solid #ddd; padding: 20px; border-radius: 10px; text-align: center; background: white; height: 100%; }
+
+    /* FORGOT PASSWORD BUTTON STYLING */
+    p:has(a[href*="forgot_password"]), a[href*="forgot_password"] {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        background-color: #ffffff;
+        color: #31333F !important;
+        border: 1px solid rgba(49, 51, 63, 0.2);
+        border-radius: 0.5rem;
+        text-decoration: none !important;
+        font-size: 14px;
+        transition: background-color 0.2s;
+        margin-top: 10px;
+    }
+    a[href*="forgot_password"]:hover { background-color: #f0f2f6; border-color: #0056b3; }
     </style>
 """, unsafe_allow_html=True)
 
 # --- 6. AUTHENTICATION FLOW ---
 authenticator.login(location='main')
 
-if st.session_state["authentication_status"]:
+if st.session_state["authentication_status"] is True:
     username = st.session_state["username"]
     user_info = get_creds()['usernames'].get(username, {})
     tier = user_info.get('package', 'Basic')
     is_admin = (username == "admin")
 
     if get_maintenance_status() and not is_admin:
-        st.error("🚧 BreatheEasy AI is currently under maintenance. We'll be back online shortly!")
+        st.error("🚧 BreatheEasy AI is currently under maintenance for system upgrades.")
         st.stop()
 
     # SAAS GATING CONFIG
@@ -108,7 +137,6 @@ if st.session_state["authentication_status"]:
         "Unlimited": {"industries": ["HVAC", "Plumbing", "Restoration", "Solar", "Law Firm", "Medical", "Custom"], "files": 20, "blog": True}
     }
 
-    # Sidebar
     with st.sidebar:
         st.markdown(f"### 👋 {st.session_state['name']} <span class='tier-badge'>{tier}</span>", unsafe_allow_html=True)
         if st.button("🔑 Change Password"):
@@ -116,7 +144,7 @@ if st.session_state["authentication_status"]:
                 new_h = stauth.Hasher.hash(authenticator.credentials['usernames'][username]['password'])
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.cursor().execute("UPDATE users SET password = ? WHERE username = ?", (new_h, username))
-                conn.commit(); conn.close(); st.success('Modified!')
+                conn.commit(); conn.close(); st.success('Password updated!')
         authenticator.logout('Sign Out', 'sidebar')
         st.divider()
         
@@ -130,23 +158,20 @@ if st.session_state["authentication_status"]:
         city = st.text_input("City")
         launch = st.button("🚀 LAUNCH SWARM", type="primary", use_container_width=True)
 
-    # Tabs
     tabs = st.tabs(["🔥 Strategy", "📅 7-Day Calendar", "📱 Previews", "💎 Pricing", "🛠️ Admin" if is_admin else "📋 History"])
 
     with tabs[0]: # STRATEGY & DOWNLOADS
         if launch and city:
-            if uploaded and len(uploaded) > max_f: st.error(f"Limit exceeded: {max_f} files allowed.")
-            else:
-                with st.spinner("AI Agents coordinating strategy..."):
-                    run_marketing_swarm({'city': city, 'industry': main_cat, 'service': target_service, 'blog': include_blog})
-                    if os.path.exists("final_marketing_strategy.md"):
-                        with open("final_marketing_strategy.md", "r") as f: st.session_state['copy'] = f.read()
-                        st.session_state['gen'] = True
-                        conn = sqlite3.connect('breatheeasy.db')
-                        conn.cursor().execute("UPDATE users SET usage_count = usage_count + 1 WHERE username = ?", (username,))
-                        conn.cursor().execute("INSERT INTO leads (date, user, industry, service, city, content) VALUES (?,?,?,?,?,?)",
-                                              (datetime.now().strftime("%Y-%m-%d"), username, main_cat, target_service, city, st.session_state['copy']))
-                        conn.commit(); conn.close()
+            with st.spinner("AI Agents coordinating strategy..."):
+                run_marketing_swarm({'city': city, 'industry': main_cat, 'service': target_service, 'blog': include_blog})
+                if os.path.exists("final_marketing_strategy.md"):
+                    with open("final_marketing_strategy.md", "r") as f: st.session_state['copy'] = f.read()
+                    st.session_state['gen'] = True
+                    conn = sqlite3.connect('breatheeasy.db')
+                    conn.cursor().execute("UPDATE users SET usage_count = usage_count + 1 WHERE username = ?", (username,))
+                    conn.cursor().execute("INSERT INTO leads (date, user, industry, service, city, content) VALUES (?,?,?,?,?,?)",
+                                          (datetime.now().strftime("%Y-%m-%d"), username, main_cat, target_service, city, st.session_state['copy']))
+                    conn.commit(); conn.close()
 
         if st.session_state.get('gen'):
             copy = st.session_state['copy']
@@ -155,25 +180,9 @@ if st.session_state["authentication_status"]:
             col2.download_button("📕 PDF Report", create_pdf(copy, target_service, city, user_info.get('logo_path')), f"{city}_Strategy.pdf", use_container_width=True)
             st.markdown(copy)
 
-    with tabs[1]: # CONTENT CALENDAR
-        if st.session_state.get('gen'):
-            for day in range(1, 8):
-                st.info(f"**Day {day}:** Optimized {main_cat} content for {city}. (See Strategy tab for full copy)")
-        else: st.info("Run strategy first.")
-
     with tabs[2]: # MOCKUPS
         if st.session_state.get('gen'):
-            st.markdown("### 🌐 Google Ad Preview")
             st.markdown(f"<div class='mockup-container'><div style='color:#1a0dab;font-size:18px;'>#1 {target_service} in {city}</div><p>{st.session_state['copy'][:150]}...</p></div>", unsafe_allow_html=True)
-            
-        else: st.info("Run swarm to see previews.")
-
-    with tabs[3]: # PRICING
-        p1, p2, p3 = st.columns(3)
-        with p1: st.markdown('<div class="pricing-card"><h3>Basic</h3><h1>$0</h1><p>2 Industries<br>1 File Upload</p></div>', unsafe_allow_html=True)
-        with p2: st.markdown('<div class="pricing-card" style="border:2px solid #0056b3"><h3>Pro</h3><h1>$49</h1><p>5 Industries<br>5 File Uploads<br>SEO Blog</p></div>', unsafe_allow_html=True)
-        with p3: st.markdown('<div class="pricing-card"><h3>Unlimited</h3><h1>$99</h1><p>All Industries<br>20 File Uploads<br>Custom Niche</p></div>', unsafe_allow_html=True)
-        
 
     if is_admin:
         with tabs[-1]:
@@ -183,13 +192,35 @@ if st.session_state["authentication_status"]:
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.cursor().execute("UPDATE settings SET value = ? WHERE key = 'maintenance_mode'", ("OFF" if m_on else "ON",))
                 conn.commit(); conn.close(); st.rerun()
+            
+            if st.button("💣 RESET ALL DATA"):
+                reset_database()
+                st.rerun()
+
             conn = sqlite3.connect('breatheeasy.db')
             st.dataframe(pd.read_sql_query("SELECT username, package, last_login, usage_count FROM users", conn), use_container_width=True)
             conn.close()
 
 elif st.session_state["authentication_status"] is None:
-    st.warning("Please login to access the Command Center.")
-    try:
-        u_forgot, e_forgot, p_forgot = authenticator.forgot_password('Forgot password')
-        if u_forgot: st.success('New password generated. Check email.')
-    except Exception as e: st.error(e)
+    st.markdown("<h1 style='text-align: center;'>🌬️ BreatheEasy AI</h1>", unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        try:
+            u_forgot, e_forgot, p_forgot = authenticator.forgot_password('Forgot password')
+            if u_forgot:
+                hashed_f = stauth.Hasher.hash(p_forgot)
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.cursor().execute("UPDATE users SET password = ? WHERE username = ?", (hashed_f, u_forgot))
+                conn.commit(); conn.close(); st.success('Check email for new password.')
+        except Exception as e: st.error(e)
+    with col2:
+        with st.expander("🆕 Register Here"):
+            res = authenticator.register_user(pre_authorization=False)
+            if res:
+                e, u, n = res
+                if e:
+                    hashed_reg = stauth.Hasher.hash(authenticator.credentials['usernames'][u]['password'])
+                    conn = sqlite3.connect('breatheeasy.db')
+                    conn.cursor().execute("INSERT INTO users (username, email, name, password, role, package, last_login) VALUES (?,?,?,?,?,?,?)",
+                                          (u, e, n, hashed_reg, 'member', 'Basic', datetime.now().strftime("%Y-%m-%d %H:%M")))
+                    conn.commit(); conn.close(); st.success('Registered!'); st.rerun()
