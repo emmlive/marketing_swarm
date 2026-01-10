@@ -1,120 +1,79 @@
-import streamlit as st
-import streamlit_authenticator as stauth
-import os
-import re
-import base64
-from openai import OpenAI, BadRequestError
-from main import marketing_crew
-from docx import Document
-from fpdf import FPDF
-from io import BytesIO
+# --- 8. PROTECTED DASHBOARD ---
+@st.dialog("🎓 Strategy Masterclass")
+def video_tutorial():
+    st.write("How to close $10k+ clients using these reports.")
+    st.video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    if st.button("Close"): st.rerun()
 
-# --- 1. CRITICAL: PAGE CONFIG MUST BE FIRST ---
-st.set_page_config(page_title="BreatheEasy AI", page_icon="🌬️", layout="wide")
+if st.session_state["authentication_status"]:
+    username = st.session_state["username"]
+    user_info = get_users_from_db()['usernames'].get(username, {})
+    user_tier = user_info.get('package', 'Basic')
+    user_logo = user_info.get('logo_path')
 
-# --- 2. THE ULTIMATE SaaS GATEKEEPER CSS ---
-# This hides the Toolbar (pencil), Header (GitHub/Fork/Menu), and Footer
-hide_style = """
-    <style>
-    /* Hides the top header bar entirely (GitHub icon, Fork, 3-dots) */
-    header { visibility: hidden !important; }
-    
-    /* Hides the 'Manage app' button and status widgets */
-    div[data-testid="stStatusWidget"] { visibility: hidden !important; }
-    
-    /* Hides the toolbar/pencil icon */
-    div[data-testid="stToolbar"] { visibility: hidden !important; }
-    
-    /* Hides the 'Made with Streamlit' footer */
-    footer { visibility: hidden !important; }
-    
-    /* Removes extra padding at the top for a professional SaaS feel */
-    .block-container { padding-top: 2rem !important; }
-    </style>
-"""
-st.markdown(hide_style, unsafe_allow_html=True)
+with st.sidebar:
+        st.markdown(f"### 👋 {st.session_state['name']} <span class='tier-badge'>{user_tier}</span>", unsafe_allow_html=True)
+        if st.button("🎓 Video Tutorial"): video_tutorial()
+        authenticator.logout('Sign Out', 'sidebar')
+        st.divider()
 
-# --- 3. AUTHENTICATION CONFIGURATION ---
-credentials = dict(st.secrets['credentials'])
+        if PACKAGE_CONFIG[user_tier]["branding"]:
+            with st.expander("🎨 Custom Branding"):
+                logo_file = st.file_uploader("Upload Company Logo", type=['png', 'jpg'])
+                if logo_file:
+                    os.makedirs("logos", exist_ok=True)
+                    user_logo = f"logos/{username}.png"
+                    with open(user_logo, "wb") as f: f.write(logo_file.getvalue())
+                    conn = sqlite3.connect('breatheeasy.db')
+                    conn.cursor().execute("UPDATE users SET logo_path = ? WHERE username = ?", (user_logo, username))
+                    conn.commit(); conn.close(); st.success("Branding Applied!")
 
-if 'usernames' in credentials:
-    credentials['usernames'] = dict(credentials['usernames'])
-    for username in credentials['usernames']:
-        credentials['usernames'][username] = dict(credentials['usernames'][username])
+BREATHEEASY AI - MONTHLY PERFORMANCE REPORT
+    --------------------------------------------
+    📈 USER GROWTH: Total Members: {new_users}
+    💰 REVENUE SUMMARY: Pro: {pro_count} | Unlimited: {unlimited_count} | EST. TOTAL: ${total_rev}
+    🛠️ TOP SERVICES:
+    {service_summary.to_string(index=False)}
+    """
+    conn.close()
+    return send_admin_alert("Monthly Revenue & Usage Report", report_body)
 
-authenticator = stauth.Authenticate(
-    credentials,
-    st.secrets['cookie']['name'],
-    st.secrets['cookie']['key'],
-    st.secrets['cookie']['expiry_days']
-)
-
-# --- 4. AUTHENTICATION UI ---
-# Capture return values for v0.3.x
-name, authentication_status, username = authenticator.login(location='main')
-
-if authentication_status is False:
-    st.error('Username/password is incorrect')
-elif authentication_status is None:
-    # Optional: Registration/Forgot Password only visible when not logged in
-    st.warning('Please enter your username and password')
-    st.divider()
-    col1, col2 = st.columns(2)
-    with col1:
-        try:
-            preauth_list = st.secrets.get('preauthorized', {}).get('emails', [])
-            if authenticator.register_user(location='main', pre_authorized=preauth_list):
-                st.success('Registration successful! Please contact admin to finalize.')
-        except Exception as e:
-            st.error(f"Registration Error: {e}")
-            
-    with col2:
-        try:
-            user_forgot, email_forgot, new_pw = authenticator.forgot_password(location='main')
-            if user_forgot:
-                st.success('Temporary password generated. Please contact admin.')
-        except Exception as e:
-            st.error(f"Reset Error: {e}")
-
-    # Stop execution here if not logged in
-    st.stop()
-
-# --- 5. THE PROTECTED APP DASHBOARD ---
-if authentication_status:
-    # --- SECURE API KEY INITIALIZATION ---
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    
-    # --- SIDEBAR: LOGOUT & CONNECTION STATUS ---
+# --- SIDEBAR ---
     with st.sidebar:
-        st.header(f"Welcome, {st.session_state['name']}!")
-        authenticator.logout('Logout', 'sidebar', key='unique_logout_key')
+        st.markdown(f"### 👋 {st.session_state['name']} <span class='tier-badge'>{user_tier}</span>", unsafe_allow_html=True)
+        authenticator.logout('Sign Out', 'sidebar')
         st.divider()
-        st.caption("🟢 System Status: OpenAI Connected")
-            
+
+        if user_tier == "Basic":
+            with st.expander("🎟️ Redeem Coupon"):
+                coupon_code = st.text_input("Promo Code")
+                if st.button("Apply"):
+                    if coupon_code == "BreatheFree2026":
+                        update_user_package(username, "Pro", "SELF_REDEEM")
+                        # Alert for Coupon Usage
+                        send_admin_alert("Coupon Redeemed", f"User {username} successfully used coupon 'BreatheFree2026' to upgrade to PRO.")
+                        st.success("Upgraded!")
+                        st.rerun()
+
+        st.subheader("📁 Asset Manager")
+        max_f = PACKAGE_CONFIG[user_tier]["max_files"]
+        uploaded_media = st.file_uploader(f"Max {max_f} assets", accept_multiple_files=True, type=['png', 'jpg', 'mp4'])
+        
         st.divider()
-        st.header("🏢 Business Category")
-        industry_map = {
-            "HVAC": ["Air Duct Cleaning", "Dryer Vent Cleaning", "Heating Repair", "AC Installation"],
-            "Plumbing": ["Drain Cleaning", "Water Heater Service", "Emergency Leak Repair", "Pipe Bursting"],
-            "Electrical": ["Panel Upgrades", "EV Charger Installation", "Wiring Inspection"],
-            "Landscaping": ["Lawn Maintenance", "Sprinkler Repair", "Seasonal Cleanup"],
-            "Custom": ["Manual Entry"]
+        full_map = {
+            "HVAC": ["Full System Replacement", "IAQ"], "Plumbing": ["Sewer Repair", "Tankless Heaters"],
+            "Restoration": ["Water Damage", "Mold Remediation"], "Roofing": ["Roof Replacement", "Storm Damage"],
+            "Solar": ["Solar Grid Install"], "Custom": ["Manual Entry"]
         }
-        
-        main_cat = st.selectbox("Select Industry", list(industry_map.keys()))
-        
-        if main_cat == "Custom":
-            target_industry = st.text_input("Enter Industry (e.g., Solar)")
-            target_service = st.text_input("Enter Specific Service")
-        else:
-            target_industry = main_cat
-            target_service = st.selectbox("Select Specific Service", industry_map[main_cat])
+        allowed = PACKAGE_CONFIG[user_tier]["allowed_industries"]
+        main_cat = st.selectbox("Industry", [i for i in full_map.keys() if i in allowed])
+        target_service = st.selectbox("Service", full_map[main_cat]) if main_cat != "Custom" else st.text_input("Service")
+        city_input = st.text_input("City", placeholder="Naperville, IL")
 
-        st.header("📍 Target Location")
-        city_input = st.text_input("Enter City", placeholder="Naperville, IL")
-        run_button = st.button("🚀 Generate Local Swarm")
+        include_blog = st.toggle("📝 SEO Blog Content", value=True) if PACKAGE_CONFIG[user_tier]["blog"] else False
+        run_button = st.button("🚀 LAUNCH SWARM", type="primary", use_container_width=True)
 
-    st.title("🌬️ BreatheEasy AI: Multi-Service Home Launchpad")
-
-    # (Helper functions for create_word_doc, create_pdf, generate_ad_image, analyze_inspection_photo remain here)
-    # [
+    # --- MAIN TABS ---
+    tab_list = ["🔥 Launchpad", "📊 Database", "📱 Social Preview", "💎 Pricing"]
+    if username == "admin": tab_list.append("🛠️ Admin Panel")
+    tabs = st.tabs(tab_list)
