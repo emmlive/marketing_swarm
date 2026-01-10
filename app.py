@@ -15,7 +15,7 @@ os.environ["OTEL_SDK_DISABLED"] = "true"
 if "GEMINI_API_KEY" in st.secrets:
     os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
 
-st.set_page_config(page_title="BreatheEasy AI | Enterprise", page_icon="🌬️", layout="wide")
+st.set_page_config(page_title="BreatheEasy AI | Enterprise Command", page_icon="🌬️", layout="wide")
 
 # --- 2. DATABASE ARCHITECTURE ---
 def init_db():
@@ -44,9 +44,27 @@ init_db()
 
 # --- 3. UI STYLING & GLOBAL CONFIG ---
 PACKAGE_CONFIG = {
-    "Basic": {"allowed_industries": ["HVAC", "Plumbing"], "max_files": 1, "blog": False, "branding": False},
-    "Pro": {"allowed_industries": ["HVAC", "Plumbing", "Restoration", "Solar"], "max_files": 5, "blog": True, "branding": True},
-    "Unlimited": {"allowed_industries": ["HVAC", "Plumbing", "Restoration", "Solar", "Roofing", "Law Firm", "Medical", "Custom"], "max_files": 20, "blog": True, "branding": True}
+    "Basic": {
+        "allowed_industries": ["HVAC", "Plumbing"], 
+        "max_files": 1, 
+        "blog": False, 
+        "branding": False,
+        "desc": "Perfect for solo contractors. Standard industries and basic reports."
+    },
+    "Pro": {
+        "allowed_industries": ["HVAC", "Plumbing", "Restoration", "Solar"], 
+        "max_files": 5, 
+        "blog": True, 
+        "branding": True,
+        "desc": "For growing agencies. Includes SEO Blogs, Branding, and High-Ticket industries."
+    },
+    "Unlimited": {
+        "allowed_industries": ["HVAC", "Plumbing", "Restoration", "Solar", "Roofing", "Law Firm", "Medical", "Custom"], 
+        "max_files": 20, 
+        "blog": True, 
+        "branding": True,
+        "desc": "Full Enterprise access. Custom niches and priority AI Swarm analysis."
+    }
 }
 
 st.markdown("""
@@ -102,11 +120,12 @@ if st.session_state["authentication_status"] is None:
     with col1:
         try:
             res_forgot = authenticator.forgot_password(location='main')
-            if res_forgot[0]: st.success('Reset link sent to email.')
+            if res_forgot[0]: st.success('Check email for new password.')
         except: pass
     with col2:
         with st.expander("🆕 Register New User"):
             try:
+                # Explicit location='main' fixes potential TypeErrors
                 res_reg = authenticator.register_user(location='main', pre_authorization=False)
                 if res_reg:
                     e, u, n = res_reg
@@ -116,7 +135,7 @@ if st.session_state["authentication_status"] is None:
                         conn.cursor().execute("INSERT INTO users (username, email, name, password, role, package, last_login) VALUES (?,?,?,?,?,?,?)",
                                               (u, e, n, h_pw, 'member', 'Basic', datetime.now().strftime("%Y-%m-%d %H:%M")))
                         conn.commit(); conn.close(); st.success('Registration complete! Please login.')
-            except Exception as e: st.info("Please fill out the form.")
+            except Exception as e: st.info("Fill the form to register.")
     st.stop()
 
 # --- 6. PROTECTED DASHBOARD ---
@@ -147,30 +166,41 @@ if st.session_state["authentication_status"]:
                 if st.button("Apply"):
                     if coupon == "BreatheFree2026":
                         update_user_package(username, "Pro")
-                        st.success("Upgraded!"); st.rerun()
+                        st.success("Upgraded to PRO!"); st.rerun()
 
         authenticator.logout('Sign Out', 'sidebar')
         st.divider()
 
-        # INPUTS
+        # ASSET MANAGER & INPUTS
+        st.subheader("📁 Asset Manager")
         max_f = PACKAGE_CONFIG[user_tier]["max_files"]
-        st.file_uploader(f"Assets (Max {max_f})", accept_multiple_files=True)
+        st.file_uploader(f"Max {max_f} assets", accept_multiple_files=True)
         
-        full_map = {"HVAC": ["AC Repair", "System Replacement"], "Plumbing": ["Sewer Repair", "Repiping"], 
-                    "Restoration": ["Mold", "Water"], "Solar": ["Grid Install"], "Custom": ["Manual"]}
+        full_map = {
+            "HVAC": ["Full System Replacement", "IAQ Audit", "AC Repair"], 
+            "Plumbing": ["Sewer Repair", "Tankless Heaters", "Repiping"],
+            "Restoration": ["Water Damage", "Mold Remediation"], 
+            "Roofing": ["Roof Replacement", "Storm Damage"],
+            "Solar": ["Solar Grid Install"], "Custom": ["Manual Entry"]
+        }
         allowed = PACKAGE_CONFIG[user_tier]["allowed_industries"]
         main_cat = st.selectbox("Industry", [i for i in full_map.keys() if i in allowed])
         target_service = st.selectbox("Service", full_map[main_cat]) if main_cat != "Custom" else st.text_input("Service")
-        city_input = st.text_input("City", placeholder="Chicago, IL")
+        city_input = st.text_input("City", placeholder="Naperville, IL")
+
+        # THE TWO AGENT FEATURES (Blog SEO and Competitor Analyst)
+        include_blog = st.toggle("📝 SEO Blog Content Strategist", value=True) if PACKAGE_CONFIG[user_tier]["blog"] else False
+        include_comp = st.toggle("🕵️ Competitor Intelligence Analyst", value=True) if user_tier != "Basic" else False
+        
         run_button = st.button("🚀 LAUNCH SWARM", type="primary", use_container_width=True)
 
     # --- TABS ---
-    tabs = st.tabs(["🔥 Launchpad", "📊 Database", "📱 Preview", "💎 Pricing", "🛠️ Admin" if username == "admin" else "📋 History"])
+    tabs = st.tabs(["🔥 Launchpad", "📊 Database", "📱 Social Preview", "💎 Pricing", "🛠️ Admin" if username == "admin" else "📋 History"])
 
     with tabs[0]: # OUTPUT TAB
         if run_button and city_input:
             with st.spinner("Swarm Coordinating..."):
-                run_marketing_swarm({'city': city_input, 'industry': main_cat, 'service': target_service})
+                run_marketing_swarm({'city': city_input, 'industry': main_cat, 'service': target_service, 'blog': include_blog, 'comp': include_comp})
                 if os.path.exists("final_marketing_strategy.md"):
                     with open("final_marketing_strategy.md", "r") as f: st.session_state['copy'] = f.read()
                     st.session_state['gen'] = True
@@ -186,20 +216,33 @@ if st.session_state["authentication_status"]:
             st.divider()
             st.markdown(copy)
 
-    with tabs[3]: # PRICING
+    with tabs[3]: # PRICING (GEM Tab)
+        st.subheader("💎 Membership Plans")
         c1, c2, c3 = st.columns(3)
-        with c1: st.markdown('<div class="pricing-card"><h3>Basic</h3><h1>$0</h1></div>', unsafe_allow_html=True)
-        with c2: st.markdown('<div class="pricing-card" style="border:2px solid #0056b3"><h3>Pro</h3><h1>$49</h1></div>', unsafe_allow_html=True)
-        with c3: st.markdown('<div class="pricing-card"><h3>Unlimited</h3><h1>$99</h1></div>', unsafe_allow_html=True)
+        for i, (p_name, p_val) in enumerate(PACKAGE_CONFIG.items()):
+            with [c1, c2, c3][i]:
+                st.markdown(f"""
+                <div class="pricing-card">
+                    <h3>{p_name}</h3>
+                    <p style='color: #666; font-size: 13px;'>{p_val['desc']}</p>
+                    <hr>
+                    <ul style="text-align: left; font-size: 12px;">
+                        <li>{len(p_val['allowed_industries'])} Industries</li>
+                        <li>{p_val['max_files']} File Assets</li>
+                        <li>{'✅' if p_val['blog'] else '❌'} SEO Blog AI</li>
+                        <li>{'✅' if p_val['branding'] else '❌'} Logo Branding</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
 
     if username == "admin":
         with tabs[-1]:
-            st.subheader("🛠️ Admin Panel")
+            st.subheader("🛠️ User Management")
             conn = sqlite3.connect('breatheeasy.db')
             df_users = pd.read_sql_query("SELECT username, email, package FROM users", conn)
             st.dataframe(df_users, use_container_width=True)
-            user_to_del = st.selectbox("Delete User", df_users['username'])
+            user_to_del = st.selectbox("Select user to remove", df_users['username'])
             if st.button("❌ Remove Account") and user_to_del != 'admin':
                 conn.cursor().execute("DELETE FROM users WHERE username = ?", (user_to_del,))
-                conn.commit(); st.success(f"{user_to_del} removed."); st.rerun()
+                conn.commit(); st.success(f"Removed {user_to_del}"); st.rerun()
             conn.close()
