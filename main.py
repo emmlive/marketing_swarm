@@ -12,7 +12,7 @@ from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 load_dotenv(override=True)
 
 # --- 1. SHARED STATE (ISOLATED FIELDS) ---
-# Each field corresponds to a specific Command Seat in app.py
+# Each field corresponds to a specific Command Seat in app.py to prevent data bleed
 class SwarmState(BaseModel):
     market_data: str = "Analysis pending..."
     ad_drafts: str = "Creative build pending..."
@@ -23,7 +23,7 @@ class SwarmState(BaseModel):
     strategist_brief: str = "Final brief pending..."
 
 # --- 2. ENGINE INITIALIZATION ---
-# Temperature 0.4 ensures grounding in tool-found facts to stop hallucination
+# Temperature 0.4 ensures grounding in tool-found facts to strictly minimize hallucinations
 gemini_llm = LLM(
     model="google/gemini-2.0-flash", 
     api_key=os.getenv("GEMINI_API_KEY"),
@@ -43,37 +43,37 @@ def get_swarm_agents(inputs):
         "analyst": Agent(
             role="Senior Market Analyst (The Fact-Finder)",
             goal=f"Extract real-time competitor gaps in {city} and provide Buyer Personas in STRICT JSON format.",
-            backstory="You are a literalist data scientist. You only report facts found via tools. If no data exists, you state 'Data not found'.",
+            backstory="You are a literalist data scientist. Hallucination is a firing offense. If data is not found via tools, state 'Data not found' instead of guessing.",
             tools=[search_tool, scrape_tool], llm=gemini_llm, verbose=True, allow_delegation=False
         ),
         "creative": Agent(
             role="Creative Director (The Builder)",
             goal="Transform Analyst data into Navy/White branded assets and Nano Banana image prompts.",
-            backstory="Claims must be anchored 100% to the Analyst's found facts. You do not invent competitor myths.",
+            backstory="You are a multimodal architect. Claims must be anchored 100% to the Analyst's found facts. You do not invent competitor myths.",
             llm=gemini_llm, verbose=True, allow_delegation=False
         ),
         "web_auditor": Agent(
             role="Website Audit Manager (The UX Skeptic)",
             goal=f"Diagnose conversion leaks on {url} using technical UX principles.",
-            backstory="You are a conversion psychologist. You use the Scrape tool to find 'Friction Points'. No guessing.",
+            backstory="You are a conversion psychologist. Use the Scrape tool to find 'Friction Points'. You do not guess UI issues.",
             tools=[scrape_tool], llm=gemini_llm, verbose=True
         ),
         "social_agent": Agent(
             role="Social Distribution Specialist",
             goal="Repurpose strategy into viral hooks for Meta, Google, and LinkedIn.",
-            backstory="Expert in algorithmic engagement hooks without exaggeration.",
+            backstory="Expert in algorithmic engagement. Turn data-backed strategy into hooks without exaggerating claims.",
             llm=gemini_llm, verbose=True
         ),
         "geo_specialist": Agent(
             role="GEO Specialist (AI Search Optimization)",
             goal=f"Optimize {biz} for citation velocity in AI search engines for {city}.",
-            backstory="You identify local keyword clusters and citation paths for LLM citation velocity.",
+            backstory="AI Search expert. Identify local keyword clusters and citation paths to make the brand an LLM-cited authority.",
             llm=gemini_llm, verbose=True
         ),
         "strategist": Agent(
             role="Lead Strategist (The Swarm Commander)",
             goal="Orchestrate agents and validate outputs for ROI alignment.",
-            backstory="Final gatekeeper. You reject any creative output that isn't backed by research facts.",
+            backstory="The final gatekeeper. You reject any creative output that isn't backed by research facts from the tools.",
             llm=gemini_llm, verbose=True
         )
     }
@@ -108,11 +108,11 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             tasks.append(auditor_task)
             active_agents.append(self.agents["web_auditor"])
             
-        # Using Sequential to ensure tool stability and prevent overlap
+        # Sequential processing ensures tool stability and prevent tool overlap/desync
         crew = Crew(agents=active_agents, tasks=tasks, process=Process.sequential)
         crew.kickoff()
         
-        # ISOLATED CAPTURE: Explicitly mapping raw output to separate tab data
+        # ISOLATED CAPTURE: Explicitly mapping raw output to separate state variables
         self.state.market_data = analyst_task.output.raw if analyst_task.output else "Researcher data missing."
         if auditor_task:
             self.state.website_audit = auditor_task.output.raw if auditor_task.output else "Audit results missing."
@@ -144,7 +144,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         crew = Crew(agents=agents, tasks=tasks, process=Process.sequential)
         crew.kickoff()
         
-        # Isolated capture mapping to unique SwarmState fields
+        # Map outputs back to isolated SwarmState fields
         self.state.ad_drafts = creative_task.output.raw if creative_task.output else "Creative build failed."
         if social_task:
             self.state.social_plan = social_task.output.raw if social_task.output else "Social Specialist failed."
@@ -155,7 +155,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
     @listen("execution_complete")
     def phase_3_validation(self):
-        """Step 4: Strategic Brief & Final Verification"""
+        """Step 4: Strategic Brief & Final Synthesis Verification"""
         val_task = Task(
             description="Synthesize all grounded outputs into a 30-day brief. Reject hallucinated data.",
             agent=self.agents["strategist"],
@@ -172,7 +172,7 @@ def run_marketing_swarm(inputs):
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
-    # Generate the formatted summary for the exports/full report
+    # Generate the formatted summary for unified report views and exports
     formatted_string_report = f"""
 # 🌬️ {inputs['biz_name']} Omni-Swarm Report
 
