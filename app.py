@@ -36,7 +36,7 @@ if "GEMINI_API_KEY" in st.secrets:
 
 st.set_page_config(page_title="TechInAdvance AI | Enterprise Command", page_icon="Logo1.jpeg", layout="wide")
 
-# --- 2. ELITE UI CSS (SIDEBAR & THEME) ---
+# --- 2. ELITE UI CSS (SIDEBAR VISIBILITY & THEME RECONCILIATION) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
 bg, text, side = ("#0F172A", "#F8FAFC", "#1E293B") if st.session_state.theme == 'dark' else ("#F8FAFC", "#0F172A", "#E2E8F0")
 
@@ -44,7 +44,7 @@ st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stDeployButton {{display:none;}}
-    /* SIDEBAR TOGGLE VISIBILITY FIX */
+    /* SIDEBAR TOGGLE VISIBILITY FIX - FORCED CONTRAST & BOLD */
     [data-testid="sidebar-button"] {{
         background-color: {sidebar_color} !important;
         color: white !important;
@@ -81,7 +81,7 @@ def init_db():
 
 init_db()
 
-# --- 4. AUTH UTILS ---
+# --- 4. AUTH UTILS & EXPORTS ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -89,7 +89,6 @@ def get_db_creds():
         return {'usernames': {row['username']: {'email':row['email'], 'name':row['name'], 'password':row['password']} for _, row in df.iterrows()}}
     except: return {'usernames': {}}
 
-# Initialize data source
 config_creds = get_db_creds()
 authenticator = stauth.Authenticate(config_creds, st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
@@ -127,8 +126,6 @@ if not st.session_state.get("authentication_status"):
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            # THE PERMANENT FIX: Access config_creds directly. 
-            # The library updates this dict by reference when reg_res is true.
             if u in config_creds['usernames']:
                 pw = config_creds['usernames'][u]['password']
                 conn = sqlite3.connect('breatheeasy.db')
@@ -205,11 +202,17 @@ if st.session_state.get('processing'):
             conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id) VALUES (?,?,?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, city, str(report), user_row['team_id']))
             conn.commit(); conn.close(); st.rerun()
 
-# --- 8. SEAT OUTPUT LOGIC ---
-def render_seat(idx, title, icon, data_key):
+# --- 8. SEAT OUTPUT LOGIC (GUIDE INTEGRATION) ---
+def render_seat(idx, title, icon, data_key, guide_text):
     with tabs[idx]:
         st.subheader(f"{icon} {title} Command Seat")
+        
+        # PROACTIVE FEATURE: User Implementation Guide
+        with st.expander(f"💡 How to execute these {title} results"):
+            st.info(guide_text)
+
         if st.session_state.get('gen'):
+            # Fetch agent-specific data (Ensures Isolation)
             agent_data = st.session_state['report'].get(data_key, "Intelligence pending...")
             
             if idx == 0: # Analyst Seat adds Exports
@@ -222,12 +225,22 @@ def render_seat(idx, title, icon, data_key):
             st.markdown(agent_data)
         else: st.info(f"Deploy Swarm to populate {title} intelligence.")
 
-render_seat(0, "Market Analyst", "🕵️", "analyst")
-render_seat(1, "Creative Director", "🎨", "creative")
-render_seat(2, "Lead Strategist", "👔", "strategist")
-render_seat(3, "Social Content", "✍🏾", "social")
-render_seat(4, "GEO Specialist", "🧠", "geo")
-render_seat(5, "Web Auditor", "🌐", "auditor")
+# GUIDE CONTENT DEFINITIONS
+guides = {
+    "analyst": "Identify the top competitors listed and study their gaps. Use the provided JSON Personas to customize your messaging—address their specific 'pain points' and 'buying triggers' in every communication.",
+    "creative": "Take the 'Nano Banana' prompts to an AI image tool (like Midjourney). Use the Copy Variants for your social headlines or email subject lines. Ensure Navy/White aesthetics are maintained in your final graphics.",
+    "strategist": "This is your 30-day battle plan. Execute the phases sequentially. If a creative asset doesn't align with the Analyst's research, iterate until it does.",
+    "social": "Distribute these hooks across Meta, Google, and LinkedIn. Use the 'Punchy' version for high-engagement posts and the 'Story' version for newsletters or LinkedIn articles.",
+    "geo": "Verify your Google Business Profile and local citations. Ensure the keywords identified are present in your 'About' section and reviews to increase local AI citation velocity.",
+    "auditor": "Implement the UX fixes immediately. Focus on removing 'Conversion Leaks' on your landing page—like confusing forms or slow-loading hero sections—to ensure ad spend isn't wasted."
+}
+
+render_seat(0, "Market Analyst", "🕵️", "analyst", guides["analyst"])
+render_seat(1, "Creative Director", "🎨", "creative", guides["creative"])
+render_seat(2, "Lead Strategist", "👔", "strategist", guides["strategist"])
+render_seat(3, "Social Content", "✍🏾", "social", guides["social"])
+render_seat(4, "GEO Specialist", "🧠", "geo", guides["geo"])
+render_seat(5, "Web Auditor", "🌐", "auditor", guides["auditor"])
 
 with tabs[6]: # INDUSTRY DIAGNOSTIC LAB
     st.subheader(f"🛡️ {final_ind} Diagnostic Lab")
