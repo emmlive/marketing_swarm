@@ -47,7 +47,7 @@ INDUSTRY_LIBRARY = {
     "SaaS & Tech": ["Product Launch", "User Retention", "Enterprise Sales"],
     "E-commerce": ["DTC Brand Growth", "Amazon SEO", "Influencer Strategy"],
     "Real Estate": ["Luxury Listings", "Buyer Lead Gen", "Property Management"],
-    "Finance & Fintech": ["Wealth Management", "Mortgage Lending", "Business Funding"]
+    "Finance & Fintech": ["Wealth Management", "Crypto Adoption", "Mortgage Lending", "Tax Strategy", "Business Funding"]
 }
 
 # --- 3. UI CSS (CREAM MAIN / SIDEBAR BOX BORDER) ---
@@ -134,7 +134,7 @@ def generate_cinematic_ad(prompt):
 # --- 6. AUTHENTICATION & REGISTRATION ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
-    auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "❓ Recovery"])
+    auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team", "❓ Recovery"])
     with auth_tabs[0]: authenticator.login(location='main')
     with auth_tabs[1]:
         st.markdown("### Enterprise Tiers")
@@ -152,7 +152,7 @@ if not st.session_state.get("authentication_status"):
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, hashed, plan, f"TEAM_{u}"))
                 conn.commit(); conn.close(); st.success("Account Ready! Please Log In."); st.rerun()
-    with auth_tabs[2]: authenticator.forgot_password(location='main')
+    with auth_tabs[3]: authenticator.forgot_password(location='main')
     st.stop()
 
 # --- 7. DASHBOARD DATA ---
@@ -199,7 +199,7 @@ if run_btn:
             report = run_marketing_swarm({'city': full_loc, 'industry': ind_cat, 'service': svc, 'biz_name': biz_name, 'url': audit_url, 'toggles': toggles})
             st.session_state.report, st.session_state.gen = report, True
             conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (st.session_state["username"],))
+            conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
             conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id) VALUES (?,?,?,?,?,?,?)", 
                          (datetime.now().strftime("%Y-%m-%d"), user_row['username'], ind_cat, svc, full_loc, str(report), user_row['team_id']))
             conn.commit(); conn.close(); status.update(label="✅ Swarm Success!", state="complete"); st.rerun()
@@ -261,7 +261,7 @@ with tabs[10]:
     with c2:
         st.subheader("Project Pipeline")
         st.dataframe(team_leads, use_container_width=True)
-    st.divider(); st.subheader("🛡️ Security Log"); st.code(f"Integrity: OK | Trace: {user_row['username']} | Time: {datetime.now()}")
+    st.divider(); st.subheader("🛡️ Security Log"); st.code(f"Database Integrity: OK | Access Trace: {user_row['username']} | Time: {datetime.now()}")
     conn.close()
 
 if user_row['role'] == 'admin':
@@ -285,4 +285,4 @@ if user_row['role'] == 'admin':
             if st.button("💉 Inject Credits"):
                 conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amt, target))
                 conn.commit(); st.success(f"Injected {amt} to {target}"); st.rerun()
-        conn.close()      conn.close()
+        conn.close()
