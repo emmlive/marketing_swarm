@@ -3,7 +3,10 @@ import streamlit_authenticator as stauth
 import os
 import sqlite3
 import pandas as pd
+import smtplib
 from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from main import run_marketing_swarm 
 from docx import Document
 from docx.shared import Inches
@@ -65,6 +68,7 @@ def init_db():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, 
                   service TEXT, city TEXT, content TEXT, team_id TEXT, is_shared INTEGER DEFAULT 0, score INTEGER)''')
     
+    # FIX: Use INSERT OR IGNORE to prevent IntegrityError
     hashed_pw = stauth.Hasher.hash('admin123')
     c.execute("""INSERT OR IGNORE INTO users (username, email, name, password, role, package, credits, team_id) 
                  VALUES (?,?,?,?,?,?,?,?)""",
@@ -84,7 +88,7 @@ def render_breatheeasy_gauge(score, industry):
             <div style="width: 100%; background: #E2E8F0; border-radius: 999px; height: 16px; margin-top: 15px;">
                 <div style="width: {score*10}%; background: {color}; height: 16px; border-radius: 999px; transition: 1s;"></div>
             </div>
-            <p style="margin-top: 15px; color: #64748B;">AI Vision Diagnostic active for <b>{industry}</b> Protocol.</p>
+            <p style="margin-top: 15px; color: #64748B;">Autonomous Vision Diagnostic for <b>{industry}</b> Protocol.</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -117,7 +121,7 @@ authenticator = stauth.Authenticate(get_db_creds(), st.secrets['cookie']['name']
 
 if not st.session_state.get("authentication_status"):
     st.title("🌬️ BreatheEasy AI Enterprise")
-    l_tab, r_tab, f_tab = st.tabs(["🔑 Login", "📝 Register", "❓ Forgot Password"])
+    l_tab, r_tab, f_tab = st.tabs(["🔑 Login", "📝 Register Team", "❓ Forgot Password"])
     with l_tab: authenticator.login(location='main')
     with r_tab:
         try:
@@ -126,9 +130,9 @@ if not st.session_state.get("authentication_status"):
                 e, u, n = reg_data; pw = stauth.Hasher.hash(authenticator.credentials['usernames'][u]['password'])
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Basic',5,NULL,?)", (u,e,n,pw,f"TEAM_{u}"))
-                conn.commit(); conn.close(); st.success("Account Created! Login above.")
-        except Exception: st.info("Join the Enterprise Swarm.")
-    with f_tab: st.info("Contact info@airductify.com for manual reset.")
+                conn.commit(); conn.close(); st.success("Team Account Created! Login above.")
+        except Exception: st.info("Register to access the swarm.")
+    with f_tab: st.info("Contact info@airductify.com to initiate a secure password reset.")
     st.stop()
 
 # --- 6. SIDEBAR (SaaS UI) ---
@@ -143,37 +147,32 @@ with st.sidebar:
     st.markdown(f"**Plan:** `{tier}`")
     st.metric("Credits Available", user_row['credits'])
     
-    # Subscription Upgrade Button
+    # Subscription Upgrade Logic
     if tier != 'Unlimited':
         if st.button("🚀 UPGRADE TO UNLIMITED"):
-            st.toast("Redirecting to Billing Portal...")
+            st.toast("Redirecting to Billing...")
 
-    # Package Feature List
-    with st.expander("💎 Included in your Plan"):
-        features = {
-            "Basic": "• Ad Copy\n• Market Research\n• Schedule",
-            "Pro": "• SEO Content\n• Team Share\n• Branding",
-            "Unlimited": "• All Agents\n• GEO Strategy\n• Website Audit"
-        }
-        st.write(features.get(tier, ""))
+    with st.expander("💎 Plan Features"):
+        feat = {"Basic": "• Copy & Research", "Pro": "• SEO & Sharing", "Unlimited": "• All Agents + Audit"}
+        st.write(feat.get(tier, ""))
 
     st.divider()
-    # Modular Agent Toggles with URL Option
+    # ALL AGENTS TOGGLES (Modular & Gated)
     toggles = {
-        "website_audit": st.toggle("🌐 Website Audit Manager", value=False, disabled=(tier == "Basic")),
-        "advice": st.toggle("👔 Advice Director", value=True if tier != "Basic" else False, disabled=(tier=="Basic")),
+        "audit": st.toggle("🌐 Website Audit Manager", disabled=(tier == "Basic")),
+        "advice": st.toggle("👔 Advice Director", value=True if tier != "Basic" else False),
         "sem": st.toggle("🔍 SEM Specialist", value=False),
         "time": st.toggle("📅 Time Manager", value=True),
-        "seo": st.toggle("✍️ SEO Creator", value=True if tier != "Basic" else False, disabled=(tier=="Basic")),
-        "repurpose": st.toggle("✍🏾 Repurposer", value=True),
-        "geo": st.toggle("🧠 GEO Specialist", value=False, disabled=(tier!="Unlimited")),
-        "analytics": st.toggle("📊 Analytics", value=False, disabled=(tier!="Unlimited")),
-        "share_team": st.toggle("🤝 Team Share", value=True if tier != "Basic" else False, disabled=(tier=="Basic"))
+        "seo": st.toggle("✍️ SEO Creator", value=True if tier != "Basic" else False),
+        "repurpose": st.toggle("✍🏾 Content Repurposer", value=True),
+        "geo": st.toggle("🧠 GEO Specialist", disabled=(tier != "Unlimited")),
+        "analytics": st.toggle("📊 Analytics", disabled=(tier != "Unlimited")),
+        "share_team": st.toggle("🤝 Team Share", value=True if tier != "Basic" else False)
     }
     
-    target_url = ""
-    if toggles["website_audit"]:
-        target_url = st.text_input("Enter Website URL", "https://")
+    web_url = ""
+    if toggles["audit"]:
+        web_url = st.text_input("Analysis URL", "https://")
 
     ind_map = {"HVAC": ["AC Repair", "Duct Cleaning"], "Medical": ["Clinic Audit"], "Law": ["Legal SEO"], "Solar": ["Residential"], "Custom": ["Manual"]}
     main_cat = st.selectbox("Industry", list(ind_map.keys()))
@@ -186,14 +185,13 @@ with st.sidebar:
 # --- 7. TABS ---
 tab_names = ["📝 Ad Copy", "🗓️ Schedule", "🖼️ Visual Assets", "🚀 Push to Ads", "🔬 Diagnostic Lab", "🤝 Team Share"]
 if user_row['role'] == 'admin': tab_names.append("⚙️ Admin")
-
 tabs = st.tabs(tab_names)
 
 with tabs[0]: # Ad Copy & Downloads
     if run_btn and city:
         if user_row['credits'] > 0:
-            with st.status("🐝 Swarm Active: Core Foundation & Specialists Coordinating...", expanded=True):
-                report = run_marketing_swarm({'city': city, 'industry': main_cat, 'service': svc, 'url': target_url, 'toggles': toggles})
+            with st.status("🐝 Swarm: Analyst, Creative & Manager Coordinating...", expanded=True):
+                report = run_marketing_swarm({'city': city, 'industry': main_cat, 'service': svc, 'url': web_url, 'toggles': toggles})
                 st.session_state['report'] = report
                 st.session_state['gen'] = True
                 conn = sqlite3.connect('breatheeasy.db')
@@ -201,44 +199,51 @@ with tabs[0]: # Ad Copy & Downloads
                 conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id, is_shared) VALUES (?,?,?,?,?,?,?,?)", 
                              (datetime.now().strftime("%Y-%m-%d"), user_row['username'], main_cat, svc, city, str(report), user_row['team_id'], 1 if toggles['share_team'] else 0))
                 conn.commit(); conn.close(); st.rerun()
-        else: st.error("Out of credits.")
+        else: st.error("No credits remaining.")
 
     if st.session_state.get('gen'):
-        st.subheader("📥 Download Deliverables")
+        st.subheader("📥 Export Deliverables")
         c1, c2 = st.columns(2)
-        c1.download_button("📄 Word Document", create_word_doc(st.session_state['report'], user_row['logo_path']), f"Strategy_{city}.docx", use_container_width=True)
-        c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, user_row['logo_path']), f"Strategy_{city}.pdf", use_container_width=True)
+        c1.download_button("📄 Word Document", create_word_doc(st.session_state['report'], user_row['logo_path']), f"Report_{city}.docx", use_container_width=True)
+        c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, user_row['logo_path']), f"Report_{city}.pdf", use_container_width=True)
         st.divider()
         st.markdown(st.session_state['report'])
 
 with tabs[1]: # Schedule
     if st.session_state.get('gen'):
-        st.subheader("🗓️ Multi-Agent Project Schedule")
+        st.subheader("🗓️ Timeline Schedule")
         st.write(st.session_state['report'])
-    else: st.warning("Launch Swarm to generate schedule.")
+        
 
-with tabs[2]: # Visual Assets
+[Image of a project management Gantt chart]
+
+
+with tabs[2]: # Visual Mockups
     st.subheader("🖼️ Brand Mockups")
     if st.session_state.get('gen'):
-        st.code(f"/imagine prompt: Professional {main_cat} service in {city}, Navy (#000080) and White clean lighting.")
-    else: st.warning("Run Swarm for mockups.")
+        st.code(f"/imagine prompt: Professional {main_cat} service, Navy (#000080) and White accents.")
+    else: st.warning("Launch Swarm to generate mockups.")
 
 with tabs[4]: # Diagnostic Lab
     st.subheader(f"🔬 {main_cat} Diagnostic Hub")
-    diag_up = st.file_uploader(f"Upload {main_cat} On-Site Photos", type=['png', 'jpg'])
+    diag_up = st.file_uploader(f"Upload {main_cat} Photos", type=['png', 'jpg'])
     if diag_up:
+        # Score Logic & DB Save
         score = 8 if main_cat == "Medical" else 4 if main_cat == "HVAC" else 7
         render_breatheeasy_gauge(score, main_cat)
-        st.image(diag_up, width=600)
+        if st.button("💾 SAVE SCORE TO DATABASE"):
+            conn = sqlite3.connect('breatheeasy.db')
+            conn.execute("UPDATE leads SET score = ? WHERE user = ? ORDER BY id DESC LIMIT 1", (score, st.session_state['username']))
+            conn.commit(); conn.close(); st.success("Score Saved!")
 
 if user_row['role'] == 'admin':
     with tabs[-1]:
-        st.subheader("👥 System User Management")
+        st.subheader("👥 Admin Control")
         conn = sqlite3.connect('breatheeasy.db')
         all_u = pd.read_sql("SELECT username, email, package, credits FROM users", conn)
         st.dataframe(all_u, use_container_width=True)
-        user_to_del = st.text_input("Username to remove")
-        if st.button("❌ Terminate User"):
+        user_to_del = st.text_input("Target Username")
+        if st.button("❌ Remove Account"):
             conn.execute(f"DELETE FROM users WHERE username='{user_to_del}'")
-            conn.commit(); st.success("User Terminated."); st.rerun()
+            conn.commit(); st.rerun()
         conn.close()
