@@ -11,13 +11,13 @@ from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 # Force fresh read of environment variables
 load_dotenv(override=True)
 
-# --- 1. SHARED STATE ---
+# --- 1. SHARED STATE (ISOLATED FIELDS) ---
 class SwarmState(BaseModel):
-    # These fields ensure data is captured for every Command Seat in app.py
+    # Isolated fields to prevent data overlap in Command Seats
     market_data: str = "Analysis pending..."
     ad_drafts: str = "Creative build pending..."
     website_audit: str = "Audit pending..."
-    social_plan: str = "Distribution pending..."
+    social_plan: str = "Social strategy pending..."
     geo_intel: str = "GEO mapping pending..."
     production_schedule: str = "Roadmap pending..."
     strategist_brief: str = "Final brief pending..."
@@ -32,7 +32,7 @@ gemini_llm = LLM(
 search_tool = SerperDevTool(api_key=os.getenv("SERPER_API_KEY"))
 scrape_tool = ScrapeWebsiteTool()
 
-# --- 3. AGENT DEFINITIONS (Orchestrated for $1B SaaS standard) ---
+# --- 3. AGENT DEFINITIONS ---
 def get_swarm_agents(inputs):
     biz = inputs.get('biz_name', 'The Business')
     city = inputs.get('city', 'the local area')
@@ -42,19 +42,19 @@ def get_swarm_agents(inputs):
         "analyst": Agent(
             role="Senior Market Analyst (The Researcher)",
             goal=f"Extract competitor gaps in {city} and provide Buyer Personas in STRICT JSON format.",
-            backstory="Data scientist focused on neuromarketing and competitor auditing. You output structured JSON.",
+            backstory="Data scientist focused on neuromarketing. You provide the foundation of truth.",
             tools=[search_tool, scrape_tool], llm=gemini_llm, verbose=True
         ),
         "creative": Agent(
             role="Creative Director (The Builder)",
             goal="Transform Analyst data into high-conversion assets and Nano Banana image prompts.",
-            backstory="Multimodal builder. You use Navy/White branding and psychological hooks to create visual and text assets.",
+            backstory="Multimodal builder. You use the Researcher's JSON to ensure copy is data-backed.",
             llm=gemini_llm, verbose=True
         ),
         "web_auditor": Agent(
             role="Website Audit Manager (The Auditor)",
             goal=f"Diagnose conversion leaks on {url}.",
-            backstory="UX/UI specialist. You find the 'friction' points in the provided URL.",
+            backstory="UX specialist. You find the 'friction' points in the URL provided.",
             tools=[scrape_tool], llm=gemini_llm, verbose=True
         ),
         "social_agent": Agent(
@@ -66,18 +66,18 @@ def get_swarm_agents(inputs):
         "geo_specialist": Agent(
             role="GEO Specialist (Generative Engine Optimization)",
             goal=f"Optimize {biz} for AI Search (ChatGPT/Gemini) citation velocity in {city}.",
-            backstory="AI Search expert focused on making the brand the #1 cited authority in local searches.",
+            backstory="AI Search expert focused on making the brand the #1 cited authority in local AI results.",
             llm=gemini_llm, verbose=True
         ),
         "strategist": Agent(
             role="Lead Strategist (The Manager)",
             goal="Orchestrate agents and validate outputs for ROI alignment.",
-            backstory="The Swarm Commander. You ensure the final output is elite and client-ready.",
+            backstory="The Swarm Commander. You ensure the final Master Brief is elite.",
             llm=gemini_llm, verbose=True
         )
     }
 
-# --- 4. THE STATEFUL WORKFLOW ---
+# --- 4. THE STATEFUL WORKFLOW (ISOLATED EXECUTION) ---
 class MarketingSwarmFlow(Flow[SwarmState]):
     def __init__(self, inputs):
         super().__init__()
@@ -88,59 +88,71 @@ class MarketingSwarmFlow(Flow[SwarmState]):
     @start()
     def phase_1_discovery(self):
         """Phase 1: Research and Technical Auditing"""
-        active_tasks = []
-        
-        # MANDATORY JSON SCHEMA TASK
-        active_tasks.append(Task(
+        # ANALYST TASK
+        analyst_task = Task(
             description=(
                 f"Identify top 3 competitors for {self.inputs['biz_name']} in {self.inputs['city']}. "
                 "Output findings in this JSON Schema: "
                 "{'competitors': [], 'personas': [{'pain_points': [], 'buying_trigger': '', 'mood': ''}]}"
             ),
             agent=self.agents["analyst"],
-            expected_output="Valid JSON string containing research and personas."
-        ))
+            expected_output="JSON Market Truth Report."
+        )
 
+        # AUDITOR TASK (Conditional)
         if self.toggles.get('audit'):
-            active_tasks.append(Task(
+            auditor_task = Task(
                 description=f"Audit {self.inputs.get('url')} for conversion friction.",
                 agent=self.agents["web_auditor"],
-                expected_output="UX Audit report."
-            ))
-
-        result = Crew(agents=[self.agents["analyst"], self.agents["web_auditor"]], tasks=active_tasks).kickoff()
-        self.state.market_data = str(result)
-        self.state.website_audit = str(result)
+                expected_output="Technical UX Audit findings."
+            )
+            
+            # Run parallel discovery
+            crew = Crew(agents=[self.agents["analyst"], self.agents["web_auditor"]], 
+                        tasks=[analyst_task, auditor_task])
+            result = crew.kickoff()
+            
+            # Isolated state assignment
+            self.state.market_data = str(analyst_task.output.raw)
+            self.state.website_audit = str(auditor_task.output.raw)
+        else:
+            result = Crew(agents=[self.agents["analyst"]], tasks=[analyst_task]).kickoff()
+            self.state.market_data = str(result)
+            
         return "discovery_complete"
 
     @listen("discovery_complete")
     def phase_2_execution(self):
         """Phase 2: Creative Production and Specialist Plans"""
-        active_tasks = []
-        active_agents = [self.agents["creative"]]
-        
-        # NANO BANANA INTEGRATION
-        active_tasks.append(Task(
-            description=(
-                "Parse the Analyst's JSON. Create 3 Navy/White ad copy variants. "
-                "Provide highly detailed image prompts for the 'Nano Banana' model based on the JSON 'mood'."
-            ),
+        # CREATIVE TASK
+        creative_task = Task(
+            description="Create 3 Navy/White ad variants and 'Nano Banana' prompts using the Researcher's JSON.",
             agent=self.agents["creative"],
-            expected_output="Multimodal creative assets and specific image prompts."
-        ))
+            expected_output="Branded Creative Assets."
+        )
+        tasks = [creative_task]
+        agents = [self.agents["creative"]]
 
+        # SOCIAL TASK
         if self.toggles.get('social'):
-            active_agents.append(self.agents["social_agent"])
-            active_tasks.append(Task(description="Meta/Google/LinkedIn hooks.", agent=self.agents["social_agent"], expected_output="Social Plan."))
+            social_task = Task(description="Social hooks and distribution.", agent=self.agents["social_agent"], expected_output="Social Plan.")
+            tasks.append(social_task)
+            agents.append(self.agents["social_agent"])
 
+        # GEO TASK
         if self.toggles.get('geo'):
-            active_agents.append(self.agents["geo_specialist"])
-            active_tasks.append(Task(description="AI Search velocity plan.", agent=self.agents["geo_specialist"], expected_output="GEO Report."))
+            geo_task = Task(description="AI Search velocity plan.", agent=self.agents["geo_specialist"], expected_output="GEO Report.")
+            tasks.append(geo_task)
+            agents.append(self.agents["geo_specialist"])
 
-        result = Crew(agents=active_agents, tasks=active_tasks, process=Process.sequential).kickoff()
-        self.state.ad_drafts = str(result)
-        self.state.social_plan = str(result)
-        self.state.geo_intel = str(result)
+        crew = Crew(agents=agents, tasks=tasks, process=Process.sequential)
+        crew.kickoff()
+        
+        # Isolated state assignment to prevent mirror overlap
+        self.state.ad_drafts = str(creative_task.output.raw)
+        if self.toggles.get('social'): self.state.social_plan = str(social_task.output.raw)
+        if self.toggles.get('geo'): self.state.geo_intel = str(geo_task.output.raw)
+        
         return "execution_complete"
 
     @listen("execution_complete")
@@ -149,7 +161,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         val_task = Task(
             description="Audit all agent outputs. Synthesize into a final 30-day roadmap and Master Brief.",
             agent=self.agents["strategist"],
-            expected_output="Elite Campaign Roadmap & Master Brief."
+            expected_output="Master Campaign Brief."
         )
 
         result = Crew(agents=[self.agents["strategist"]], tasks=[val_task]).kickoff()
@@ -157,19 +169,18 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         self.state.production_schedule = str(result)
         return "swarm_finished"
 
-# --- 5. EXECUTION WRAPPER (UNIFIED RETURN FOR APP.PY) ---
+# --- 5. EXECUTION WRAPPER (ISOLATED DICTIONARY) ---
 def run_marketing_swarm(inputs):
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
-    # Reconstruct the requested formatted string for the 'full_report' key
     formatted_string_report = f"""
 # 🌬️ {inputs['biz_name']} Omni-Swarm Report
 
 ## 🔍 Phase 1: Discovery & Site Audit
 {flow.state.market_data}
 
-## 📝 Phase 2: Execution, SEO IG & Distribution
+## 📝 Phase 2: Execution, Creative & Social
 {flow.state.ad_drafts}
 
 ## 🗓️ Phase 3: Managerial Review & Roadmap
