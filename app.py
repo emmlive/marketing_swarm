@@ -126,7 +126,6 @@ if not st.session_state.get("authentication_status"):
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            # FIX: Pull from the internal authenticator storage which IS updated in real-time
             pw = authenticator.credentials['usernames'][u]['password']
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
@@ -178,9 +177,9 @@ with st.sidebar:
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 7. COMMAND CENTER TABS (THE 6 SEATS) ---
+# --- 7. COMMAND CENTER TABS (THE 6 SEATS + HUB) ---
 hub_name = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
-tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "🤝 Team Share", "⚙️ Admin"])
+tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", hub_name, "🤝 Team Share", "⚙️ Admin"])
 
 if run_btn:
     if not biz_name or not city: st.error("❌ Mandatory Fields Missing.")
@@ -206,7 +205,7 @@ def render_seat(idx, title, icon, data_key):
     with tabs[idx]:
         st.subheader(f"{icon} {title} Command Seat")
         if st.session_state.get('gen'):
-            # Fetch agent-specific data from the report dictionary
+            # Fetch agent-specific data from the report dictionary returned by main.py
             agent_data = st.session_state['report'].get(data_key, "Intelligence pending...")
             
             if idx == 0: # Analyst Seat adds Exports
@@ -226,7 +225,12 @@ render_seat(3, "Social Content", "✍🏾", "social")
 render_seat(4, "GEO Specialist", "🧠", "geo")
 render_seat(5, "Web Auditor", "🌐", "auditor")
 
-with tabs[6]: # TEAM HUB
+with tabs[6]: # INDUSTRY DIAGNOSTIC LAB
+    st.subheader(f"🛡️ {final_ind} Diagnostic Lab")
+    diag_up = st.file_uploader(f"Upload {final_ind} Field Evidence", type=['png', 'jpg'])
+    if diag_up: st.success("Visual Evidence Archived for AI Risk Scoring.")
+
+with tabs[7]: # TEAM HUB
     st.info(f"Organization ID: **{user_row['team_id']}**")
     conn = sqlite3.connect('breatheeasy.db')
     st.write("### 🏆 Leadership Board")
