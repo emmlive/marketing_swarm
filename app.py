@@ -11,7 +11,7 @@ from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
 
-# --- 1. SYSTEM INITIALIZATION & STRIPE SAFETY ---
+# --- 1. SYSTEM INITIALIZATION ---
 try:
     import stripe
     stripe.api_key = st.secrets.get("STRIPE_API_KEY", "sk_test_placeholder")
@@ -48,7 +48,7 @@ INDUSTRY_LIBRARY = {
     "Finance & Fintech": ["Wealth Management", "Crypto Adoption", "Mortgage Lending", "Tax Strategy", "Business Funding"]
 }
 
-# --- 3. ELITE UI CSS ---
+# --- 3. UI CSS (FORCED CONTRAST & PULSE) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
 bg, text, side = ("#0F172A", "#F8FAFC", "#1E293B") if st.session_state.theme == 'dark' else ("#F8FAFC", "#0F172A", "#E2E8F0")
 
@@ -56,7 +56,7 @@ st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stDeployButton {{display:none;}}
-    [data-testid="sidebar-button"] {{ background-color: {sidebar_color} !important; color: white !important; border-radius: 5px !important; z-index: 999999; display: flex !important; box-shadow: 0px 0px 10px rgba(0,0,0,0.5); }}
+    [data-testid="sidebar-button"] {{ background-color: {sidebar_color} !important; color: white !important; z-index: 999999; display: flex !important; }}
     div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 10px; width: 100%; font-weight: 800 !important; border: none; text-transform: uppercase; }}
     [data-testid="stSidebar"] {{ background-color: {bg}; color: {text}; border-right: 1px solid #1E293B; }}
     .st-emotion-cache-1kyx7g3 {{ background-color: {side} !important; border-radius: 12px; padding: 20px; }}
@@ -105,12 +105,17 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 6. AUTH FLOW ---
+# --- 6. AUTH FLOW & PRICE PLANS ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
-    auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team (Invite)", "❓ Recovery"])
+    auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team"])
     with auth_tabs[0]: authenticator.login(location='main')
     with auth_tabs[1]:
+        st.subheader("Elite Subscription Tiers")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Basic", "$99/mo", "50 Credits")
+        c2.metric("Pro", "$499/mo", "250 Credits")
+        c3.metric("Enterprise", "$1999/mo", "Unlimited")
         plan = st.selectbox("Select Tier", ["Basic", "Pro", "Enterprise"])
         reg_res = authenticator.register_user(location='main')
         if reg_res:
@@ -120,17 +125,6 @@ if not st.session_state.get("authentication_status"):
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
                 conn.commit(); conn.close(); st.success("Account Created!"); st.button("Log In Now", on_click=switch_to_login)
-    with auth_tabs[2]:
-        invite_id = st.text_input("Enter Team ID")
-        join_reg = authenticator.register_user(location='main', key='join')
-        if join_reg and invite_id:
-            e, u, n = join_reg
-            if u in config_creds['usernames']:
-                pw = config_creds['usernames'][u]['password']
-                conn = sqlite3.connect('breatheeasy.db')
-                conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, pw, invite_id))
-                conn.commit(); conn.close(); st.success(f"Linked to {invite_id}!"); st.button("Proceed", on_click=switch_to_login)
-    with auth_tabs[3]: authenticator.forgot_password(location='main')
     st.stop()
 
 # --- 7. DASHBOARD CONTROL ---
@@ -177,12 +171,12 @@ if st.session_state.get('processing'):
     with tabs[0]:
         with st.status("🛠️ **Multi-Agent Coordination in Progress...**", expanded=True) as status:
             try:
-                st.write("<div class='swarm-pulse'></div> **Phase 1:** Analyst is researching competitors and personas...", unsafe_allow_html=True)
+                st.write("<div class='swarm-pulse'></div> **Phase 1:** Analyst & Auditor are researching market gaps...", unsafe_allow_html=True)
                 report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
                 
-                st.write("🎨 **Phase 2:** Creative Director is building multimodal assets...")
-                st.write("📡 **Phase 3:** Distribution agents are mapping GEO & Social hooks...")
-                st.write("👔 **Phase 4:** Strategist is synthesizing the final master brief...")
+                st.write("🎨 **Phase 2:** Creative Director is building assets...")
+                st.write("📡 **Phase 3:** Distribution agents are mapping hooks...")
+                st.write("👔 **Phase 4:** Strategist is synthesizing ROI roadmap...")
 
                 st.session_state['report'] = report
                 st.session_state['gen'] = True
@@ -192,22 +186,22 @@ if st.session_state.get('processing'):
                 conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id) VALUES (?,?,?,?,?,?,?)", 
                              (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, city, str(report), user_row['team_id']))
                 conn.commit(); conn.close()
-                status.update(label="🚀 **Swarm Complete! Intelligence Deployed.**", state="complete")
+                status.update(label="🚀 **Swarm Complete!**", state="complete")
             except Exception as e:
                 st.error(f"⚠️ Swarm Error: {str(e)}")
             finally:
                 st.session_state.processing = False
                 st.rerun()
 
-# --- 9. RENDER SEATS ---
+# --- 9. RENDER SEATS (TAB ISOLATION FIX) ---
 def render_seat(idx, title, icon, data_key, guide_text):
     with tabs[idx]:
         st.subheader(f"{icon} {title} Command Seat")
         with st.expander(f"💡 How to execute these {title} results"):
             st.info(guide_text)
         if st.session_state.get('gen'):
-            # THE FIX: This pulls isolated data from the specific report dictionary keys
-            agent_data = st.session_state['report'].get(data_key, "Intelligence pending or specialist disabled.")
+            # Fetch specifically mapped key from main.py isolated dictionary
+            agent_data = st.session_state['report'].get(data_key, "Intelligence pending or agent not activated.")
             if idx == 0:
                 st.subheader("📥 Export Deliverables")
                 c1, c2 = st.columns(2)
@@ -226,6 +220,8 @@ guides = {
     "auditor": "Immediately fix the friction points listed here to optimize conversions."
 }
 
+
+
 render_seat(0, "Market Analyst", "🕵️", "analyst", guides["analyst"])
 render_seat(1, "Creative Director", "🎨", "creative", guides["creative"])
 render_seat(2, "Lead Strategist", "👔", "strategist", guides["strategist"])
@@ -233,13 +229,8 @@ render_seat(3, "Social Content", "✍🏾", "social", guides["social"])
 render_seat(4, "GEO Specialist", "🧠", "geo", guides["geo"])
 render_seat(5, "Web Auditor", "🌐", "auditor", guides["auditor"])
 
-with tabs[6]:
-    st.subheader(f"🛡️ {final_ind} Diagnostic Lab")
-    diag_up = st.file_uploader(f"Upload Evidence", type=['png', 'jpg'])
-    if diag_up: st.success("Evidence Archived for AI Risk Scoring.")
-
 with tabs[7]:
-    st.info(f"Team ID: {user_row['team_id']}")
+    st.info(f"Organization ID: {user_row['team_id']}")
     conn = sqlite3.connect('breatheeasy.db')
     st.table(pd.read_sql_query("SELECT user, COUNT(id) as 'Reports' FROM leads WHERE team_id = ? GROUP BY user", conn, params=(user_row['team_id'],)))
     conn.close()
@@ -249,12 +240,8 @@ if user_row['role'] == 'admin':
         st.subheader("⚙️ System Administration")
         conn = sqlite3.connect('breatheeasy.db')
         st.dataframe(pd.read_sql("SELECT username, email, credits FROM users", conn), use_container_width=True)
-        
-        # RESTORED TERMINATION LOGIC
         u_del = st.text_input("Terminate User Access")
         if st.button("❌ Remove User"):
             conn.execute("DELETE FROM users WHERE username=?", (u_del,))
-            conn.commit()
-            st.success(f"User {u_del} terminated.")
-            st.rerun()
+            conn.commit(); st.success(f"User {u_del} terminated."); st.rerun()
         conn.close()
