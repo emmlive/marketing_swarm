@@ -11,8 +11,9 @@ from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 # Force fresh read of environment variables
 load_dotenv(override=True)
 
-# --- 1. SHARED STATE (ISOLATED FIELDS) ---
+# --- 1. SHARED STATE (EXCLUSIVE FIELDS) ---
 class SwarmState(BaseModel):
+    # These fields ensure 1:1 mapping with the Command Seats in app.py
     market_data: str = "Analysis pending..."
     ad_drafts: str = "Creative build pending..."
     website_audit: str = "Audit pending..."
@@ -25,7 +26,7 @@ class SwarmState(BaseModel):
 gemini_llm = LLM(
     model="google/gemini-2.0-flash", 
     api_key=os.getenv("GEMINI_API_KEY"),
-    temperature=0.4 # Strictly minimized for anti-hallucination
+    temperature=0.4 # Strictly minimized to force tool-grounded facts
 )
 
 search_tool = SerperDevTool(api_key=os.getenv("SERPER_API_KEY"))
@@ -41,42 +42,42 @@ def get_swarm_agents(inputs):
         "analyst": Agent(
             role="Senior Market Analyst (The Fact-Finder)",
             goal=f"Extract competitor gaps in {city} and provide Buyer Personas in STRICT JSON format.",
-            backstory="You are a literalist data scientist. You only report facts found via tools. If no data exists, you state 'Data not found'.",
+            backstory="You are a literalist data scientist. Hallucination is a firing offense. If data is not found via search_tool, you state 'Data not found' instead of guessing.",
             tools=[search_tool, scrape_tool], llm=gemini_llm, verbose=True, allow_delegation=False
         ),
         "creative": Agent(
             role="Creative Director (The Builder)",
-            goal="Transform Analyst data into Navy/White branded assets. Claims must be anchored to the Researcher's JSON.",
-            backstory="You are a multimodal architect. You use the specific gaps identified by the Analyst to build high-conversion copy and Nano Banana prompts.",
+            goal="Transform Analyst data into Navy/White branded assets and Nano Banana image prompts.",
+            backstory="You are a multimodal architect. Claims must be anchored 100% to the Researcher's JSON. You do not invent competitor myths.",
             llm=gemini_llm, verbose=True, allow_delegation=False
         ),
         "web_auditor": Agent(
             role="Website Audit Manager (The UX Skeptic)",
-            goal=f"Diagnose conversion friction on {url} using technical UX principles.",
-            backstory="UX expert. You scan for friction points like poor accessibility or unclear CTAs. Do not guess; use the Scrape tool.",
+            goal=f"Diagnose conversion leaks on {url} using technical UX principles.",
+            backstory="You are a conversion psychologist. You use the Scrape tool to find 'Friction Points'. You do not guess UI issues.",
             tools=[scrape_tool], llm=gemini_llm, verbose=True
         ),
         "social_agent": Agent(
             role="Social Distribution Specialist",
             goal="Repurpose strategy into viral hooks for Meta, Google, and LinkedIn.",
-            backstory="Expert in algorithmic engagement. You turn strategy into attention-grabbing hooks without exaggerating claims.",
+            backstory="Engagement expert. You turn data-backed strategy into attention-grabbing hooks without exaggerating claims.",
             llm=gemini_llm, verbose=True
         ),
         "geo_specialist": Agent(
             role="GEO Specialist (AI Search Optimization)",
             goal=f"Optimize {biz} for citation velocity in AI search engines for {city}.",
-            backstory="AI Search expert. You identify local keyword clusters and citation paths.",
+            backstory="AI Search expert. You identify local keyword clusters and citation paths to make the brand a recommended authority.",
             llm=gemini_llm, verbose=True
         ),
         "strategist": Agent(
             role="Lead Strategist (The Swarm Commander)",
-            goal="Orchestrate agents and reject any output not grounded in Phase 1 research.",
-            backstory="Final gatekeeper. You ensure 100% brand consistency and fact-anchored ROI for the master brief.",
+            goal="Orchestrate agents and validate outputs for ROI alignment.",
+            backstory="The final gatekeeper. You reject any creative output that isn't backed by research facts.",
             llm=gemini_llm, verbose=True
         )
     }
 
-# --- 4. THE STATEFUL WORKFLOW (STRICT ISOLATION & SEQUENTIAL STABILITY) ---
+# --- 4. THE STATEFUL WORKFLOW (ISOLATED & SEQUENTIAL) ---
 class MarketingSwarmFlow(Flow[SwarmState]):
     def __init__(self, inputs):
         super().__init__()
@@ -87,11 +88,10 @@ class MarketingSwarmFlow(Flow[SwarmState]):
     @start()
     def phase_1_discovery(self):
         """Step 1: Grounded Research and Technical Auditing"""
-        # ANALYST TASK
         analyst_task = Task(
             description=(
                 f"Identify top 3 competitors for {self.inputs['biz_name']} in {self.inputs['city']}. "
-                "Output STRICT JSON Schema: {{'competitors': [], 'personas': [{{'name': '', 'pain_points': [], 'buying_trigger': '', 'mood': ''}}]}}"
+                "Output STRICT JSON Schema: {{'competitors': [], 'personas': [{{'name': '', 'pain_points': [], 'trigger': '', 'mood': ''}}]}}"
             ),
             agent=self.agents["analyst"],
             expected_output="JSON Market Truth Report based EXCLUSIVELY on tool results."
@@ -100,7 +100,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         tasks = [analyst_task]
         active_agents = [self.agents["analyst"]]
 
-        # AUDITOR TASK
         auditor_task = None
         if self.toggles.get('audit'):
             auditor_task = Task(
@@ -111,16 +110,15 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             tasks.append(auditor_task)
             active_agents.append(self.agents["web_auditor"])
             
-        # Using Sequential to ensure tool stability during scraping
         crew = Crew(agents=active_agents, tasks=tasks, process=Process.sequential)
         crew.kickoff()
         
-        # ISOLATED CAPTURE: Explicitly pulling raw outputs to separate tab data
+        # ISOLATED CAPTURE: Explicitly mapping raw output to prevent merging
         self.state.market_data = analyst_task.output.raw if analyst_task.output else "Researcher data missing."
         if auditor_task:
             self.state.website_audit = auditor_task.output.raw if auditor_task.output else "Audit results missing."
         else:
-            self.state.website_audit = "Web Auditor not activated for this swarm."
+            self.state.website_audit = "Web Auditor not requested."
             
         return "discovery_complete"
 
@@ -128,7 +126,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
     def phase_2_execution(self):
         """Step 2 & 3: Fact-Anchored Creative & Specialist Mapping"""
         creative_task = Task(
-            description="Using the Analyst's JSON, build 3 ad variants and 'Nano Banana' prompts. Claims must be grounded in research.",
+            description="Using the Analyst's JSON, build 3 ad variants and 'Nano Banana' prompts. Ground claims in research.",
             agent=self.agents["creative"],
             expected_output="Grounded Branded Assets and Image Prompts."
         )
@@ -138,7 +136,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
         social_task = None
         if self.toggles.get('social'):
-            social_task = Task(description="Platform-specific social hooks.", agent=self.agents["social_agent"], expected_output="Social Distribution Plan.")
+            social_task = Task(description="Platform-specific viral hooks.", agent=self.agents["social_agent"], expected_output="Social Distribution Plan.")
             tasks.append(social_task)
             agents.append(self.agents["social_agent"])
 
@@ -151,10 +149,12 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         crew = Crew(agents=agents, tasks=tasks, process=Process.sequential)
         crew.kickoff()
         
-        # Isolated capture mapping to SwarmState
+        # Isolated capture mapping to unique SwarmState fields
         self.state.ad_drafts = creative_task.output.raw if creative_task.output else "Creative build failed."
-        self.state.social_plan = social_task.output.raw if social_task and social_task.output else "Social Specialist not activated."
-        self.state.geo_intel = geo_task.output.raw if geo_task and geo_task.output else "GEO Specialist not activated."
+        if social_task:
+            self.state.social_plan = social_task.output.raw if social_task.output else "Social hooks failed."
+        if geo_task:
+            self.state.geo_intel = geo_task.output.raw if geo_task.output else "GEO Report failed."
         
         return "execution_complete"
 
@@ -162,7 +162,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
     def phase_3_validation(self):
         """Step 4: Strategic Brief & Final Verification"""
         val_task = Task(
-            description="Synthesize all agent outputs into a 30-day brief. Reject any assets that hallucinate data.",
+            description="Synthesize all grounded outputs into a 30-day brief. Reject hallucinated data.",
             agent=self.agents["strategist"],
             expected_output="Verified Master Campaign Brief and Roadmap."
         )
@@ -172,7 +172,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         self.state.production_schedule = str(result)
         return "swarm_finished"
 
-# --- 5. EXECUTION WRAPPER ---
+# --- 5. EXECUTION WRAPPER (ISOLATED RETURN) ---
 def run_marketing_swarm(inputs):
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
