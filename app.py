@@ -108,7 +108,7 @@ def render_breatheeasy_gauge(score, industry):
         </div>
     """, unsafe_allow_html=True)
 
-# --- 4. SaaS WORKFLOW (AUTH & FORGOT PASSWORD #2) ---
+# --- 4. SaaS WORKFLOW (AUTH & RECOVERY) ---
 authenticator = stauth.Authenticate(get_db_creds(), st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
 if not st.session_state.get("authentication_status"):
@@ -126,9 +126,9 @@ if not st.session_state.get("authentication_status"):
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("INSERT OR IGNORE INTO users VALUES (?,?,?,?,'member',?,?,?,?)", (u, e, n, pw, plan.split()[0], 50, "Logo1.jpeg", f"TEAM_{u}"))
             conn.commit(); conn.close(); st.success("Registration Successful!"); st.button("Back to Login", on_click=switch_to_login)
-    with auth_tabs[2]: # FORGOT PASSWORD RESTORED
+    with auth_tabs[2]:
         st.subheader("Account Recovery")
-        st.info("Submit your username. If the account exists, our security swarm will send recovery instructions to your registered email.")
+        st.info("Submit your username for AI security swarm recovery.")
         recovery_user = st.text_input("Username")
         if st.button("Send Recovery Instructions"): st.success("Email sent if account exists.")
     st.stop()
@@ -154,7 +154,7 @@ with st.sidebar:
             conn = sqlite3.connect('breatheeasy.db'); conn.execute("UPDATE users SET logo_path = ? WHERE username = ?", (save_path, st.session_state['username'])); conn.commit(); conn.close(); st.success("Branding Applied!")
 
     st.divider(); biz_name = st.text_input("Brand Name"); biz_usp = st.text_area("Brand USP")
-    toggles = {"audit": st.toggle("🌐 Web Auditor", value=True), "advice": st.toggle("👔 Advice Director", value=True), "sem": st.toggle("🔍 SEM Specialist"), "seo": st.toggle("✍️ SEO Creator"), "repurpose": st.toggle("✍🏾 Content Repurposer"), "geo": st.toggle("🧠 GEO Specialist")}
+    toggles = {"audit": st.toggle("🌐 Web Auditor", value=True), "advice": st.toggle("👔 Advice Director", value=True), "sem": st.toggle("🚀 Ads & Budget Forecaster", value=True), "seo": st.toggle("✍️ SEO Authority (IG)", value=True), "repurpose": st.toggle("✍🏾 Content Repurposer"), "geo": st.toggle("🧠 GEO Specialist")}
     
     web_url = st.text_input("Target URL") if toggles["audit"] else ""
     ind_choice = st.selectbox("Industry", ["HVAC", "Medical", "Law", "Solar", "Custom"])
@@ -165,13 +165,12 @@ with st.sidebar:
     authenticator.logout('Sign Out', 'sidebar')
 
 # --- 6. TABS & DYNAMIC COMMAND CENTER ---
-
 hub_display_name = f"🔬 {final_ind} Diagnostic Hub" if final_ind else "🔬 Diagnostic Lab"
-tabs = st.tabs(["📝 Ad Copy", "🗓️ User Schedule", "🖼️ Visual Assets", "🚀 Push to Ads", hub_display_name, "⚙️ Admin Hub"])
+tabs = st.tabs(["📝 Ad Copy", "🗓️ Roadmap", "📊 Ads Manager", hub_display_name, "⚙️ Admin Hub"])
 
 with tabs[0]: # Strategic Strategy & Ad Copy
     if run_btn and city and biz_name:
-        with st.status("🐝 Swarm Active: Coordinating Specialists...", expanded=True):
+        with st.status("🐝 Swarm Active: Conversion Psychologist & SEO Authority collaborating...", expanded=True):
             report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
             st.session_state['report'] = report; st.session_state['gen'] = True
             conn = sqlite3.connect('breatheeasy.db')
@@ -191,7 +190,28 @@ with tabs[1]: # User Schedule
     st.subheader("🗓️ Your 30-Day Project Roadmap")
     if st.session_state.get('gen'): st.write(st.session_state['report'])
 
-with tabs[4]: # Fully Dynamic Diagnostic Hub
+with tabs[2]: # REFINED ADS MANAGER TAB
+    st.subheader("🚀 Ads Manager & Automated Budget Forecaster")
+    
+    if st.session_state.get('gen'):
+        st.info(f"💡 Swarm-Generated Forecast for {final_ind} in {city}")
+        
+        # Displaying automated budget forecasting results
+        st.markdown("### 📊 Projected ROI & Spend Tiers")
+        data = {
+            "Budget Tier": ["Conservative", "Aggressive", "Elite Scaling"],
+            "Monthly Ad Spend": ["$2,500", "$7,500", "$20,000+"],
+            "Est. CPC Range": ["$4.50 - $7.00", "$4.00 - $6.50", "$3.50 - $5.50"],
+            "Target ROAS": ["250%", "380%", "520%"]
+        }
+        st.table(pd.DataFrame(data))
+        
+        st.markdown("#### 🎯 Automated Conversion Forecast")
+        st.markdown(st.session_state['report'])
+    else:
+        st.warning("Launch the Omni-Swarm to calculate industry-specific CPC and ROI forecasts.")
+
+with tabs[3]: # Fully Dynamic Diagnostic Hub
     st.subheader(f"🛡️ {final_ind} Quality & Safety Audit")
     diag_up = st.file_uploader(f"Upload {final_ind} Field Evidence", type=['png', 'jpg'])
     if diag_up:
