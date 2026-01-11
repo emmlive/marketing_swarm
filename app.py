@@ -44,7 +44,7 @@ st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stDeployButton {{display:none;}}
-    /* SIDEBAR TOGGLE VISIBILITY FIX - FORCED CONTRAST */
+    /* SIDEBAR TOGGLE VISIBILITY FIX - FORCED CONTRAST & BOLD */
     [data-testid="sidebar-button"] {{
         background-color: {sidebar_color} !important;
         color: white !important;
@@ -53,8 +53,17 @@ st.markdown(f"""
         display: flex !important;
         box-shadow: 0px 0px 10px rgba(0,0,0,0.5);
     }}
+    div.stButton > button {{ 
+        background-color: {sidebar_color}; 
+        color: white; 
+        border-radius: 10px; 
+        width: 100%; 
+        font-weight: 800 !important; 
+        border: none;
+        text-transform: uppercase;
+    }}
     [data-testid="stSidebar"] {{ background-color: {bg}; color: {text}; border-right: 1px solid #1E293B; }}
-    div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 10px; width: 100%; font-weight: 700; border: none; }}
+    .st-emotion-cache-1kyx7g3 {{ background-color: {side} !important; border-radius: 12px; padding: 20px; }}
     .swarm-pulse {{ background-color: {sidebar_color}; border-radius: 50%; width: 12px; height: 12px; display: inline-block; margin-right: 10px; animation: pulse-animation 1.5s infinite; }}
     @keyframes pulse-animation {{ 0% {{ transform: scale(0.95); opacity: 0.7; }} 70% {{ transform: scale(1.1); opacity: 1; }} 100% {{ transform: scale(0.95); opacity: 0.7; }} }}
     </style>
@@ -72,7 +81,7 @@ def init_db():
 
 init_db()
 
-# --- 4. AUTH UTILS ---
+# --- 4. AUTH UTILS & EXPORTS ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -80,7 +89,6 @@ def get_db_creds():
         return {'usernames': {row['username']: {'email':row['email'], 'name':row['name'], 'password':row['password']} for _, row in df.iterrows()}}
     except: return {'usernames': {}}
 
-# Initialize with standard dictionary
 config_creds = get_db_creds()
 authenticator = stauth.Authenticate(config_creds, st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
@@ -89,7 +97,7 @@ def create_word_doc(content, logo_path="Logo1.jpeg"):
     final_logo = logo_path if logo_path and os.path.exists(logo_path) else "Logo1.jpeg"
     try: doc.add_picture(final_logo, width=Inches(1.5))
     except: pass
-    doc.add_heading('Strategic Intelligence Report', 0); doc.add_paragraph(str(content))
+    doc.add_heading('Strategic Market Intelligence Brief', 0); doc.add_paragraph(str(content))
     bio = BytesIO(); doc.save(bio); return bio.getvalue()
 
 def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
@@ -101,43 +109,39 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. AUTH FLOW (RECOVERY, INVITE, & DYNAMIC DATA FIX) ---
+# --- 5. AUTH FLOW (RECOVERY, INVITE, & DATA SYNC) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
-    auth_tabs = st.tabs(["🔑 Login", "📝 Register", "🤝 Join Team (Invite)", "❓ Recovery"])
+    auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team (Invite)", "❓ Recovery"])
     
     with auth_tabs[0]: authenticator.login(location='main')
     
     with auth_tabs[1]:
+        st.subheader("Elite Subscription Tiers")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Basic", "$99/mo", "50 Credits")
+        c2.metric("Pro", "$499/mo", "250 Credits")
+        c3.metric("Enterprise", "$1999/mo", "Unlimited")
+        plan = st.selectbox("Select Tier", ["Basic", "Pro", "Enterprise"])
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            # PROACTIVE FIX: Pull from the initial config_creds which is updated by the register_user method
-            if u in config_creds['usernames']:
-                new_pw = config_creds['usernames'][u]['password']
-                conn = sqlite3.connect('breatheeasy.db')
-                conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',50,'Logo1.jpeg',?)", (u, e, n, new_pw, f"TEAM_{u}"))
-                conn.commit(); conn.close()
-                st.success("Account Created Successfully!"); st.button("Go to Login", on_click=switch_to_login)
+            pw = config_creds['usernames'][u]['password']
+            conn = sqlite3.connect('breatheeasy.db')
+            conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
+            conn.commit(); conn.close(); st.success("Account Created!"); st.button("Log In Now", on_click=switch_to_login)
 
     with auth_tabs[2]:
-        invite_id = st.text_input("Team ID to Join")
+        invite_id = st.text_input("Enter Team ID")
         join_reg = authenticator.register_user(location='main', key='join')
         if join_reg and invite_id:
             e, u, n = join_reg
-            if u in config_creds['usernames']:
-                new_pw = config_creds['usernames'][u]['password']
-                conn = sqlite3.connect('breatheeasy.db')
-                conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, new_pw, invite_id))
-                conn.commit(); conn.close()
-                st.success(f"Linked to Team {invite_id}!"); st.button("Proceed to Login", on_click=switch_to_login)
+            pw = config_creds['usernames'][u]['password']
+            conn = sqlite3.connect('breatheeasy.db')
+            conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, pw, invite_id))
+            conn.commit(); conn.close(); st.success(f"Linked to {invite_id}!"); st.button("Proceed", on_click=switch_to_login)
 
-    with auth_tabs[3]: # PASSWORD RECOVERY
-        st.subheader("Credential Recovery")
-        try:
-            if authenticator.forgot_password(location='main'):
-                st.success('Recovery email dispatched.')
-        except Exception: st.info("Enter your username to reset via AI Swarm.")
+    with auth_tabs[3]: authenticator.forgot_password(location='main')
     st.stop()
 
 # --- 6. DASHBOARD CONTROL ---
@@ -148,99 +152,88 @@ conn.close()
 with st.sidebar:
     main_logo = user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg"
     st.image(main_logo, use_column_width=True)
-    st.button("🌓 Toggle Theme", on_click=toggle_theme)
+    st.button("**🌓 TOGGLE THEME**", on_click=toggle_theme)
     st.metric("Credits Available", user_row['credits'])
     st.info(f"📍 Team ID: {user_row['team_id']}")
     
     st.divider()
-    biz_name = st.text_input("Brand Name"); biz_usp = st.text_area("USP")
+    biz_name = st.text_input("Brand Name"); biz_usp = st.text_area("Core USP")
     ind_choice = st.selectbox("Industry", ["HVAC", "Medical", "Law", "Solar", "Real Estate", "Custom"])
     final_ind = st.text_input("Define Industry") if ind_choice == "Custom" else ind_choice
     
-    svc_map = {"HVAC": ["Repair", "Install"], "Medical": ["Telehealth", "Growth"], "Law": ["Injury", "Litigation"], "Solar": ["Audit", "Install"]}
-    svc = st.selectbox("Service Choice", svc_map.get(ind_choice, ["General Service"]))
-    city = st.text_input("Market City"); web_url = st.text_input("Auditor URL")
+    svc_map = {"HVAC": ["Repair", "Install"], "Medical": ["Telehealth", "Clinical Audit"], "Law": ["Personal Injury", "Litigation"], "Solar": ["ROI Audit", "Install"], "Real Estate": ["Listing Swarm", "Buyer Lead Gen"]}
+    svc = st.selectbox("Specific Service", svc_map.get(ind_choice, ["Strategic Service"]))
+    city = st.text_input("Market City"); web_url = st.text_input("Audit URL")
 
-    st.divider(); st.subheader("🤖 Active Swarm Agents")
+    st.divider(); st.subheader("🤖 Swarm Personnel")
     toggles = {
-        "audit": st.toggle("🕵️ Web Auditor", value=True),
-        "sem": st.toggle("📝 Ad Generator", value=True),
-        "seo": st.toggle("✍️ SEO Blog Creator (IG)", value=True),
-        "advice": st.toggle("👔 Advice Director", value=True),
-        "repurpose": st.toggle("✍🏾 Social Content", value=True),
-        "geo": st.toggle("🧠 GEO Specialist", value=True)
+        "analyst": st.toggle("🕵️ Market Analyst (Researcher)", value=True),
+        "builder": st.toggle("🎨 Creative Director (Builder)", value=True),
+        "manager": st.toggle("👔 Strategist (Manager)", value=True),
+        "social": st.toggle("✍🏾 Social Content Agent", value=True),
+        "geo": st.toggle("🧠 GEO Specialist", value=True),
+        "audit": st.toggle("🌐 Web Auditor", value=True)
     }
-    
-    run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
+    run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
 
 # --- 7. COMMAND CENTER TABS ---
-tabs = st.tabs(["🕵️ Web Auditor", "📝 Ad Generator", "✍️ SEO Blog Creator", "🗓️ Roadmap", "📊 Ads Manager", "🔬 Diagnostic Lab", "🤝 Team Share", "⚙️ Admin Hub"])
+hub_name = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
+tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "🤝 Team Share", "⚙️ Admin"])
 
 if run_btn:
-    if not biz_name or not city: st.error("❌ Brand Name and City required.")
+    if not biz_name or not city: st.error("❌ Mandatory Fields Missing.")
     elif user_row['credits'] <= 0: st.error("❌ Out of Credits.")
     else: st.session_state.processing = True
 
 if st.session_state.get('processing'):
     with tabs[0]:
-        st.markdown(f"### <div class='swarm-pulse'></div> Swarm Active: Deployment in Progress...", unsafe_allow_html=True)
-        with st.status("🐝 **Specialist Agents Coordinating...**", expanded=True) as status:
+        st.markdown(f"### <div class='swarm-pulse'></div> Swarm Active...")
+        with st.status("🛠️ **Multi-Agent Coordination in Progress...**", expanded=True) as status:
             report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
-            status.update(label="🚀 Swarm Complete!", state="complete", expanded=False)
-            
+            status.update(label="🚀 Swarm Complete!", state="complete")
             st.session_state['report'] = report
             st.session_state['gen'] = True
             st.session_state.processing = False
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
-            conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id) VALUES (?,?,?,?,?,?,?)", 
-                         (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, city, str(report), user_row['team_id']))
+            conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id) VALUES (?,?,?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, city, str(report), user_row['team_id']))
             conn.commit(); conn.close(); st.rerun()
 
-with tabs[0]: # WEB AUDITOR SEAT
-    st.subheader("🕵️ Auditor Agent: Conversion Analysis")
-    if st.session_state.get('gen'):
-        st.subheader("📥 Export Branded Deliverables")
-        c1, c2 = st.columns(2)
-        r_logo = user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg"
-        c1.download_button("📄 Word Document", create_word_doc(st.session_state['report'], r_logo), f"Report_{city}.docx", use_container_width=True)
-        c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, r_logo), f"Report_{city}.pdf", use_container_width=True)
-        st.markdown(st.session_state['report'])
-        st.divider(); st.subheader("🔥 Conversion Attention Heatmap")
-        st.image("https://via.placeholder.com/1200x400/0F172A/3B82F6?text=Psychological+Attention+Heatmap", use_column_width=True)
+# --- 8. SEAT OUTPUT LOGIC ---
+def render_seat(idx, title, icon):
+    with tabs[idx]:
+        st.subheader(f"{icon} {title} Output")
+        if st.session_state.get('gen'):
+            if idx == 0: # Analyst Seat adds Exports
+                st.subheader("📥 Export Deliverables")
+                c1, c2 = st.columns(2)
+                r_logo = user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg"
+                c1.download_button("📄 Word Document", create_word_doc(st.session_state['report'], r_logo), f"Report_{city}.docx", use_container_width=True)
+                c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, r_logo), f"Report_{city}.pdf", use_container_width=True)
+            st.markdown(st.session_state['report'])
+        else: st.info(f"Deploy Swarm to populate {title} intelligence.")
 
-with tabs[1]: # AD GENERATOR & API
-    st.subheader("📝 Ad Generator Agent")
-    if st.session_state.get('gen'):
-        st.markdown(st.session_state['report'])
-        st.subheader("🔗 Social Push")
-        if st.button("Push to Meta Ads"): st.success("Campaign Synced to Meta API")
+render_seat(0, "Market Analyst", "🕵️")
+render_seat(1, "Creative Director", "🎨")
+render_seat(2, "Lead Strategist", "👔")
+render_seat(3, "Social Content", "✍🏾")
+render_seat(4, "GEO Specialist", "🧠")
+render_seat(5, "Web Auditor", "🌐")
 
-with tabs[2]: # SEO BLOG CREATOR
-    st.subheader("✍️ SEO Blog Creator (Information Gain)")
-    if st.session_state.get('gen'):
-        st.markdown(st.session_state['report'])
-
-with tabs[5]: # UNIVERSAL DIAGNOSTIC LAB
-    st.subheader(f"🛡️ {final_ind} Quality & Compliance Audit")
-    diag_up = st.file_uploader(f"Upload {final_ind} Evidence", type=['png', 'jpg'])
-    if diag_up: st.success("Evidence Archived.")
-
-with tabs[6]: # TEAM Hub
-    st.subheader("🤝 Team Collaboration & Viral Invite")
+with tabs[6]: # TEAM HUB
+    st.info(f"Organization ID: **{user_row['team_id']}**")
     conn = sqlite3.connect('breatheeasy.db')
-    st.write("### 🏆 Team Leaderboard")
-    leader_df = pd.read_sql_query("SELECT user as 'Member', COUNT(id) as 'Reports' FROM leads WHERE team_id = ? GROUP BY user ORDER BY Reports DESC", conn, params=(user_row['team_id'],))
-    st.table(leader_df)
+    st.write("### 🏆 Leadership Board")
+    st.table(pd.read_sql_query("SELECT user as 'Member', COUNT(id) as 'Reports' FROM leads WHERE team_id = ? GROUP BY user ORDER BY Reports DESC", conn, params=(user_row['team_id'],)))
     conn.close()
 
 if user_row['role'] == 'admin': # ADMIN HUB
     with tabs[-1]:
-        st.subheader("👥 System Administration")
+        st.subheader("⚙️ System Administration")
         conn = sqlite3.connect('breatheeasy.db')
         st.dataframe(pd.read_sql("SELECT username, email, credits FROM users", conn), use_container_width=True)
-        u_del = st.text_input("Username to Terminate")
+        u_del = st.text_input("Terminate User Access")
         if st.button("❌ Remove User"):
             conn.execute(f"DELETE FROM users WHERE username='{u_del}'"); conn.commit(); st.rerun()
         conn.close()
