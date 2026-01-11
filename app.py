@@ -109,7 +109,7 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. AUTH FLOW (RECOVERY, INVITE, & DATA SYNC) ---
+# --- 5. AUTH FLOW (RECOVERY, INVITE, & DYNAMIC DATA FIX) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team (Invite)", "❓ Recovery"])
@@ -121,11 +121,12 @@ if not st.session_state.get("authentication_status"):
         c1, c2, c3 = st.columns(3)
         c1.metric("Basic", "$99/mo", "50 Credits")
         c2.metric("Pro", "$499/mo", "250 Credits")
-        c3.metric("Enterprise", "$1999/mo", "Unlimited")
+        c3.metric("Enterprise", "$1999/mo", "Unlimited Swarms")
         plan = st.selectbox("Select Tier", ["Basic", "Pro", "Enterprise"])
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
+            # THE FIX: Access password directly from the modified config_creds updated by component
             pw = config_creds['usernames'][u]['password']
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
@@ -201,25 +202,30 @@ if st.session_state.get('processing'):
             conn.commit(); conn.close(); st.rerun()
 
 # --- 8. SEAT OUTPUT LOGIC ---
-def render_seat(idx, title, icon):
+def render_seat(idx, title, icon, data_key):
     with tabs[idx]:
-        st.subheader(f"{icon} {title} Output")
+        st.subheader(f"{icon} {title} Command Seat")
         if st.session_state.get('gen'):
-            if idx == 0: # Analyst Seat adds Exports
+            # Proactively fetch agent-specific content from the returned dictionary
+            agent_data = st.session_state['report'].get(data_key, st.session_state['report'].get('full_report', 'Intelligence pending...'))
+            
+            if idx == 0: # Analyst Seat adds Branded Exports
                 st.subheader("📥 Export Deliverables")
                 c1, c2 = st.columns(2)
                 r_logo = user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg"
-                c1.download_button("📄 Word Document", create_word_doc(st.session_state['report'], r_logo), f"Report_{city}.docx", use_container_width=True)
-                c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, r_logo), f"Report_{city}.pdf", use_container_width=True)
-            st.markdown(st.session_state['report'])
-        else: st.info(f"Deploy Swarm to populate {title} intelligence.")
+                c1.download_button("📄 Word Document", create_word_doc(agent_data, r_logo), f"Report_{city}.docx", use_container_width=True)
+                c2.download_button("📕 PDF Report", create_pdf(agent_data, svc, city, r_logo), f"Report_{city}.pdf", use_container_width=True)
+            
+            st.markdown(agent_data)
+        else: st.info(f"Deploy Swarm to activate the {title} specialist.")
 
-render_seat(0, "Market Analyst", "🕵️")
-render_seat(1, "Creative Director", "🎨")
-render_seat(2, "Lead Strategist", "👔")
-render_seat(3, "Social Content", "✍🏾")
-render_seat(4, "GEO Specialist", "🧠")
-render_seat(5, "Web Auditor", "🌐")
+# Link Tabs to Agent Dictionary Keys
+render_seat(0, "Market Analyst", "🕵️", "analyst")
+render_seat(1, "Creative Director", "🎨", "creative")
+render_seat(2, "Lead Strategist", "👔", "strategist")
+render_seat(3, "Social Content", "✍🏾", "social")
+render_seat(4, "GEO Specialist", "🧠", "geo")
+render_seat(5, "Web Auditor", "🌐", "auditor")
 
 with tabs[6]: # TEAM HUB
     st.info(f"Organization ID: **{user_row['team_id']}**")
