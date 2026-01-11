@@ -1,10 +1,10 @@
 import os
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process, LLM
-from crewai.flow.flow import Flow, listen, start, router
+from crewai.flow.flow import Flow, listen, start
 from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 
 # Force a fresh read of the .env file
@@ -12,15 +12,12 @@ load_dotenv(override=True)
 
 # --- 1. SHARED STATE (THE BLACKBOARD) ---
 class SwarmState(BaseModel):
-    """The shared state object that agents read from and write to."""
-    campaign_goal: str = ""
-    market_data: dict = {}
+    """The shared state object following the 'Blackboard' architecture."""
+    market_data: str = ""
     ad_drafts: str = ""
-    visual_concepts: str = ""
     social_calendar: str = ""
     repurposed_content: str = ""
-    human_revision_notes: str = ""
-    is_approved: bool = False
+    visual_prompts: str = ""
 
 # --- 2. ENGINE INITIALIZATION ---
 gemini_llm = LLM(
@@ -32,103 +29,101 @@ gemini_llm = LLM(
 search_tool = SerperDevTool(api_key=os.getenv("SERPER_API_KEY"))
 scrape_tool = ScrapeWebsiteTool()
 
-# --- 3. THE AGENTS (Integrated Legacy & New) ---
-def get_agents(inputs):
+# --- 3. AGENT DEFINITIONS (Strict Phase Alignment) ---
+def get_swarm_agents(inputs):
     return {
-        "strategist": Agent(
-            role="Lead Marketing Strategist",
-            goal=f"Transform {inputs['service']} goals into an execution plan.",
-            backstory="High-reasoning orchestrator and quality controller.",
-            llm=gemini_llm, verbose=True
-        ),
         "analyst": Agent(
-            role=f"Senior {inputs['industry']} Market Analyst",
-            goal=f"Identify competitor gaps and persona mapping in {inputs['city']}.",
-            backstory="Expert in identifying local pain points and purchase 'hooks'.",
+            role="Senior Market Analyst",
+            goal=f"Research the {inputs['service']} market in {inputs['city']} to provide the 'Truth'.",
+            backstory="Data-driven researcher. You identify top 3 competitors and map 2 distinct buyer personas with specific hooks.",
             tools=[search_tool, scrape_tool],
             llm=gemini_llm, verbose=True
         ),
         "creative": Agent(
-            role="Creative Director",
-            goal="Build ad copy and visual prompts based on Analyst truth.",
-            backstory="Specialist in punchy, story-based, and urgency-driven copy.",
-            llm=gemini_llm, verbose=True
-        ),
-        "vision": Agent(
-            role="Vision Inspector Agent",
-            goal="Perform professional visual diagnostics using smartphone imagery for ANY industry.",
-            backstory="Analyzes density, contaminants, and hazards to provide objective scoring.",
+            role="Lead Creative Strategist",
+            goal="Transform research into 3 high-converting ad variants and visual prompts.",
+            backstory="Award-winning builder. You create Punchy, Story, and Urgency variants using Navy (#000080) and White visual psychology.",
             llm=gemini_llm, verbose=True
         ),
         "repurposer": Agent(
             role="Content Repurposing Agent",
-            goal="Turn 1 blog/report into localized GBP, FB, Quora, and Reddit posts.",
-            backstory="Expert at localizing content by city while avoiding 'salesy' tones.",
+            goal="Localize content for GBP, Facebook, Quora, and Reddit.",
+            backstory="You avoid 'salesy' tones and act as a helpful neighbor. You include AI-Verified Discount Code: BREATHE2026.",
             llm=gemini_llm, verbose=True
         ),
-        "social_mgr": Agent(
-            role="Social Media Manager",
-            goal="Create a 7-day social media schedule.",
-            backstory="Expert at pacing content to mix offers with helpful tips.",
+        "strategist": Agent(
+            role="Lead Marketing Strategist",
+            goal="Orchestrate and validate the 'Relay Race' phases.",
+            backstory="Quality controller. You ensure Creative uses the Analyst's data and Distribution matches the localized city tone.",
             llm=gemini_llm, verbose=True
         )
     }
 
 # --- 4. THE STATEFUL WORKFLOW (FLOWS) ---
 class MarketingSwarmFlow(Flow[SwarmState]):
-    """Orchestrates the 'Relay Race' between agents."""
+    """Orchestrates the 'Research -> Creative -> Distribution' phases."""
     
     def __init__(self, inputs):
         super().__init__()
         self.inputs = inputs
-        self.agents = get_agents(inputs)
+        self.agents = get_swarm_agents(inputs)
 
     @start()
-    def initialize_campaign(self):
-        """Phase 1: Research"""
-        print(f"--- Starting Swarm for {self.inputs['service']} in {self.inputs['city']} ---")
-        
-        research_task = Task(
+    def phase_1_research(self):
+        """Step 1: The Researcher identifies the 'Truth'."""
+        print(f"--- [PHASE 1] Starting Research for {self.inputs['city']} ---")
+        task = Task(
             description=f"Identify 3 competitors and 2 buyer personas for {self.inputs['service']} in {self.inputs['city']}.",
             agent=self.agents["analyst"],
-            expected_output="JSON with keys: competitors, pain_points, target_demographics."
+            expected_output="Competitor Audit and Persona Mapping summary."
         )
-        
-        result = Crew(agents=[self.agents["analyst"]], tasks=[research_task]).kickoff()
+        result = Crew(agents=[self.agents["analyst"]], tasks=[task]).kickoff()
         self.state.market_data = result.raw
-        return "Market Research Complete"
+        return "research_complete"
 
-    @listen("initialize_campaign")
-    def generate_creative(self):
-        """Phase 2: Creative Assets"""
-        creative_task = Task(
-            description=f"Using research: {self.state.market_data}, write 3 ad versions and image prompts.",
+    @listen("phase_1_research")
+    def phase_2_creative(self):
+        """Step 2: The Builder creates ads based ONLY on research."""
+        print("--- [PHASE 2] Generating Creative Assets ---")
+        task = Task(
+            description=f"Using this research: {self.state.market_data}, write 3 ads (Punchy, Story, Urgency) and 3 Navy/White image prompts.",
             agent=self.agents["creative"],
-            expected_output="Multimodal assets (Ads + Nano Banana prompts)."
+            expected_output="3 Ad Variants and 3 Visual Prompts."
         )
-        
-        result = Crew(agents=[self.agents["creative"]], tasks=[creative_task]).kickoff()
+        result = Crew(agents=[self.agents["creative"]], tasks=[task]).kickoff()
         self.state.ad_drafts = result.raw
-        return "Creative Assets Generated"
+        return "creative_complete"
 
-    @listen("generate_creative")
-    def repurpose_and_schedule(self):
-        """Phase 3: Distribution & Repurposing"""
-        repurpose_task = Task(
-            description=f"Localize this content for {self.inputs['city']} for GBP, Quora, and Reddit.",
+    @listen("phase_2_creative")
+    def phase_3_distribution(self):
+        """Step 3: The Distributor localizes and repurposes content."""
+        print("--- [PHASE 3] Localizing for Distribution ---")
+        task = Task(
+            description=f"Repurpose these ads: {self.state.ad_drafts} into localized posts for GBP, FB, Quora, and Reddit for {self.inputs['city']}.",
             agent=self.agents["repurposer"],
-            expected_output="Platform-specific localized content posts."
+            expected_output="Localized content pack with BREATHE2026 code."
         )
-        
-        result = Crew(agents=[self.agents["repurposer"]], tasks=[repurpose_task]).kickoff()
+        result = Crew(agents=[self.agents["repurposer"]], tasks=[task]).kickoff()
         self.state.repurposed_content = result.raw
-        return "Distribution Ready"
+        return "swarm_complete"
 
 # --- 5. EXECUTION WRAPPER ---
-def run_swarm(city, industry, service):
-    inputs = {"city": city, "industry": industry, "service": service}
+def run_marketing_swarm(inputs):
+    """Entry point called by app.py."""
     flow = MarketingSwarmFlow(inputs)
-    final_state = flow.kickoff()
+    final_output = flow.kickoff()
     
-    print("✅ Agents and Tasks completed in Stateful Workflow.")
-    return final_state
+    # Consolidate results for the Launchpad tab
+    full_report = f"""
+# 🌬️ BreatheEasy AI Swarm Report: {inputs['city']}
+
+## 📊 Phase 1: Market Research
+{flow.state.market_data}
+
+## 📝 Phase 2: Ad Copy & Visuals
+{flow.state.ad_drafts}
+
+## 🚀 Phase 3: Distribution (GBP/Social/Reddit)
+{flow.state.repurposed_content}
+    """
+    return full_report
