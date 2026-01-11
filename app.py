@@ -34,7 +34,7 @@ os.environ["OTEL_SDK_DISABLED"] = "true"
 if "GEMINI_API_KEY" in st.secrets:
     os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
 
-st.set_page_config(page_title="TechInAdvance AI | Command", page_icon="Logo1.jpeg", layout="wide")
+st.set_page_config(page_title="TechInAdvance AI | Command Hub", page_icon="Logo1.jpeg", layout="wide")
 
 # --- 2. EXHAUSTIVE INDUSTRY & SERVICE LIBRARY ---
 INDUSTRY_LIBRARY = {
@@ -48,25 +48,25 @@ INDUSTRY_LIBRARY = {
     "Finance & Fintech": ["Wealth Management", "Crypto Adoption", "Mortgage Lending", "Tax Strategy", "Business Funding"]
 }
 
-# --- 3. UI CSS (LOCKED CREAM MAIN / DYNAMIC SIDEBAR WITH BORDER) ---
+# --- 3. UI CSS (CREAM MAIN / DYNAMIC SIDEBAR WITH CRISP BORDER) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
-bg = "#FDFCF0" # Main Area Locked to Cream
-text = "#1E293B" # Main Area Text Locked
-# Sidebar Dynamic Variables
+bg = "#FDFCF0" # Main Area locked to Champagne Cream
+text = "#1E293B" # Darker text for readability
 side_bg = "#1E293B" if st.session_state.theme == 'dark' else "#FFFFFF"
 side_text = "#F8FAFC" if st.session_state.theme == 'dark' else "#1E293B"
-side_border = "rgba(255,255,255,0.2)" if st.session_state.theme == 'dark' else "rgba(0,0,0,0.15)"
+# Stronger border logic for Light Theme to define the box
+side_border = "rgba(255,255,255,0.2)" if st.session_state.theme == 'dark' else "rgba(0,0,0,0.18)"
 
 st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stApp {{ background-color: {bg}; color: {text}; }}
     
-    /* SIDEBAR STYLING WITH DISTINCT BORDER */
+    /* SIDEBAR WITH DISTINCT BOX BORDER */
     [data-testid="stSidebar"] {{ 
         background-color: {side_bg} !important; 
         border-right: 2px solid {side_border} !important;
-        box-shadow: 4px 0px 15px rgba(0,0,0,0.05);
+        box-shadow: 4px 0px 15px rgba(0,0,0,0.08);
     }}
     [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {{
         color: {side_text} !important;
@@ -74,7 +74,6 @@ st.markdown(f"""
     
     .sidebar-brand {{ text-align: center; padding-bottom: 20px; border-bottom: 1px solid {side_border}; margin-bottom: 20px; }}
     
-    /* MAIN AREA CARDS */
     .price-card {{
         background-color: white; padding: 25px; border-radius: 15px; border: 2px solid {sidebar_color};
         text-align: center; margin-bottom: 20px; color: #1E293B; box-shadow: 0px 4px 10px rgba(0,0,0,0.05);
@@ -82,7 +81,7 @@ st.markdown(f"""
     .price-header {{ font-size: 1.5rem; font-weight: 800; color: {sidebar_color}; }}
     .price-value {{ font-size: 2.2rem; font-weight: 900; margin: 10px 0; }}
     
-    [data-testid="stMetric"] {{ background-color: {side_bg}; padding: 15px; border-radius: 10px; border: 1px solid {side_border}; }}
+    [data-testid="stMetric"] {{ background-color: {side_bg}; padding: 15px; border-radius: 10px; border: 1.5px solid {side_border}; }}
     .insight-card {{ background-color: white; padding: 25px; border-radius: 15px; border-left: 5px solid {sidebar_color}; margin-top: 15px; line-height: 1.6; white-space: pre-wrap; color: #1E293B; }}
     
     div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 8px; font-weight: 800 !important; width: 100%; transition: 0.3s; height: 3.2em; }}
@@ -135,11 +134,14 @@ def generate_cinematic_ad(prompt):
     except Exception as e:
         st.error(f"Veo Error: {e}"); return None
 
-# --- 6. AUTHENTICATION & REGISTRATION (FIXED ATTRIBUTE ERROR) ---
+# --- 6. AUTHENTICATION & REGISTRATION (HARDENED LOGIC) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team", "❓ Recovery"])
-    with auth_tabs[0]: authenticator.login(location='main')
+    with auth_tabs[0]: 
+        authenticator.login(location='main')
+        st.button("🌓 Toggle Sidebar Theme Mode", on_click=toggle_theme)
+
     with auth_tabs[1]:
         st.markdown("### Select Enterprise Tier")
         p1, p2, p3 = st.columns(3)
@@ -151,7 +153,7 @@ if not st.session_state.get("authentication_status"):
         if reg_res:
             e, u, n = reg_res
             conn = sqlite3.connect('breatheeasy.db')
-            # HARDENED FIX: Accessing credentials directly from the authenticator config mapping
+            # PULLING PASSWORD DIRECTLY FROM INTERNAL STATE TO PREVENT KEYERROR
             new_pw = authenticator.credentials['usernames'][u]['password']
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, new_pw, plan, f"TEAM_{u}"))
             conn.commit(); conn.close(); st.success("Account Created! Please Log In."); st.rerun()
@@ -187,7 +189,7 @@ with st.sidebar:
     authenticator.logout('Sign Out', 'sidebar')
 
 # --- 8. TABS ---
-tabs = st.tabs(["🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "✍️ SEO Blogger", "👁️ Vision Inspector", "🎬 Veo Studio", "🤝 Team Intel", "⚙️ Admin"])
+tabs = st.tabs(["🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "✍️ SEO Blogger", "👁️ Vision Inspector", "🎬 Veo Studio", "🤝 Team Intel hub", "⚙️ Admin Control"])
 
 if run_btn:
     if not biz_name or not city_input: st.error("❌ Required fields missing.")
@@ -207,12 +209,12 @@ if st.session_state.get('processing'):
             except Exception as e: st.error(f"Error: {e}")
             finally: st.session_state.processing = False; st.rerun()
 
-# --- 9. RENDER ---
+# --- 9. RENDER COMMAND SEATS ---
 def render_seat(idx, title, icon, data_key):
     with tabs[idx]:
         st.markdown(f"### {icon} {title} Command Seat")
         if st.session_state.get('gen'):
-            data = st.session_state.report.get(data_key, "No data.")
+            data = st.session_state.report.get(data_key, "Agent results pending.")
             c1, c2, c3 = st.columns([2, 1, 1])
             with c1: st.success("Verified")
             with c2: st.download_button("📄 Word", create_word_doc(data, user_row['logo_path']), f"{title}.docx", key=f"w_{data_key}")
@@ -225,7 +227,7 @@ for i, s in enumerate(seats): render_seat(i, s[0], s[1], s[2])
 
 with tabs[8]:
     st.subheader("👁️ Vision Inspector")
-    v_file = st.file_uploader("Screenshot Upload", type=['png', 'jpg', 'jpeg'])
+    v_file = st.file_uploader("Evidence Upload", type=['png', 'jpg', 'jpeg'])
     if v_file: st.image(v_file, use_container_width=True)
 
 with tabs[9]:
@@ -241,7 +243,7 @@ with tabs[9]:
     else: st.warning("Launch swarm first.")
 
 with tabs[10]:
-    st.header("🤝 Team Intel hub")
+    st.header("🤝 Team Intel Hub")
     conn = sqlite3.connect('breatheeasy.db')
     team_df = pd.read_sql_query("SELECT date, user, service, city FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
     st.dataframe(team_df, use_container_width=True); conn.close()
@@ -249,12 +251,12 @@ with tabs[10]:
 # --- 10. ADMIN CONTROL ---
 if user_row['role'] == 'admin':
     with tabs[11]:
-        st.header("⚙️ Admin Control")
+        st.header("⚙️ Admin God-Mode")
         conn = sqlite3.connect('breatheeasy.db')
         all_users = pd.read_sql_query("SELECT username, email, credits, package FROM users", conn)
         st.dataframe(all_users, use_container_width=True)
         st.divider()
-        u_del = st.text_input("Purge Username")
+        u_del = st.text_input("Terminate User Username")
         if st.button("❌ Remove User"):
             if u_del != 'admin':
                 conn.execute("DELETE FROM users WHERE username=?", (u_del,))
