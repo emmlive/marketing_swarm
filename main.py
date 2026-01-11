@@ -85,6 +85,7 @@ def get_swarm_agents(inputs):
     }
 
 # --- 4. THE STATEFUL WORKFLOW ---
+# 
 class MarketingSwarmFlow(Flow[SwarmState]):
     def __init__(self, inputs):
         super().__init__()
@@ -109,6 +110,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
         active_tasks = [analyst_task, ad_track_task]
         
+        auditor_task = None
         if self.toggles.get('audit') and self.inputs.get('url'):
             auditor_task = Task(
                 description=f"Scan {self.inputs.get('url')} for UX friction.",
@@ -121,8 +123,8 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         
         self.state.market_data = analyst_task.output.raw
         self.state.competitor_ads = ad_track_task.output.raw
-        if self.toggles.get('audit') and self.inputs.get('url'):
-            self.state.website_audit = active_tasks[-1].output.raw
+        if auditor_task:
+            self.state.website_audit = auditor_task.output.raw
             
         return "discovery_complete"
 
@@ -137,7 +139,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         
         production_tasks = [creative_task]
         
-        # Chapter 9: SEO Blogger
         seo_task = None
         if self.toggles.get('seo'):
             seo_task = Task(
@@ -147,7 +148,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             )
             production_tasks.append(seo_task)
 
-        # Distribution Logic
         social_task = None
         if self.toggles.get('social'):
             social_task = Task(description="Viral hooks.", agent=self.agents["social_agent"], expected_output="Social Plan.")
@@ -160,7 +160,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
         Crew(agents=list(self.agents.values()), tasks=production_tasks, process=Process.sequential).kickoff()
         
-        # HARDENED ASSIGNMENT: Mapping by object reference, not list index
+        # ASSIGNMENT BY OBJECT REFERENCE (Index-Proof)
         self.state.ad_drafts = creative_task.output.raw
         if seo_task: self.state.seo_article = seo_task.output.raw
         if social_task: self.state.social_plan = social_task.output.raw
@@ -180,12 +180,11 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         self.state.production_schedule = str(result)
         return "swarm_finished"
 
-# --- 5. EXECUTION WRAPPER (FULL REPORT INTEGRATED) ---
+# --- 5. EXECUTION WRAPPER ---
 def run_marketing_swarm(inputs):
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
-    # Unified report for global exports
     formatted_string_report = f"""
 # 🌬️ {inputs['biz_name']} Omni-Swarm Report
 
