@@ -108,7 +108,7 @@ def render_breatheeasy_gauge(score, industry):
         </div>
     """, unsafe_allow_html=True)
 
-# --- 4. AUTH & RECOVERY WORKFLOW ---
+# --- 4. SaaS WORKFLOW (AUTH & TEAM REGISTRATION) ---
 authenticator = stauth.Authenticate(get_db_creds(), st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
 if not st.session_state.get("authentication_status"):
@@ -119,21 +119,24 @@ if not st.session_state.get("authentication_status"):
     with auth_tabs[0]: authenticator.login(location='main')
     with auth_tabs[1]:
         plan = st.selectbox("Select Subscription Tier", ["Basic ($99/mo)", "Pro ($499/mo)", "Enterprise ($1999/mo)"])
+        join_team_id = st.text_input("Join Existing Team ID (Optional)", placeholder="TEAM_xxxx")
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
             pw = authenticator.credentials['usernames'][u]['password']
+            # Logic: If no team ID is provided, create a new one based on username
+            final_tid = join_team_id if join_team_id else f"TEAM_{u}"
             conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("INSERT OR IGNORE INTO users VALUES (?,?,?,?,'member',?,?,?,?)", (u, e, n, pw, plan.split()[0], 50, "Logo1.jpeg", f"TEAM_{u}"))
+            conn.execute("INSERT OR IGNORE INTO users VALUES (?,?,?,?,'member',?,?,?,?)", 
+                         (u, e, n, pw, plan.split()[0], 50, "Logo1.jpeg", final_tid))
             conn.commit(); conn.close(); st.success("Registration Successful!"); st.button("Back to Login", on_click=switch_to_login)
     with auth_tabs[2]:
         st.subheader("Account Recovery")
-        st.info("Submit your username. Our security swarm will verify and send recovery instructions.")
         recovery_user = st.text_input("Username")
-        if st.button("Send Recovery Instructions"): st.success("Dispatched if account exists.")
+        if st.button("Send Recovery Instructions"): st.success("Instructions dispatched if account exists.")
     st.stop()
 
-# --- 5. SIDEBAR COMMAND CENTER ---
+# --- 5. DASHBOARD CONTROL CENTER ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
@@ -143,6 +146,7 @@ with st.sidebar:
     st.button("🌓 Switch Theme", on_click=toggle_theme)
     st.markdown(f"### 👋 {st.session_state['name']} (`{user_row['package']}`)")
     st.metric("Credits Available", user_row['credits'])
+    st.info(f"📍 Team ID: {user_row['team_id']}")
     
     if user_row['package'] in ["Pro", "Enterprise", "Unlimited"]:
         st.divider(); st.subheader("🎨 Custom White-Labeling")
@@ -157,8 +161,8 @@ with st.sidebar:
     toggles = {
         "audit": st.toggle("🌐 Web Auditor", value=True), 
         "advice": st.toggle("👔 Advice Director", value=True), 
-        "sem": st.toggle("🚀 Ads & Budget Forecaster", value=True), # UPDATED
-        "seo": st.toggle("✍️ SEO Authority (IG)", value=True), # UPDATED
+        "sem": st.toggle("🚀 Ads & Budget Forecaster", value=True), 
+        "seo": st.toggle("✍️ SEO Authority (IG)", value=True), 
         "repurpose": st.toggle("✍🏾 Content Repurposer"), 
         "geo": st.toggle("🧠 GEO Specialist")
     }
@@ -172,14 +176,12 @@ with st.sidebar:
     authenticator.logout('Sign Out', 'sidebar')
 
 # --- 6. TABS & DYNAMIC COMMAND CENTER ---
-
-
 hub_display_name = f"🔬 {final_ind} Diagnostic Hub" if final_ind else "🔬 Diagnostic Lab"
-tabs = st.tabs(["📝 Ad Copy", "🗓️ Roadmap", "📊 Ads Manager", hub_display_name, "⚙️ Admin Hub"])
+tabs = st.tabs(["📝 Ad Copy", "🗓️ Roadmap", "📊 Ads Manager", hub_display_name, "🤝 Team Share", "⚙️ Admin Hub"])
 
 with tabs[0]: # Strategic Strategy & Ad Copy
     if run_btn and city and biz_name:
-        with st.status("🐝 Swarm Active: Conversion Psychologists analyzing market friction...", expanded=True):
+        with st.status("🐝 Swarm Active: Coordinating Specialists...", expanded=True):
             report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
             st.session_state['report'] = report; st.session_state['gen'] = True
             conn = sqlite3.connect('breatheeasy.db')
@@ -195,22 +197,14 @@ with tabs[0]: # Strategic Strategy & Ad Copy
         c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, report_logo), f"Report_{city}.pdf", use_container_width=True)
         st.markdown(st.session_state['report'])
 
-with tabs[1]: # User Schedule
+with tabs[1]: # User Schedule / Roadmap
     st.subheader("🗓️ Your 30-Day Project Roadmap")
-    
-
-[Image of a project management Gantt chart]
-
     if st.session_state.get('gen'): st.write(st.session_state['report'])
 
-with tabs[2]: # REFINED ADS MANAGER & BUDGET FORECASTER
+with tabs[2]: # ADS MANAGER & BUDGET FORECASTER
     st.subheader("🚀 Ads Manager & Automated Budget Forecaster")
-    
     if st.session_state.get('gen'):
         st.info(f"💡 Automated Performance Forecast for {final_ind} in {city}")
-        
-        # Displaying automated budget forecasting results in a professional SaaS table
-        st.markdown("### 📊 Projected ROI & Spend Tiers")
         data = {
             "Budget Tier": ["Conservative", "Aggressive", "Elite Scaling"],
             "Monthly Ad Spend": ["$2,500", "$7,500", "$20,000+"],
@@ -233,11 +227,21 @@ with tabs[3]: # Fully Dynamic Diagnostic Hub
             conn.execute("UPDATE leads SET score = ? WHERE user = ? ORDER BY id DESC LIMIT 1", (score, st.session_state['username']))
             conn.commit(); conn.close(); st.success("Score Saved to Cloud!")
 
+with tabs[4]: # TEAM SHARE Hub
+    st.subheader("🤝 Team Collaboration Hub")
+    st.write(f"Active Team ID: **{user_row['team_id']}**")
+    st.info("Colleagues can join this team during registration using the ID above.")
+    conn = sqlite3.connect('breatheeasy.db')
+    team_leads = pd.read_sql_query("SELECT date, user, industry, service, city FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
+    st.write("### Shared Team History")
+    st.dataframe(team_leads, use_container_width=True)
+    conn.close()
+
 if user_row['role'] == 'admin': # Admin Hub
     with tabs[-1]:
         st.subheader("👥 User & Credit Administration")
         conn = sqlite3.connect('breatheeasy.db')
-        all_u = pd.read_sql("SELECT username, email, package, credits FROM users", conn)
+        all_u = pd.read_sql("SELECT username, email, package, credits, team_id FROM users", conn)
         st.dataframe(all_u, use_container_width=True)
         user_to_del = st.text_input("Username to Terminate")
         if st.button("❌ Remove User"):
