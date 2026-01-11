@@ -22,13 +22,7 @@ except ImportError:
 if 'theme' not in st.session_state: st.session_state.theme = 'dark'
 if 'auth_tab' not in st.session_state: st.session_state.auth_tab = "🔑 Login"
 if 'processing' not in st.session_state: st.session_state.processing = False
-
-def toggle_theme():
-    st.session_state.theme = 'light' if st.session_state.theme == 'dark' else 'dark'
-
-def switch_to_login():
-    st.session_state.auth_tab = "🔑 Login"
-    st.rerun()
+if 'video_url' not in st.session_state: st.session_state.video_url = None
 
 os.environ["OTEL_SDK_DISABLED"] = "true"
 if "GEMINI_API_KEY" in st.secrets:
@@ -56,40 +50,12 @@ st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stDeployButton {{display:none;}}
-    
-    /* SIDEBAR ALIGNMENT */
     [data-testid="sidebar-button"] {{ background-color: {sidebar_color} !important; color: white !important; z-index: 999999; display: flex !important; }}
     [data-testid="stSidebar"] {{ background-color: {bg}; color: {text}; border-right: 1px solid #1E293B; }}
-    
-    /* METRIC & TEAM BOX ALIGNMENT */
-    [data-testid="stMetric"] {{
-        background-color: {side};
-        padding: 15px;
-        border-radius: 10px;
-        border: 1px solid rgba(255,255,255,0.1);
-    }}
-    
-    /* ELITE BUTTONS */
-    div.stButton > button {{ 
-        background-color: {sidebar_color}; 
-        color: white; 
-        border-radius: 8px; 
-        font-weight: 800 !important; 
-        text-transform: uppercase;
-        transition: all 0.3s ease;
-    }}
+    [data-testid="stMetric"] {{ background-color: {side}; padding: 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }}
+    div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 8px; font-weight: 800 !important; text-transform: uppercase; transition: all 0.3s ease; }}
     div.stButton > button:hover {{ transform: translateY(-2px); box-shadow: 0px 4px 15px {sidebar_color}66; }}
-    
-    /* INSIGHT CARDS */
-    .insight-card {{
-        background-color: {side};
-        padding: 25px;
-        border-radius: 15px;
-        border-left: 5px solid {sidebar_color};
-        margin-top: 15px;
-        line-height: 1.6;
-    }}
-    
+    .insight-card {{ background-color: {side}; padding: 25px; border-radius: 15px; border-left: 5px solid {sidebar_color}; margin-top: 15px; line-height: 1.6; }}
     .swarm-pulse {{ background-color: {sidebar_color}; border-radius: 50%; width: 12px; height: 12px; display: inline-block; margin-right: 10px; animation: pulse-animation 1.5s infinite; }}
     @keyframes pulse-animation {{ 0% {{ transform: scale(0.95); opacity: 0.7; }} 70% {{ transform: scale(1.1); opacity: 1; }} 100% {{ transform: scale(0.95); opacity: 0.7; }} }}
     </style>
@@ -118,6 +84,18 @@ def get_db_creds():
 config_creds = get_db_creds()
 authenticator = stauth.Authenticate(config_creds, st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
+# --- VIDEO GENERATION HELPER (CHAPTER 8: VEO) ---
+def generate_cinematic_ad(prompt):
+    try:
+        video = st.video_generation(
+            prompt=f"Elite cinematic marketing ad: {prompt}. High-end professional color grading, 4k, slow motion, corporate commercial style.",
+            aspect_ratio="16:9"
+        )
+        return video
+    except Exception as e:
+        st.error(f"Veo Generation Failed: {e}")
+        return None
+
 def create_word_doc(content, logo_path="Logo1.jpeg"):
     doc = Document()
     final_logo = logo_path if logo_path and os.path.exists(logo_path) else "Logo1.jpeg"
@@ -139,7 +117,6 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team", "❓ Recovery"])
-    
     with auth_tabs[0]: authenticator.login(location='main')
     with auth_tabs[1]:
         st.subheader("Elite Subscription Tiers")
@@ -156,7 +133,6 @@ if not st.session_state.get("authentication_status"):
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
                 conn.commit(); conn.close(); st.success("Account Created!"); st.button("Log In Now", on_click=switch_to_login)
-
     with auth_tabs[3]:
         try:
             username_to_reset, email_to_reset, new_password = authenticator.forgot_password(location='main')
@@ -169,28 +145,24 @@ if not st.session_state.get("authentication_status"):
         except Exception: st.info("Enter details to initiate recovery.")
     st.stop()
 
-# --- 7. DASHBOARD CONTROL ---
+# --- 7. DASHBOARD DATA ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
 
 with st.sidebar:
     st.image(user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg", use_container_width=True)
-    
-    # ELITE SIDEBAR ALIGNMENT
     m_col, t_col = st.columns(2)
     with m_col: st.metric("Credits", user_row['credits'])
     with t_col:
         st.markdown(f"""<div style="background:{side}; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); height:80px; text-align:center;">
         <small style="opacity:0.7;">TEAM ID</small><br><b>{user_row['team_id']}</b></div>""", unsafe_allow_html=True)
-    
     st.divider()
     biz_name = st.text_input("Brand Name"); biz_usp = st.text_area("Core USP")
     ind_cat = st.selectbox("Industry Sector", list(INDUSTRY_LIBRARY.keys()) + ["Custom"])
     final_ind = st.text_input("Define Industry") if ind_cat == "Custom" else ind_cat
     svc = st.selectbox("Service Focus", INDUSTRY_LIBRARY[ind_cat]) if ind_cat != "Custom" else st.text_input("Define Service")
     city = st.text_input("Market City"); web_url = st.text_input("Audit URL")
-    
     st.divider(); st.subheader("🤖 Swarm Personnel")
     toggles = {k: st.toggle(v, value=True) for k, v in {"analyst": "🕵️ Analyst", "builder": "🎨 Creative", "manager": "👔 Strategist", "social": "✍🏾 Social", "geo": "🧠 GEO", "audit": "🌐 Auditor"}.items()}
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
@@ -198,7 +170,7 @@ with st.sidebar:
 
 # --- 8. TABS ---
 hub_label = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
-tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", hub_label, "🤝 Team Share", "⚙️ Admin"])
+tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "🎬 Cinematic Studio", hub_label, "🤝 Team Share", "⚙️ Admin"])
 
 if run_btn:
     if not biz_name or not city: st.error("❌ Mandatory Fields Missing.")
@@ -211,9 +183,8 @@ if st.session_state.get('processing'):
             try:
                 st.write("<div class='swarm-pulse'></div> **Phase 1:** Researching market gaps...", unsafe_allow_html=True)
                 report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
-                st.write("🎨 **Phase 2:** Building creative assets...")
+                st.write("🎨 **Phase 2:** Building creative assets and video prompts...")
                 st.write("👔 **Phase 3:** Finalizing ROI roadmap...")
-                
                 st.session_state.report, st.session_state.gen = report, True
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
@@ -222,28 +193,22 @@ if st.session_state.get('processing'):
             except Exception as e: st.error(f"⚠️ Error: {str(e)}")
             finally: st.session_state.processing = False; st.rerun()
 
-# --- 9. RENDER SEATS (ELITE VISUALIZATION) ---
+# --- 9. RENDER SEATS ---
 def render_seat(idx, title, icon, data_key, guide_text):
     with tabs[idx]:
         st.markdown(f"### {icon} {title} Command Seat")
         with st.expander("💡 Strategy Guide"): st.info(guide_text)
-        
         if st.session_state.get('gen'):
             report_dict = st.session_state.get('report', {})
-            agent_data = report_dict.get(data_key, "No data returned for this agent.")
-            
-            # Action Bar & Visualization
+            agent_data = report_dict.get(data_key, "No data returned.")
             c1, c2, c3 = st.columns([2, 1, 1])
             with c1: st.success(f"Verified {title} Intelligence")
-            with c2: st.download_button("📄 Word", create_word_doc(agent_data, user_row['logo_path']), f"{title}.docx", use_container_width=True)
-            with c3: st.download_button("📕 PDF", create_pdf(agent_data, svc, city, user_row['logo_path']), f"{title}.pdf", use_container_width=True)
-            
+            with c2: st.download_button("📄 Word", create_word_doc(agent_data, user_row['logo_path']), f"{title}.docx", use_container_width=True, key=f"w_{data_key}")
+            with c3: st.download_button("📕 PDF", create_pdf(agent_data, svc, city, user_row['logo_path']), f"{title}.pdf", use_container_width=True, key=f"p_{data_key}")
             st.markdown(f"""<div class="insight-card">{agent_data.replace('•', '<br>•')}</div>""", unsafe_allow_html=True)
         else: st.info(f"Launch Swarm to populate {title} seat.")
 
-guides = {"analyst": "Identify gaps. Use Personas to tailor scripts.", "creative": "Use 'Nano Banana' prompts for AI art.", "strategist": "Follow 30-day roadmap.", "social": "Post viral hooks.", "geo": "Embed keywords in metadata.", "auditor": "Fix conversion friction."}
-
-
+guides = {"analyst": "Identify gaps.", "creative": "Use AI art prompts.", "strategist": "ROI Roadmap.", "social": "Viral hooks.", "geo": "AI Search SEO.", "auditor": "Fix UX leaks."}
 
 render_seat(0, "Market Analyst", "🕵️", "analyst", guides["analyst"])
 render_seat(1, "Creative Director", "🎨", "creative", guides["creative"])
@@ -251,6 +216,27 @@ render_seat(2, "Lead Strategist", "👔", "strategist", guides["strategist"])
 render_seat(3, "Social Content", "✍🏾", "social", guides["social"])
 render_seat(4, "GEO Specialist", "🧠", "geo", guides["geo"])
 render_seat(5, "Web Auditor", "🌐", "auditor", guides["auditor"])
+
+# --- 10. CINEMATIC STUDIO (CHAPTER 8: VEO) ---
+with tabs[6]:
+    st.markdown("### 🎬 Veo Cinematic Studio")
+    st.info("Transform your Creative Brief into a high-end AI Video Ad using Veo (3 Credits Daily).")
+    if st.session_state.get('gen'):
+        # Extract prompt from creative agent output
+        raw_creative = st.session_state.report.get('creative', '')
+        # Simple extraction logic for the video prompt section
+        default_video_prompt = raw_creative.split("Video Prompt:")[-1] if "Video Prompt:" in raw_creative else raw_creative[:300]
+        
+        video_prompt = st.text_area("Video Script/Scene Description", value=default_video_prompt, height=150)
+        
+        if st.button("📽️ GENERATE CINEMATIC AD"):
+            with st.spinner("Veo is rendering your ad..."):
+                video_file = generate_cinematic_ad(video_prompt)
+                if video_file:
+                    st.video(video_file)
+                    st.success("Cinematic Ad Rendered Successfully.")
+    else:
+        st.warning("Generate a swarm report first to unlock the Cinematic Studio.")
 
 if user_row['role'] == 'admin':
     with tabs[-1]:
