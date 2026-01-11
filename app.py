@@ -77,7 +77,7 @@ def init_db():
 
 init_db()
 
-# --- 5. AUTH & EXPORTS ---
+# --- 5. AUTH UTILS ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -105,11 +105,14 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 6. AUTH FLOW & PRICE PLANS ---
+# --- 6. AUTH FLOW & PRICE PLANS (RECOVERY ADDED) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
-    auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team"])
-    with auth_tabs[0]: authenticator.login(location='main')
+    auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team", "❓ Recovery"])
+    
+    with auth_tabs[0]: 
+        authenticator.login(location='main')
+    
     with auth_tabs[1]:
         st.subheader("Elite Subscription Tiers")
         c1, c2, c3 = st.columns(3)
@@ -125,9 +128,33 @@ if not st.session_state.get("authentication_status"):
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
                 conn.commit(); conn.close(); st.success("Account Created!"); st.button("Log In Now", on_click=switch_to_login)
+
+    with auth_tabs[2]:
+        invite_id = st.text_input("Enter Team ID")
+        join_reg = authenticator.register_user(location='main', key='join')
+        if join_reg and invite_id:
+            e, u, n = join_reg
+            if u in config_creds['usernames']:
+                pw = config_creds['usernames'][u]['password']
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, pw, invite_id))
+                conn.commit(); conn.close(); st.success(f"Linked to {invite_id}!"); st.button("Proceed", on_click=switch_to_login)
+
+    with auth_tabs[3]:
+        try:
+            username_to_reset, email_to_reset, new_password = authenticator.forgot_password(location='main')
+            if username_to_reset:
+                st.success('New password generated. Please update your records.')
+                hashed_pw = stauth.Hasher.hash(new_password)
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("UPDATE users SET password = ? WHERE username = ?", (hashed_pw, username_to_reset))
+                conn.commit(); conn.close()
+        except Exception as e:
+            st.info("Enter your details to initiate recovery.")
+            
     st.stop()
 
-# --- 7. DASHBOARD CONTROL ---
+# --- 7. DASHBOARD DATA ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
@@ -158,7 +185,7 @@ with st.sidebar:
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 8. COMMAND CENTER TABS ---
+# --- 8. TABS ---
 hub_label = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
 tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", hub_label, "🤝 Team Share", "⚙️ Admin"])
 
@@ -174,8 +201,8 @@ if st.session_state.get('processing'):
                 st.write("<div class='swarm-pulse'></div> **Phase 1:** Analyst & Auditor are researching market gaps...", unsafe_allow_html=True)
                 report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
                 
-                st.write("🎨 **Phase 2:** Creative Director is building assets...")
-                st.write("📡 **Phase 3:** Distribution agents are mapping hooks...")
+                st.write("🎨 **Phase 2:** Creative Director is building multimodal assets...")
+                st.write("📡 **Phase 3:** Distribution agents are mapping GEO & Social hooks...")
                 st.write("👔 **Phase 4:** Strategist is synthesizing ROI roadmap...")
 
                 st.session_state['report'] = report
@@ -193,15 +220,17 @@ if st.session_state.get('processing'):
                 st.session_state.processing = False
                 st.rerun()
 
-# --- 9. RENDER SEATS (TAB ISOLATION FIX) ---
+# --- 9. RENDER SEATS (STRICT DYNAMIC MAPPING) ---
 def render_seat(idx, title, icon, data_key, guide_text):
     with tabs[idx]:
         st.subheader(f"{icon} {title} Command Seat")
         with st.expander(f"💡 How to execute these {title} results"):
             st.info(guide_text)
         if st.session_state.get('gen'):
-            # Fetch specifically mapped key from main.py isolated dictionary
-            agent_data = st.session_state['report'].get(data_key, "Intelligence pending or agent not activated.")
+            # DYNAMIC FIX: Strictly pulls by key to avoid overlap
+            report_dict = st.session_state.get('report', {})
+            agent_data = report_dict.get(data_key, "Agent results pending or specialist not enabled.")
+            
             if idx == 0:
                 st.subheader("📥 Export Deliverables")
                 c1, c2 = st.columns(2)
