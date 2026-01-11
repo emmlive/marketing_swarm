@@ -11,7 +11,7 @@ from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
 
-# --- 1. SYSTEM INITIALIZATION & STRIPE SAFETY ---
+# --- 1. SYSTEM INITIALIZATION ---
 try:
     import stripe
     stripe.api_key = st.secrets.get("STRIPE_API_KEY", "sk_test_placeholder")
@@ -36,12 +36,8 @@ if "GEMINI_API_KEY" in st.secrets:
 st.set_page_config(page_title="TechInAdvance AI | Enterprise Command", page_icon="Logo1.jpeg", layout="wide")
 
 # ELITE UI CSS: Sidebar Hide Button Visibility Fix & Pulse Animations
-if st.session_state.theme == 'dark':
-    bg, text, side, card, btn = "#0F172A", "#F8FAFC", "#1E293B", "#334155", "#3B82F6"
-    sidebar_toggle_color = "#FFFFFF"
-else:
-    bg, text, side, card, btn = "#F8FAFC", "#0F172A", "#E2E8F0", "#FFFFFF", "#2563EB"
-    sidebar_toggle_color = "#000000"
+sidebar_toggle_color = "#FFFFFF" if st.session_state.theme == 'dark' else "#000000"
+bg, text, side, card, btn = ("#0F172A", "#F8FAFC", "#1E293B", "#334155", "#3B82F6") if st.session_state.theme == 'dark' else ("#F8FAFC", "#0F172A", "#E2E8F0", "#FFFFFF", "#2563EB")
 
 st.markdown(f"""
     <style>
@@ -49,7 +45,6 @@ st.markdown(f"""
     .stDeployButton {{display:none;}}
     [data-testid="sidebar-button"] {{ color: {sidebar_toggle_color} !important; background-color: {side}; border-radius: 50%; padding: 5px; }}
     [data-testid="stSidebar"] {{ background-color: {bg}; color: {text}; border-right: 1px solid #1E293B; }}
-    [data-testid="stSidebar"] * {{ color: {text} !important; }}
     .st-emotion-cache-1kyx7g3 {{ background-color: {side} !important; border-radius: 12px; padding: 20px; margin-bottom: 10px; }}
     div.stButton > button {{ background-color: {btn}; color: white; border-radius: 10px; width: 100%; font-weight: 700; border: none; }}
     .swarm-pulse {{ background-color: {btn}; border-radius: 50%; width: 12px; height: 12px; display: inline-block; margin-right: 10px; animation: pulse-animation 1.5s infinite; }}
@@ -61,19 +56,15 @@ st.markdown(f"""
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users 
-                 (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT, 
-                  package TEXT, credits INTEGER DEFAULT 0, logo_path TEXT, team_id TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS leads 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, 
-                  service TEXT, city TEXT, content TEXT, team_id TEXT, is_shared INTEGER DEFAULT 0, score INTEGER)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT, package TEXT, credits INTEGER DEFAULT 0, logo_path TEXT, team_id TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, service TEXT, city TEXT, content TEXT, team_id TEXT, is_shared INTEGER DEFAULT 0, score INTEGER)''')
     hashed_pw = stauth.Hasher.hash('admin123')
     c.execute("INSERT OR IGNORE INTO users VALUES (?,?,?,?,'admin','Unlimited',9999,'Logo1.jpeg','HQ_001')", ('admin', 'admin@techinadvance.ai', 'Admin', hashed_pw))
     conn.commit(); conn.close()
 
 init_db()
 
-# --- 3. CORE LOGIC UTILS ---
+# --- 3. AUTHENTICATION & CORE UTILS ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -81,6 +72,7 @@ def get_db_creds():
         return {'usernames': {row['username']: {'email':row['email'], 'name':row['name'], 'password':row['password']} for _, row in df.iterrows()}}
     except: return {'usernames': {}}
 
+# Initial Load
 credentials_dict = get_db_creds()
 authenticator = stauth.Authenticate(credentials_dict, st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
@@ -101,11 +93,11 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 4. AUTH FLOW & VIRAL INVITES ---
+# --- 4. AUTH FLOW ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     st.title("TechInAdvance AI Enterprise")
-    auth_tabs = st.tabs(["🔑 Login", "📝 Register", "🤝 Join Team (Invite)", "❓ Recovery"])
+    auth_tabs = st.tabs(["🔑 Login", "📝 Register & Subscribe", "🤝 Join Team (Invite)", "❓ Recovery"])
     
     with auth_tabs[0]: authenticator.login(location='main')
     with auth_tabs[1]:
@@ -113,22 +105,24 @@ if not st.session_state.get("authentication_status"):
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            pw = credentials_dict['usernames'][u]['password']
+            # FIX: Get password directly from the internal authenticator storage to avoid KeyError
+            pw = authenticator.credentials['usernames'][u]['password']
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
-            conn.commit(); conn.close(); st.success("Registration Successful!"); st.button("Proceed", on_click=switch_to_login)
+            conn.commit(); conn.close(); st.success("Registration Successful!"); st.button("Log In", on_click=switch_to_login)
+            
     with auth_tabs[2]:
         invite_id = st.text_input("Enter Organization Team ID")
         join_reg = authenticator.register_user(location='main', key='join_form')
         if join_reg and invite_id:
             e, u, n = join_reg
-            pw = credentials_dict['usernames'][u]['password']
+            pw = authenticator.credentials['usernames'][u]['password']
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, pw, invite_id))
             conn.commit(); conn.close(); st.success(f"Joined {invite_id}!"); st.button("Login Now", on_click=switch_to_login)
     st.stop()
 
-# --- 5. DASHBOARD CONTROL CENTER ---
+# --- 5. DASHBOARD CONTROL ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
@@ -136,7 +130,7 @@ conn.close()
 with st.sidebar:
     main_logo = user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg"
     st.image(main_logo, use_column_width=True)
-    st.button("🌓 Toggle Theme", on_click=toggle_theme)
+    st.button("🌓 Toggle Dark/Light Mode", on_click=toggle_theme)
     st.metric("Credits Available", user_row['credits'])
     st.info(f"📍 Team ID: {user_row['team_id']}")
     
@@ -163,7 +157,7 @@ with st.sidebar:
     authenticator.logout('Sign Out', 'sidebar')
 
 # --- 6. COMMAND CENTER TABS ---
-tabs = st.tabs(["🕵️ Web Auditor", "📝 Ad Generator", "👔 Strategy/SEO", "🗓️ Roadmap", "📊 Ads Manager", "🔬 Industry Diagnostic Lab", "🤝 Team Share", "⚙️ Admin Hub"])
+tabs = st.tabs(["🕵️ Web Auditor", "📝 Ad Generator", "👔 Strategy/SEO", "🗓️ Roadmap", "📊 Ads Manager", "🔬 Diagnostic Lab", "🤝 Team Share", "⚙️ Admin Hub"])
 
 if run_btn:
     if not biz_name or not city: st.error("❌ Brand Name and City required.")
@@ -172,12 +166,9 @@ if run_btn:
 
 if st.session_state.get('processing'):
     with tabs[0]:
-        st.markdown(f"### <div class='swarm-pulse'></div> Swarm Active: Analyzing {final_ind} in {city}...", unsafe_allow_html=True)
-        with st.status("🐝 **Specialist Agents Coordinating...**", expanded=True) as status:
-            st.write("🕵️ Analyst: Diagnosing Neuromarketing Conversion Leaks...")
+        st.markdown(f"### <div class='swarm-pulse'></div> Swarm Active: Coordination in Progress...", unsafe_allow_html=True)
+        with st.status("🛠️ **Specialist Agents Coordinating...**", expanded=True) as status:
             report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
-            st.write("✅ Creative Director: Branded Navy/White assets ready.")
-            st.write("✅ SEO Lead: Information Gain content strategy verified.")
             status.update(label="🚀 Swarm Complete!", state="complete", expanded=False)
             
             st.session_state['report'] = report
@@ -189,19 +180,19 @@ if st.session_state.get('processing'):
                          (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, city, str(report), user_row['team_id']))
             conn.commit(); conn.close(); st.rerun()
 
-with tabs[0]: # WEB AUDITOR SEAT - AUDITED & VERIFIED
+with tabs[0]: # WEB AUDITOR SEAT
     st.subheader("🕵️ Auditor Agent: Conversion Analysis")
     if st.session_state.get('gen'):
         st.subheader("📥 Export Branded Deliverables")
         c1, c2 = st.columns(2)
-        report_logo = user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg"
-        c1.download_button("📄 Word Document", create_word_doc(st.session_state['report'], report_logo), f"Report_{city}.docx", use_container_width=True)
-        c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, report_logo), f"Report_{city}.pdf", use_container_width=True)
+        r_logo = user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg"
+        c1.download_button("📄 Word Document", create_word_doc(st.session_state['report'], r_logo), f"Report_{city}.docx", use_container_width=True)
+        c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, r_logo), f"Report_{city}.pdf", use_container_width=True)
         st.markdown(st.session_state['report'])
         st.divider(); st.subheader("🔥 Conversion Attention Heatmap")
         st.image("https://via.placeholder.com/1200x400/0F172A/3B82F6?text=Psychological+Attention+Heatmap", use_column_width=True)
 
-with tabs[1]: # AD GENERATOR & LEAD GEN API
+with tabs[1]: # AD GENERATOR & API
     st.subheader("📝 Ad Generator: Creative Variants & API Sync")
     if st.session_state.get('gen'):
         st.markdown(st.session_state['report'])
@@ -209,13 +200,9 @@ with tabs[1]: # AD GENERATOR & LEAD GEN API
         api_choice = st.selectbox("Select Target API", ["Meta Lead Forms", "Google Lead Extensions", "Zapier Webhook", "HighLevel CRM"])
         if st.button(f"Sync Creative to {api_choice}"): st.success("Intelligence Synced.")
 
-with tabs[5]: # UNIVERSAL DIAGNOSTIC LAB
-    st.subheader(f"🛡️ {final_ind} Quality & Compliance Audit")
-    diag_up = st.file_uploader(f"Upload {final_ind} Evidence", type=['png', 'jpg'])
-    if diag_up: st.success("Visual Evidence Archived for Risk Scoring.")
-
 with tabs[6]: # TEAM HUB
-    st.subheader("🤝 Team Collaboration Hub")
+    st.subheader("🤝 Team Collaboration & Viral Invite")
+    st.info(f"Invite colleagues using Team ID: **{user_row['team_id']}**")
     conn = sqlite3.connect('breatheeasy.db')
     st.write("### 🏆 Team Leaderboard")
     leader_df = pd.read_sql_query("SELECT user as 'Member', COUNT(id) as 'Reports' FROM leads WHERE team_id = ? GROUP BY user ORDER BY Reports DESC", conn, params=(user_row['team_id'],))
