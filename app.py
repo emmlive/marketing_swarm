@@ -79,7 +79,9 @@ def get_db_creds():
         return {'usernames': {row['username']: {'email':row['email'], 'name':row['name'], 'password':row['password']} for _, row in df.iterrows()}}
     except: return {'usernames': {}}
 
-authenticator = stauth.Authenticate(get_db_creds(), st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
+# Initialize with dictionary source
+config_creds = get_db_creds()
+authenticator = stauth.Authenticate(config_creds, st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
 def create_word_doc(content, logo_path="Logo1.jpeg"):
     doc = Document()
@@ -98,7 +100,7 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. AUTH FLOW (RECOVERY, INVITE, & DYNAMIC DATA FIX) ---
+# --- 5. AUTH FLOW (FIXED ATTRIBUTE ERROR & RECOVERY) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register", "🤝 Join Team (Invite)", "❓ Recovery"])
@@ -109,8 +111,8 @@ if not st.session_state.get("authentication_status"):
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            # FIX: Access the updated credentials from the authenticator object itself
-            new_pw = authenticator.credentials['usernames'][u]['password']
+            # PROACTIVE FIX: Pull password from the source dictionary config_creds
+            new_pw = config_creds['usernames'][u]['password']
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',50,'Logo1.jpeg',?)", (u, e, n, new_pw, f"TEAM_{u}"))
             conn.commit(); conn.close(); st.success("Account Created!"); st.button("Go to Login", on_click=switch_to_login)
@@ -120,7 +122,7 @@ if not st.session_state.get("authentication_status"):
         join_reg = authenticator.register_user(location='main', key='join')
         if join_reg and invite_id:
             e, u, n = join_reg
-            new_pw = authenticator.credentials['usernames'][u]['password']
+            new_pw = config_creds['usernames'][u]['password']
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, new_pw, invite_id))
             conn.commit(); conn.close(); st.success(f"Linked to {invite_id}"); st.button("Proceed", on_click=switch_to_login)
@@ -201,6 +203,8 @@ with tabs[0]: # WEB AUDITOR SEAT
         c1.download_button("📄 Word Document", create_word_doc(st.session_state['report'], r_logo), f"Report_{city}.docx", use_container_width=True)
         c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, r_logo), f"Report_{city}.pdf", use_container_width=True)
         st.markdown(st.session_state['report'])
+        st.divider(); st.subheader("🔥 Conversion Attention Heatmap")
+        st.image("https://via.placeholder.com/1200x400/0F172A/3B82F6?text=Psychological+Attention+Heatmap", use_column_width=True)
 
 with tabs[1]: # AD GENERATOR
     st.subheader("📝 Ad Generator Agent")
