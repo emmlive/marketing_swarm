@@ -13,7 +13,7 @@ load_dotenv(override=True)
 
 # --- 1. SHARED STATE (ISOLATED FIELDS) ---
 class SwarmState(BaseModel):
-    # These fields correspond to the EXCLUSIVE Command Seats in app.py
+    # Isolated fields map exactly to the Command Seats and Progress Tracker
     market_data: str = "Analysis pending..."
     ad_drafts: str = "Creative build pending..."
     website_audit: str = "Audit pending..."
@@ -48,7 +48,7 @@ def get_swarm_agents(inputs):
         "creative": Agent(
             role="Creative Director (The Builder)",
             goal="Transform Analyst data into high-conversion assets and Nano Banana image prompts.",
-            backstory="Multimodal builder. You use the Researcher's JSON to ensure copy is data-backed.",
+            backstory="Multimodal builder. You use the Researcher's JSON to ensure assets are data-backed.",
             llm=gemini_llm, verbose=True
         ),
         "web_auditor": Agent(
@@ -66,7 +66,7 @@ def get_swarm_agents(inputs):
         "geo_specialist": Agent(
             role="GEO Specialist (Generative Engine Optimization)",
             goal=f"Optimize {biz} for AI Search (ChatGPT/Gemini) citation velocity in {city}.",
-            backstory="AI Search expert focused on making the brand the #1 cited authority in local AI results.",
+            backstory="AI Search expert focused on making the brand a cited authority in local AI results.",
             llm=gemini_llm, verbose=True
         ),
         "strategist": Agent(
@@ -87,7 +87,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
     @start()
     def phase_1_discovery(self):
-        """Phase 1: Research and Technical Auditing"""
+        """Step 1: Research and Technical Auditing"""
         analyst_task = Task(
             description=(
                 f"Identify top 3 competitors for {self.inputs['biz_name']} in {self.inputs['city']}. "
@@ -98,32 +98,33 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             expected_output="JSON Market Truth Report."
         )
 
+        tasks = [analyst_task]
+        active_agents = [self.agents["analyst"]]
+
         if self.toggles.get('audit'):
             auditor_task = Task(
                 description=f"Audit {self.inputs.get('url')} for conversion friction.",
                 agent=self.agents["web_auditor"],
                 expected_output="Technical UX Audit findings."
             )
+            tasks.append(auditor_task)
+            active_agents.append(self.agents["web_auditor"])
             
-            # Run parallel discovery
-            crew = Crew(agents=[self.agents["analyst"], self.agents["web_auditor"]], 
-                        tasks=[analyst_task, auditor_task])
-            crew.kickoff()
-            
-            # ISOLATED CAPTURE: Pull directly from task output to prevent merging
-            self.state.market_data = str(analyst_task.output.raw)
-            self.state.website_audit = str(auditor_task.output.raw)
-        else:
-            result = Crew(agents=[self.agents["analyst"]], tasks=[analyst_task]).kickoff()
-            self.state.market_data = str(result)
+        crew = Crew(agents=active_agents, tasks=tasks)
+        crew.kickoff()
+        
+        # ISOLATED CAPTURE
+        self.state.market_data = analyst_task.output.raw if analyst_task.output else "Researcher data missing."
+        if self.toggles.get('audit'):
+            self.state.website_audit = auditor_task.output.raw if auditor_task.output else "Audit data missing."
             
         return "discovery_complete"
 
     @listen("discovery_complete")
     def phase_2_execution(self):
-        """Phase 2: Creative Production and Specialist Plans"""
+        """Step 2 & 3: Creative & Specialist Mapping"""
         creative_task = Task(
-            description="Create 3 Navy/White ad variants and 'Nano Banana' prompts using the Researcher's JSON.",
+            description="Create 3 Navy/White ad variants and 'Nano Banana' prompts based on the Researcher's JSON personas.",
             agent=self.agents["creative"],
             expected_output="Branded Creative Assets."
         )
@@ -144,15 +145,15 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         crew.kickoff()
         
         # Isolated state assignment
-        self.state.ad_drafts = str(creative_task.output.raw)
-        if self.toggles.get('social'): self.state.social_plan = str(social_task.output.raw)
-        if self.toggles.get('geo'): self.state.geo_intel = str(geo_task.output.raw)
+        self.state.ad_drafts = creative_task.output.raw if creative_task.output else "Creative data missing."
+        if self.toggles.get('social'): self.state.social_plan = social_task.output.raw if social_task.output else "Social data missing."
+        if self.toggles.get('geo'): self.state.geo_intel = geo_task.output.raw if geo_task.output else "GEO data missing."
         
         return "execution_complete"
 
     @listen("execution_complete")
     def phase_3_validation(self):
-        """Phase 3: Final Brief and Roadmap"""
+        """Step 4: Strategic Brief & Final Synthesis"""
         val_task = Task(
             description="Audit all agent outputs. Synthesize into a final 30-day roadmap and Master Brief.",
             agent=self.agents["strategist"],
@@ -164,12 +165,11 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         self.state.production_schedule = str(result)
         return "swarm_finished"
 
-# --- 5. EXECUTION WRAPPER (ISOLATED DICTIONARY & FORMATTED STRING) ---
+# --- 5. EXECUTION WRAPPER ---
 def run_marketing_swarm(inputs):
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
-    # Reconstruct the requested formatted string for the legacy view
     formatted_string_report = f"""
 # 🌬️ {inputs['biz_name']} Omni-Swarm Report
 
