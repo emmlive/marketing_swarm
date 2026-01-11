@@ -2,6 +2,7 @@ cookie:
   expiry_days: 30
   key: random_signature_key
   name: breatheeasy_session
+
 credentials:
   usernames:
     admin:
@@ -12,8 +13,9 @@ credentials:
       email: client@example.com
       name: John Client
       password: $2b$12$.fLv6OevQqB8HDOPC5k1z.CWIYiqhRt2kkB9mP4pylHHiNcD36TWS
+
 pre-authorized:
   emails:
-  - client1@gmail.com
-  - partner@hvacpros.com
-  - prospective_lead@service.com
+    - client1@gmail.com
+    - partner@hvacpros.com
+    - prospective_lead@service.com
