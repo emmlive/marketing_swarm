@@ -48,42 +48,35 @@ INDUSTRY_LIBRARY = {
     "Finance & Fintech": ["Wealth Management", "Crypto Adoption", "Mortgage Lending", "Tax Strategy", "Business Funding"]
 }
 
-# --- 3. UI CSS (LOCKED CREAM MAIN / DYNAMIC SIDEBAR WITH CRISP BORDER) ---
+# --- 3. UI CSS (CREAM MAIN / DYNAMIC SIDEBAR WITH BORDER) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
-bg = "#FDFCF0" # Main Area locked to Champagne Cream
-text = "#1E293B" # Darker text for readability
+bg = "#FDFCF0" # Main Area Locked to Cream
+text = "#1E293B" 
 side_bg = "#1E293B" if st.session_state.theme == 'dark' else "#FFFFFF"
 side_text = "#F8FAFC" if st.session_state.theme == 'dark' else "#1E293B"
-# Stronger border logic for Light Theme to define the box clearly
 side_border = "rgba(255,255,255,0.2)" if st.session_state.theme == 'dark' else "rgba(0,0,0,0.18)"
 
 st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stApp {{ background-color: {bg}; color: {text}; }}
-    
-    /* SIDEBAR WITH DISTINCT BOX BORDER */
     [data-testid="stSidebar"] {{ 
         background-color: {side_bg} !important; 
-        border-right: 2px solid {side_border} !important;
-        box-shadow: 4px 0px 15px rgba(0,0,0,0.08);
+        border-right: 2.2px solid {side_border} !important;
+        box-shadow: 4px 0px 15px rgba(0,0,0,0.05);
     }}
     [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {{
         color: {side_text} !important;
     }}
-    
     .sidebar-brand {{ text-align: center; padding-bottom: 20px; border-bottom: 1px solid {side_border}; margin-bottom: 20px; }}
-    
     .price-card {{
         background-color: white; padding: 25px; border-radius: 15px; border: 2px solid {sidebar_color};
         text-align: center; margin-bottom: 20px; color: #1E293B; box-shadow: 0px 4px 10px rgba(0,0,0,0.05);
     }}
     .price-header {{ font-size: 1.5rem; font-weight: 800; color: {sidebar_color}; }}
     .price-value {{ font-size: 2.2rem; font-weight: 900; margin: 10px 0; }}
-    
-    [data-testid="stMetric"] {{ background-color: {side_bg}; padding: 15px; border-radius: 10px; border: 1.5px solid {side_border}; }}
+    [data-testid="stMetric"] {{ background-color: {side_bg}; padding: 15px; border-radius: 10px; border: 1px solid {side_border}; }}
     .insight-card {{ background-color: white; padding: 25px; border-radius: 15px; border-left: 5px solid {sidebar_color}; margin-top: 15px; line-height: 1.6; white-space: pre-wrap; color: #1E293B; }}
-    
     div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 8px; font-weight: 800 !important; width: 100%; transition: 0.3s; height: 3.2em; }}
     div.stButton > button:hover {{ transform: translateY(-2px); box-shadow: 0px 4px 15px {sidebar_color}66; }}
     </style>
@@ -129,8 +122,7 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
 
 def generate_cinematic_ad(prompt):
     try:
-        video = st.video_generation(prompt=f"Elite cinematic marketing ad: {prompt}. 4k, professional style.", aspect_ratio="16:9")
-        return video
+        return st.video_generation(prompt=f"Elite cinematic marketing ad: {prompt}. 4k.", aspect_ratio="16:9")
     except Exception as e:
         st.error(f"Veo Error: {e}"); return None
 
@@ -144,15 +136,15 @@ if not st.session_state.get("authentication_status"):
     with auth_tabs[1]:
         st.markdown("### Select Enterprise Tier")
         p1, p2, p3 = st.columns(3)
-        with p1: st.markdown(f'<div class="price-card"><div class="price-header">BASIC</div><div class="price-value">$99</div></div>', unsafe_allow_html=True)
-        with p2: st.markdown(f'<div class="price-card"><div class="price-header">PRO</div><div class="price-value">$499</div></div>', unsafe_allow_html=True)
-        with p3: st.markdown(f'<div class="price-card"><div class="price-header">ENTERPRISE</div><div class="price-value">$1,999</div></div>', unsafe_allow_html=True)
+        with p1: st.markdown('<div class="price-card"><div class="price-header">BASIC</div><div class="price-value">$99</div></div>', unsafe_allow_html=True)
+        with p2: st.markdown('<div class="price-card"><div class="price-header">PRO</div><div class="price-value">$499</div></div>', unsafe_allow_html=True)
+        with p3: st.markdown('<div class="price-card"><div class="price-header">ENTERPRISE</div><div class="price-value">$1,999</div></div>', unsafe_allow_html=True)
         plan = st.selectbox("Select Tier", ["Basic", "Pro", "Enterprise"])
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
             conn = sqlite3.connect('breatheeasy.db')
-            # HARDENED FIX: Pulling password directly from registration state to prevent AttributeError
+            # HARDENED FIX: Pulling from standard credential mapping to avoid AttributeError
             new_pw = authenticator.credentials['usernames'][u]['password']
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, new_pw, plan, f"TEAM_{u}"))
             conn.commit(); conn.close(); st.success("Account Created! Please Log In."); st.rerun()
@@ -187,7 +179,7 @@ with st.sidebar:
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 8. TABS ---
+# --- 8. COMMAND CENTER TABS ---
 tabs = st.tabs(["🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "✍️ SEO Blogger", "👁️ Vision Inspector", "🎬 Veo Studio", "🤝 Team Intel hub", "⚙️ Admin Control"])
 
 if run_btn:
@@ -208,7 +200,7 @@ if st.session_state.get('processing'):
             except Exception as e: st.error(f"Error: {e}")
             finally: st.session_state.processing = False; st.rerun()
 
-# --- 9. RENDER COMMAND SEATS ---
+# --- 9. RENDER SEATS ---
 def render_seat(idx, title, icon, data_key):
     with tabs[idx]:
         st.markdown(f"### {icon} {title} Command Seat")
@@ -226,11 +218,11 @@ for i, s in enumerate(seats): render_seat(i, s[0], s[1], s[2])
 
 with tabs[8]:
     st.subheader("👁️ Vision Inspector")
-    v_file = st.file_uploader("Evidence Upload", type=['png', 'jpg', 'jpeg'])
+    v_file = st.file_uploader("Evidence Screenshot", type=['png', 'jpg', 'jpeg'])
     if v_file: st.image(v_file, use_container_width=True)
 
 with tabs[9]:
-    st.markdown("### 🎬 Veo Cinematic Studio")
+    st.subheader("🎬 Veo Cinematic Studio")
     if st.session_state.get('gen'):
         creative_out = st.session_state.report.get('creative', '')
         vp = creative_out.split("Video Prompt:")[-1] if "Video Prompt:" in creative_out else creative_out[:300]
@@ -242,15 +234,15 @@ with tabs[9]:
     else: st.warning("Launch swarm first.")
 
 with tabs[10]:
-    st.header("🤝 Team Intel hub")
+    st.header("🤝 Team Intelligence hub")
     conn = sqlite3.connect('breatheeasy.db')
     team_df = pd.read_sql_query("SELECT date, user, service, city FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
     st.dataframe(team_df, use_container_width=True); conn.close()
 
-# --- 10. ADMIN CONTROL (ZERO OMISSIONS) ---
+# --- 10. ADMIN CONTROL ---
 if user_row['role'] == 'admin':
     with tabs[11]:
-        st.header("⚙️ Admin Control")
+        st.header("⚙️ Admin Control Center")
         conn = sqlite3.connect('breatheeasy.db')
         all_users = pd.read_sql_query("SELECT username, email, credits, package FROM users", conn)
         st.dataframe(all_users, use_container_width=True)
