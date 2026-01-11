@@ -48,24 +48,24 @@ INDUSTRY_LIBRARY = {
     "Finance & Fintech": ["Wealth Management", "Crypto Adoption", "Mortgage Lending", "Tax Strategy", "Business Funding"]
 }
 
-# --- 3. UI CSS (LOCKED CREAM MAIN / DYNAMIC SIDEBAR) ---
+# --- 3. UI CSS (LOCKED CREAM MAIN / DYNAMIC SIDEBAR WITH BORDER) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
 bg = "#FDFCF0" # Main Area Locked to Cream
 text = "#1E293B" # Main Area Text Locked
 # Sidebar Dynamic Variables
 side_bg = "#1E293B" if st.session_state.theme == 'dark' else "#FFFFFF"
 side_text = "#F8FAFC" if st.session_state.theme == 'dark' else "#1E293B"
-side_border = "rgba(255,255,255,0.1)" if st.session_state.theme == 'dark' else "rgba(0,0,0,0.15)"
+side_border = "rgba(255,255,255,0.2)" if st.session_state.theme == 'dark' else "rgba(0,0,0,0.15)"
 
 st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stApp {{ background-color: {bg}; color: {text}; }}
     
-    /* SIDEBAR STYLING - THE ONLY DYNAMIC PART */
+    /* SIDEBAR STYLING WITH DISTINCT BORDER */
     [data-testid="stSidebar"] {{ 
         background-color: {side_bg} !important; 
-        border-right: 2px solid {side_border} !important;
+        border-right: 1.5px solid {side_border} !important;
         box-shadow: 4px 0px 15px rgba(0,0,0,0.05);
     }}
     [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {{
@@ -135,7 +135,7 @@ def generate_cinematic_ad(prompt):
     except Exception as e:
         st.error(f"Veo Error: {e}"); return None
 
-# --- 6. AUTH FLOW & REGISTRATION ---
+# --- 6. AUTHENTICATION & REGISTRATION (FIXED ATTRIBUTE ERROR) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team", "❓ Recovery"])
@@ -151,7 +151,7 @@ if not st.session_state.get("authentication_status"):
         if reg_res:
             e, u, n = reg_res
             conn = sqlite3.connect('breatheeasy.db')
-            # HARDENED PASSWORD FETCH (DIRECT FROM AUTHENTICATOR DATA)
+            # HARDENED FIX: Pulling password directly from registration logic state mapping
             new_pw = authenticator.credentials['usernames'][u]['password']
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, new_pw, plan, f"TEAM_{u}"))
             conn.commit(); conn.close(); st.success("Account Created! Please Log In."); st.rerun()
@@ -190,13 +190,13 @@ with st.sidebar:
 tabs = st.tabs(["🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "✍️ SEO Blogger", "👁️ Vision Inspector", "🎬 Veo Studio", "🤝 Team Intel", "⚙️ Admin"])
 
 if run_btn:
-    if not biz_name or not city_input: st.error("❌ Missing required fields.")
-    elif user_row['credits'] <= 0: st.error("❌ No credits remaining.")
+    if not biz_name or not city_input: st.error("❌ Required fields missing.")
+    elif user_row['credits'] <= 0: st.error("❌ Out of credits.")
     else: st.session_state.processing = True
 
 if st.session_state.get('processing'):
     with tabs[0]:
-        with st.status("🛠️ Swarm Coordination...", expanded=True) as status:
+        with st.status("🛠️ Swarm Action...", expanded=True) as status:
             try:
                 report = run_marketing_swarm({'city': full_loc, 'industry': ind_cat, 'service': svc, 'biz_name': biz_name, 'url': web_url, 'toggles': toggles})
                 st.session_state.report, st.session_state.gen = report, True
@@ -212,9 +212,9 @@ def render_seat(idx, title, icon, data_key):
     with tabs[idx]:
         st.markdown(f"### {icon} {title} Command Seat")
         if st.session_state.get('gen'):
-            data = st.session_state.report.get(data_key, "Agent results pending.")
+            data = st.session_state.report.get(data_key, "No data.")
             c1, c2, c3 = st.columns([2, 1, 1])
-            with c1: st.success("Intelligence Verified")
+            with c1: st.success("Verified")
             with c2: st.download_button("📄 Word", create_word_doc(data, user_row['logo_path']), f"{title}.docx", key=f"w_{data_key}")
             with c3: st.download_button("📕 PDF", create_pdf(data, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{data_key}")
             st.markdown(f'<div class="insight-card">{data}</div>', unsafe_allow_html=True)
@@ -225,7 +225,7 @@ for i, s in enumerate(seats): render_seat(i, s[0], s[1], s[2])
 
 with tabs[8]:
     st.subheader("👁️ Vision Inspector")
-    v_file = st.file_uploader("Evidence Upload", type=['png', 'jpg', 'jpeg'])
+    v_file = st.file_uploader("Screenshot Upload", type=['png', 'jpg', 'jpeg'])
     if v_file: st.image(v_file, use_container_width=True)
 
 with tabs[9]:
@@ -233,7 +233,7 @@ with tabs[9]:
     if st.session_state.get('gen'):
         creative_out = st.session_state.report.get('creative', '')
         vp = creative_out.split("Video Prompt:")[-1] if "Video Prompt:" in creative_out else creative_out[:300]
-        v_prompt = st.text_area("Video Scene Description", value=vp, height=150)
+        v_prompt = st.text_area("Video Scene", value=vp, height=150)
         if st.button("📽️ GENERATE AD"):
             with st.spinner("Rendering..."):
                 v_file = generate_cinematic_ad(v_prompt)
@@ -241,29 +241,33 @@ with tabs[9]:
     else: st.warning("Launch swarm first.")
 
 with tabs[10]:
-    st.header("🤝 Team Intel Hub")
+    st.header("🤝 Team Intel hub")
     conn = sqlite3.connect('breatheeasy.db')
     team_df = pd.read_sql_query("SELECT date, user, service, city FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
     st.dataframe(team_df, use_container_width=True); conn.close()
 
-# --- 10. ADMIN CONTROL ---
+# --- 10. ADMIN CONTROL (ZERO OMISSIONS) ---
 if user_row['role'] == 'admin':
     with tabs[11]:
-        st.header("⚙️ Admin God-Mode")
+        st.header("⚙️ Admin Control")
         conn = sqlite3.connect('breatheeasy.db')
         all_users = pd.read_sql_query("SELECT username, email, credits, package FROM users", conn)
         st.dataframe(all_users, use_container_width=True)
         st.divider()
-        u_del = st.text_input("Purge Username")
+        
+        u_del = st.text_input("Terminate User Username")
         if st.button("❌ Remove User"):
             if u_del != 'admin':
                 conn.execute("DELETE FROM users WHERE username=?", (u_del,))
                 conn.commit(); st.success(f"Purged {u_del}"); st.rerun()
             else: st.error("Admin protected.")
+
         st.divider()
-        target_u = st.selectbox("Select Target", all_users['username'])
-        amount = st.number_input("Refill Quantity", value=50)
+        
+        target_u = st.selectbox("Refill User Credits", all_users['username'])
+        amount = st.number_input("Refill Amount", value=50)
         if st.button("💉 Inject Credits"):
             conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amount, target_u))
             conn.commit(); st.success("Credits Refilled."); st.rerun()
+        
         conn.close()
