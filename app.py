@@ -36,7 +36,7 @@ if "GEMINI_API_KEY" in st.secrets:
 
 st.set_page_config(page_title="TechInAdvance AI | Enterprise Command", page_icon="Logo1.jpeg", layout="wide")
 
-# --- 2. INDUSTRY & SERVICE LIBRARY ---
+# --- 2. EXHAUSTIVE INDUSTRY & SERVICE LIBRARY ---
 INDUSTRY_LIBRARY = {
     "HVAC & Home Services": ["AC Repair", "Heating Install", "Plumbing", "Roofing Audit", "Electrical", "Pest Control"],
     "Medical & Healthcare": ["Telehealth Growth", "Dental Implants", "Plastic Surgery", "Physical Therapy", "Chiropractic Marketing"],
@@ -48,27 +48,38 @@ INDUSTRY_LIBRARY = {
     "Finance & Fintech": ["Wealth Management", "Crypto Adoption", "Mortgage Lending", "Tax Strategy", "Business Funding"]
 }
 
-# --- 3. ELITE UI CSS (LOCKED CREAM THEME & ALIGNMENT) ---
+# --- 3. ELITE UI CSS (v118.0 DYNAMIC SYNC & SIDEBAR BORDER) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
 bg = "#FDFCF0" if st.session_state.theme == 'light' else "#0F172A"
 text = "#1E293B" if st.session_state.theme == 'light' else "#F8FAFC"
 side = "#FFFFFF" if st.session_state.theme == 'light' else "#1E293B"
+# Distinct border logic for Light Theme visibility
+border_color = "rgba(0,0,0,0.15)" if st.session_state.theme == 'light' else "rgba(255,255,255,0.1)"
 
 st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stApp {{ background-color: {bg}; color: {text}; }}
-    [data-testid="stSidebar"] {{ background-color: {side}; border-right: 1px solid rgba(0,0,0,0.1); }}
-    .sidebar-brand {{ text-align: center; padding: 20px 0; border-bottom: 1px solid rgba(0,0,0,0.1); margin-bottom: 20px; }}
+    
+    /* DISTINCT SIDEBAR BORDER */
+    [data-testid="stSidebar"] {{ 
+        background-color: {side}; 
+        border-right: 1.5px solid {border_color}; 
+    }}
+    
+    .sidebar-brand {{ text-align: center; padding-bottom: 20px; border-bottom: 1px solid {border_color}; margin-bottom: 20px; }}
+    
     .price-card {{
         background-color: {side}; padding: 25px; border-radius: 15px; border: 2px solid {sidebar_color};
         text-align: center; margin-bottom: 20px; color: {text}; box-shadow: 0px 4px 10px rgba(0,0,0,0.05);
     }}
     .price-header {{ font-size: 1.5rem; font-weight: 800; color: {sidebar_color}; }}
     .price-value {{ font-size: 2.2rem; font-weight: 900; margin: 10px 0; }}
-    [data-testid="stMetric"] {{ background-color: {side}; padding: 15px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.1); }}
+    
+    [data-testid="stMetric"] {{ background-color: {side}; padding: 15px; border-radius: 10px; border: 1px solid {border_color}; }}
     .insight-card {{ background-color: {side}; padding: 25px; border-radius: 15px; border-left: 5px solid {sidebar_color}; margin-top: 15px; line-height: 1.6; white-space: pre-wrap; }}
-    div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 8px; font-weight: 800 !important; width: 100%; transition: 0.3s; height: 3.2em; }}
+    
+    div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 8px; font-weight: 800 !important; width: 100%; transition: 0.3s; }}
     div.stButton > button:hover {{ transform: translateY(-2px); box-shadow: 0px 4px 15px {sidebar_color}66; }}
     </style>
 """, unsafe_allow_html=True)
@@ -85,7 +96,7 @@ def init_db():
 
 init_db()
 
-# --- 5. AUTH & UTILS ---
+# --- 5. AUTH & HELPERS ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -113,34 +124,40 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
 
 def generate_cinematic_ad(prompt):
     try:
-        video = st.video_generation(prompt=f"Elite cinematic marketing ad: {prompt}. 4k, professional commercial style.", aspect_ratio="16:9")
+        video = st.video_generation(prompt=f"Elite cinematic marketing ad: {prompt}. 4k, corporate style.", aspect_ratio="16:9")
         return video
     except Exception as e:
         st.error(f"Veo Error: {e}"); return None
 
-# --- 6. AUTHENTICATION & REGISTRATION ---
+# --- 6. AUTH FLOW & HIGH-VIS PRICING ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team", "❓ Recovery"])
-    with auth_tabs[0]: authenticator.login(location='main')
+    
+    with auth_tabs[0]: 
+        authenticator.login(location='main')
+
     with auth_tabs[1]:
-        st.markdown("### Select Your Enterprise Tier")
+        st.markdown("### Enterprise Tiers")
         p1, p2, p3 = st.columns(3)
-        with p1: st.markdown(f'<div class="price-card"><div class="price-header">BASIC</div><div class="price-value">$99</div><p>50 Credits</p></div>', unsafe_allow_html=True)
-        with p2: st.markdown(f'<div class="price-card"><div class="price-header">PRO</div><div class="price-value">$499</div><p>250 Credits</p></div>', unsafe_allow_html=True)
-        with p3: st.markdown(f'<div class="price-card"><div class="price-header">ENTERPRISE</div><div class="price-value">$1,999</div><p>Unlimited</p></div>', unsafe_allow_html=True)
-        plan = st.selectbox("Tier Selection", ["Basic", "Pro", "Enterprise"])
+        with p1: st.markdown(f'<div class="price-card"><div class="price-header">BASIC</div><div class="price-value">$99</div></div>', unsafe_allow_html=True)
+        with p2: st.markdown(f'<div class="price-card"><div class="price-header">PRO</div><div class="price-value">$499</div></div>', unsafe_allow_html=True)
+        with p3: st.markdown(f'<div class="price-card"><div class="price-header">ENTERPRISE</div><div class="price-value">$1,999</div></div>', unsafe_allow_html=True)
+        
+        plan = st.selectbox("Select Tier", ["Basic", "Pro", "Enterprise"])
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
             conn = sqlite3.connect('breatheeasy.db')
+            # HARDENED FIX FOR ATTRIBUTE ERROR
             new_pw = authenticator.config['credentials']['usernames'][u]['password']
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, new_pw, plan, f"TEAM_{u}"))
-            conn.commit(); conn.close(); st.success("Created!"); st.button("Log In Now", on_click=switch_to_login)
+            conn.commit(); conn.close(); st.success("Account Created! Please Log In."); st.rerun()
+
     with auth_tabs[3]: authenticator.forgot_password(location='main')
     st.stop()
 
-# --- 7. DASHBOARD DATA ---
+# --- 7. DASHBOARD CONTROL ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
@@ -153,7 +170,7 @@ with st.sidebar:
     st.button("🌓 Toggle Theme", on_click=toggle_theme)
     m_col, t_col = st.columns(2)
     with m_col: st.metric("Credits", user_row['credits'])
-    with t_col: st.markdown(f"""<div style="background:{side}; padding:10px; border-radius:10px; border:1px solid rgba(0,0,0,0.1); height:85px; text-align:center;"><small style="opacity:0.7;">TEAM ID</small><br><b>{user_row['team_id']}</b></div>""", unsafe_allow_html=True)
+    with t_col: st.markdown(f"""<div style="background:{side}; padding:10px; border-radius:10px; border:1px solid {border_color}; height:85px; text-align:center;"><small>TEAM ID</small><br><b>{user_row['team_id']}</b></div>""", unsafe_allow_html=True)
     st.divider()
     biz_name = st.text_input("Brand Name")
     c_col1, c_col2 = st.columns(2)
@@ -172,13 +189,13 @@ with st.sidebar:
 tabs = st.tabs(["🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "✍️ SEO Blogger", "👁️ Vision Inspector", "🎬 Veo Studio", "🤝 Team Intel", "⚙️ Admin"])
 
 if run_btn:
-    if not biz_name or not city_input: st.error("❌ Fields missing.")
-    elif user_row['credits'] <= 0: st.error("❌ No credits.")
+    if not biz_name or not city_input: st.error("❌ Required fields missing.")
+    elif user_row['credits'] <= 0: st.error("❌ Out of credits.")
     else: st.session_state.processing = True
 
 if st.session_state.get('processing'):
     with tabs[0]:
-        with st.status("🛠️ Swarm Action...", expanded=True) as status:
+        with st.status("🛠️ Swarm Coordination...", expanded=True) as status:
             try:
                 report = run_marketing_swarm({'city': full_loc, 'industry': ind_cat, 'service': svc, 'biz_name': biz_name, 'url': web_url, 'toggles': toggles})
                 st.session_state.report, st.session_state.gen = report, True
@@ -189,25 +206,25 @@ if st.session_state.get('processing'):
             except Exception as e: st.error(f"Error: {e}")
             finally: st.session_state.processing = False; st.rerun()
 
-# --- 9. RENDER ---
+# --- 9. RENDER SEATS ---
 def render_seat(idx, title, icon, data_key):
     with tabs[idx]:
         st.markdown(f"### {icon} {title} Command Seat")
         if st.session_state.get('gen'):
-            data = st.session_state.report.get(data_key, "No data.")
+            data = st.session_state.report.get(data_key, "Not requested.")
             c1, c2, c3 = st.columns([2, 1, 1])
-            with c1: st.success("Verified")
+            with c1: st.success("Verified Intelligence")
             with c2: st.download_button("📄 Word", create_word_doc(data, user_row['logo_path']), f"{title}.docx", key=f"w_{data_key}")
             with c3: st.download_button("📕 PDF", create_pdf(data, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{data_key}")
             st.markdown(f'<div class="insight-card">{data}</div>', unsafe_allow_html=True)
-        else: st.info("Deploy Swarm.")
+        else: st.info(f"Launch Swarm to populate {title} seat.")
 
 seats = [("Analyst", "🕵️", "analyst"), ("Ads", "📺", "ads"), ("Creative", "🎨", "creative"), ("Strategist", "👔", "strategist"), ("Social", "✍🏾", "social"), ("GEO", "🧠", "geo"), ("Auditor", "🌐", "auditor"), ("SEO", "✍️", "seo")]
 for i, s in enumerate(seats): render_seat(i, s[0], s[1], s[2])
 
 with tabs[8]:
     st.subheader("👁️ Vision Inspector")
-    v_file = st.file_uploader("Screenshot Upload", type=['png', 'jpg', 'jpeg'])
+    v_file = st.file_uploader("Evidence Upload", type=['png', 'jpg', 'jpeg'])
     if v_file: st.image(v_file, use_container_width=True)
 
 with tabs[9]:
@@ -215,7 +232,7 @@ with tabs[9]:
     if st.session_state.get('gen'):
         creative_out = st.session_state.report.get('creative', '')
         vp = creative_out.split("Video Prompt:")[-1] if "Video Prompt:" in creative_out else creative_out[:300]
-        v_prompt = st.text_area("Video Script", value=vp, height=150)
+        v_prompt = st.text_area("Video Scene Description", value=vp, height=150)
         if st.button("📽️ GENERATE AD"):
             with st.spinner("Rendering..."):
                 v_file = generate_cinematic_ad(v_prompt)
@@ -228,7 +245,7 @@ with tabs[10]:
     team_df = pd.read_sql_query("SELECT date, user, service, city FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
     st.dataframe(team_df, use_container_width=True); conn.close()
 
-# --- 10. FINAL ADMIN RESTORED (NO OMISSIONS) ---
+# --- 10. ADMIN COMMAND (NO OMISSIONS) ---
 if user_row['role'] == 'admin':
     with tabs[11]:
         st.header("⚙️ Admin Control")
@@ -236,22 +253,16 @@ if user_row['role'] == 'admin':
         all_users = pd.read_sql_query("SELECT username, email, credits, package FROM users", conn)
         st.dataframe(all_users, use_container_width=True)
         st.divider()
-        
-        # USER TERMINATION
         u_del = st.text_input("Terminate User Username")
         if st.button("❌ Remove User"):
             if u_del != 'admin':
                 conn.execute("DELETE FROM users WHERE username=?", (u_del,))
                 conn.commit(); st.success(f"Purged {u_del}"); st.rerun()
-            else: st.error("Cannot delete admin.")
-
+            else: st.error("Admin cannot be deleted.")
         st.divider()
-        
-        # CREDIT REFILL (RESTORED)
         target_u = st.selectbox("Refill User Credits", all_users['username'])
         amount = st.number_input("Refill Amount", value=50)
         if st.button("💉 Inject Credits"):
             conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amount, target_u))
             conn.commit(); st.success("Refilled."); st.rerun()
-        
         conn.close()
