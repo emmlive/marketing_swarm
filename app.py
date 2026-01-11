@@ -10,12 +10,20 @@ from docx.shared import Inches
 from fpdf import FPDF
 from io import BytesIO
 
-# --- 1. THEME ENGINE & SYSTEM INITIALIZATION ---
+# --- 1. THEME ENGINE & REDIRECT INITIALIZATION ---
 if 'theme' not in st.session_state:
     st.session_state.theme = 'dark'
 
+# Logic for automated redirect after registration
+if 'auth_tab' not in st.session_state:
+    st.session_state.auth_tab = "🔑 Login"
+
 def toggle_theme():
     st.session_state.theme = 'light' if st.session_state.theme == 'dark' else 'dark'
+
+def switch_to_login():
+    st.session_state.auth_tab = "🔑 Login"
+    st.rerun()
 
 os.environ["OTEL_SDK_DISABLED"] = "true"
 if "GEMINI_API_KEY" in st.secrets:
@@ -41,7 +49,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DATABASE ENGINE (Self-Healing & Migration Ready) ---
+# --- 2. DATABASE ENGINE ---
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
@@ -69,7 +77,7 @@ except:
         os.remove('breatheeasy.db')
     init_db()
 
-# --- 3. AUTHENTICATION LOGIC ---
+# --- 3. AUTHENTICATION HELPERS ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -112,28 +120,40 @@ def render_breatheeasy_gauge(score, industry):
         </div>
     """, unsafe_allow_html=True)
 
-# --- 5. SaaS WORKFLOW (AUTH & REGISTRATION) ---
-# Fetch credentials for the session
+# --- 5. SaaS WORKFLOW (AUTH, REGISTRATION & PAYMENT) ---
 user_credentials = get_db_creds()
 authenticator = stauth.Authenticate(user_credentials, st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
 if not st.session_state.get("authentication_status"):
     st.title("🌬️ BreatheEasy AI Enterprise Swarm")
-    l_tab, r_tab, f_tab = st.tabs(["🔑 Login", "📝 Register & Choose Plan", "❓ Forgot Password"])
     
-    with l_tab:
+    # Controlled tab switching using Session State
+    auth_tabs = ["🔑 Login", "📝 Register & Choose Plan", "❓ Forgot Password"]
+    active_idx = auth_tabs.index(st.session_state.auth_tab)
+    choice = st.radio("Access Control", auth_tabs, index=active_idx, horizontal=True, label_visibility="collapsed")
+    
+    if choice == "🔑 Login":
         authenticator.login(location='main')
     
-    with r_tab:
-        plan = st.selectbox("Select Subscription Plan", ["Basic (5 Credits)", "Pro (50 Credits)", "Enterprise (Unlimited)"])
+    elif choice == "📝 Register & Choose Plan":
+        st.subheader("🚀 Join the Enterprise Swarm")
+        plan = st.selectbox("Select Subscription Plan", [
+            "Basic ($99/mo - 5 Credits)", 
+            "Pro ($499/mo - 50 Credits)", 
+            "Enterprise ($1999/mo - Unlimited)"
+        ])
+        
+        # Payment Gateway Simulation (Stripe Placeholder)
+        st.write("---")
+        st.write("💳 **Secure Payment Gateway**")
+        cc_col1, cc_col2 = st.columns([2, 1])
+        with cc_col1: st.text_input("Card Number", placeholder="0000 0000 0000 0000")
+        with cc_col2: st.text_input("CVC", placeholder="123")
+        
         try:
-            # FIX: Properly handle registration without relying on .credentials attribute directly
             reg_result = authenticator.register_user(location='main')
             if reg_result:
                 email_reg, username_reg, name_reg = reg_result
-                # Extract the hashed password from the internal authenticator state
-                # In most versions, it's now in authenticator.credentials['usernames']
-                # If that fails, we fallback to the raw input if captured, but here we use the hashed one
                 hashed_password = authenticator.credentials['usernames'][username_reg]['password']
                 
                 conn = sqlite3.connect('breatheeasy.db')
@@ -142,11 +162,17 @@ if not st.session_state.get("authentication_status"):
                              (username_reg, email_reg, name_reg, hashed_password, 'member', plan.split()[0], creds, f"TEAM_{username_reg}"))
                 conn.commit()
                 conn.close()
-                st.success("Registration complete! Switch to Login tab.")
+                
+                st.success("Registration & Payment Successful!")
+                st.balloons()
+                # Auto-redirect trigger
+                st.session_state.auth_tab = "🔑 Login"
+                st.button("Proceed to Login", on_click=switch_to_login)
         except Exception as e:
-            st.info("Complete the form above to register.")
+            st.info("Please fill the registration form and payment details above.")
 
-    with f_tab: st.info("Manual Password Reset: Contact support@airductify.com")
+    elif choice == "❓ Forgot Password":
+        st.info("Manual Password Reset: Contact support@airductify.com")
     st.stop()
 
 # --- 6. DASHBOARD CONTROL CENTER ---
@@ -175,7 +201,14 @@ with st.sidebar:
     }
     
     web_url = st.text_input("Website URL") if toggles["audit"] else ""
-    ind = st.selectbox("Industry", ["HVAC", "Medical", "Law", "Solar", "Real Estate"])
+    
+    # Industry Selection with "Custom" Option
+    ind_choice = st.selectbox("Industry", ["HVAC", "Medical", "Law", "Solar", "Real Estate", "Custom"])
+    if ind_choice == "Custom":
+        final_ind = st.text_input("Enter Your Industry", placeholder="e.g. Legal Tech")
+    else:
+        final_ind = ind_choice
+
     svc = st.text_input("Service Type")
     city = st.text_input("Target City")
     
@@ -183,20 +216,29 @@ with st.sidebar:
     authenticator.logout('Sign Out', 'sidebar')
 
 # --- 7. TABS: FULL PLATFORM ---
-hub_name = f"🔬 {ind} Diagnostic Hub" if ind else "🔬 Diagnostic Lab"
-tabs = st.tabs(["📝 Ad Copy", "🗓️ User Schedule", "🖼️ Visual Assets", "🚀 Push to Ads", hub_name, "🤝 Team Share", "⚙️ Admin"])
+# Fixed Dynamic Naming for Diagnostic Hub
+hub_display_name = f"🔬 {final_ind} Diagnostic Hub" if final_ind else "🔬 Diagnostic Lab"
+tabs = st.tabs(["📝 Ad Copy", "🗓️ User Schedule", "🖼️ Visual Assets", "🚀 Push to Ads", hub_display_name, "🤝 Team Share", "⚙️ Admin"])
 
 with tabs[0]: # Strategic Strategy & Ad Copy
     if run_btn and city:
         if user_row['credits'] > 0 and biz_name:
             with st.status("🐝 Swarm Active: Domain Specialists Coordinating...", expanded=True):
-                report = run_marketing_swarm({'city': city, 'industry': ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
+                report = run_marketing_swarm({
+                    'city': city, 
+                    'industry': final_ind, 
+                    'service': svc, 
+                    'biz_name': biz_name, 
+                    'usp': biz_usp, 
+                    'url': web_url, 
+                    'toggles': toggles
+                })
                 st.session_state['report'] = report
                 st.session_state['gen'] = True
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
                 conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id, is_shared) VALUES (?,?,?,?,?,?,?,?)", 
-                             (datetime.now().strftime("%Y-%m-%d"), user_row['username'], ind, svc, city, str(report), user_row['team_id'], 1))
+                             (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, city, str(report), user_row['team_id'], 1))
                 conn.commit(); conn.close(); st.rerun()
         elif not biz_name: st.error("Business Name is required.")
 
@@ -212,12 +254,13 @@ with tabs[1]: # User Schedule
     if st.session_state.get('gen'):
         st.write(st.session_state['report'])
 
-with tabs[4]: # Dynamic Diagnostic Hub
-    st.subheader(f"🛡️ {ind} Quality & Safety Audit")
-    diag_up = st.file_uploader(f"Upload {ind} Field Photos", type=['png', 'jpg'])
+with tabs[4]: # Fully Dynamic Diagnostic Hub
+    st.subheader(f"🛡️ {final_ind} Quality & Safety Audit")
+    diag_up = st.file_uploader(f"Upload {final_ind} Field Photos", type=['png', 'jpg'])
     if diag_up:
-        score = 8 if ind == "Medical" else 4 if ind == "HVAC" else 7
-        render_breatheeasy_gauge(score, ind)
+        # Dynamic scoring logic (simulated)
+        score = 8 if final_ind == "Medical" else 4 if final_ind == "HVAC" else 7
+        render_breatheeasy_gauge(score, final_ind)
         if st.button("💾 SAVE SCORE TO DATABASE"):
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("UPDATE leads SET score = ? WHERE user = ? ORDER BY id DESC LIMIT 1", (score, st.session_state['username']))
