@@ -18,11 +18,15 @@ try:
 except ImportError:
     stripe = None
 
-# PERSISTENT SESSION STATES
 if 'theme' not in st.session_state: st.session_state.theme = 'dark'
-if 'auth_tab' not in st.session_state: st.session_state.auth_tab = "🔑 Login"
 if 'processing' not in st.session_state: st.session_state.processing = False
-if 'video_url' not in st.session_state: st.session_state.video_url = None
+
+def toggle_theme():
+    st.session_state.theme = 'light' if st.session_state.theme == 'dark' else 'dark'
+
+def switch_to_login():
+    st.session_state.auth_tab = "🔑 Login"
+    st.rerun()
 
 os.environ["OTEL_SDK_DISABLED"] = "true"
 if "GEMINI_API_KEY" in st.secrets:
@@ -42,7 +46,7 @@ INDUSTRY_LIBRARY = {
     "Finance & Fintech": ["Wealth Management", "Crypto Adoption", "Mortgage Lending", "Tax Strategy", "Business Funding"]
 }
 
-# --- 3. UI CSS (ELITE UI AUDIT & ALIGNMENT) ---
+# --- 3. UI CSS (ELITE UI AUDIT) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
 bg, text, side = ("#0F172A", "#F8FAFC", "#1E293B") if st.session_state.theme == 'dark' else ("#F8FAFC", "#0F172A", "#E2E8F0")
 
@@ -73,7 +77,7 @@ def init_db():
 
 init_db()
 
-# --- 5. AUTH UTILS & EXPORTS ---
+# --- 5. AUTH & VIDEO HELPERS ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -84,17 +88,15 @@ def get_db_creds():
 config_creds = get_db_creds()
 authenticator = stauth.Authenticate(config_creds, st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
-# --- VIDEO GENERATION HELPER (CHAPTER 8: VEO) ---
 def generate_cinematic_ad(prompt):
     try:
         video = st.video_generation(
-            prompt=f"Elite cinematic marketing ad: {prompt}. High-end professional color grading, 4k, slow motion, corporate commercial style.",
+            prompt=f"Elite cinematic marketing ad: {prompt}. High-end professional color grading, 4k, corporate commercial style.",
             aspect_ratio="16:9"
         )
         return video
     except Exception as e:
-        st.error(f"Veo Generation Failed: {e}")
-        return None
+        st.error(f"Veo Generation Failed: {e}"); return None
 
 def create_word_doc(content, logo_path="Logo1.jpeg"):
     doc = Document()
@@ -113,7 +115,7 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 6. AUTH FLOW & PRICE PLANS ---
+# --- 6. LOGIN & RECOVERY ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team", "❓ Recovery"])
@@ -137,7 +139,7 @@ if not st.session_state.get("authentication_status"):
         try:
             username_to_reset, email_to_reset, new_password = authenticator.forgot_password(location='main')
             if username_to_reset:
-                st.success('New password generated. Update your records.')
+                st.success('New password generated.')
                 hashed_pw = stauth.Hasher.hash(new_password)
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("UPDATE users SET password = ? WHERE username = ?", (hashed_pw, username_to_reset))
@@ -145,7 +147,7 @@ if not st.session_state.get("authentication_status"):
         except Exception: st.info("Enter details to initiate recovery.")
     st.stop()
 
-# --- 7. DASHBOARD DATA ---
+# --- 7. DASHBOARD CONTROL ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
@@ -154,9 +156,7 @@ with st.sidebar:
     st.image(user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg", use_container_width=True)
     m_col, t_col = st.columns(2)
     with m_col: st.metric("Credits", user_row['credits'])
-    with t_col:
-        st.markdown(f"""<div style="background:{side}; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); height:80px; text-align:center;">
-        <small style="opacity:0.7;">TEAM ID</small><br><b>{user_row['team_id']}</b></div>""", unsafe_allow_html=True)
+    with t_col: st.markdown(f"""<div style="background:{side}; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); height:80px; text-align:center;"><small style="opacity:0.7;">TEAM ID</small><br><b>{user_row['team_id']}</b></div>""", unsafe_allow_html=True)
     st.divider()
     biz_name = st.text_input("Brand Name"); biz_usp = st.text_area("Core USP")
     ind_cat = st.selectbox("Industry Sector", list(INDUSTRY_LIBRARY.keys()) + ["Custom"])
@@ -164,13 +164,13 @@ with st.sidebar:
     svc = st.selectbox("Service Focus", INDUSTRY_LIBRARY[ind_cat]) if ind_cat != "Custom" else st.text_input("Define Service")
     city = st.text_input("Market City"); web_url = st.text_input("Audit URL")
     st.divider(); st.subheader("🤖 Swarm Personnel")
-    toggles = {k: st.toggle(v, value=True) for k, v in {"analyst": "🕵️ Analyst", "builder": "🎨 Creative", "manager": "👔 Strategist", "social": "✍🏾 Social", "geo": "🧠 GEO", "audit": "🌐 Auditor"}.items()}
+    toggles = {k: st.toggle(v, value=True) for k, v in {"analyst": "🕵️ Analyst", "builder": "🎨 Creative", "manager": "👔 Strategist", "social": "✍🏾 Social", "geo": "🧠 GEO", "audit": "🌐 Auditor", "seo": "✍️ SEO Blogger"}.items()}
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 8. TABS ---
+# --- 8. COMMAND CENTER TABS ---
 hub_label = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
-tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "🎬 Cinematic Studio", hub_label, "🤝 Team Share", "⚙️ Admin"])
+tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "✍️ SEO Blogger", "🎬 Cinematic Studio", hub_label, "⚙️ Admin"])
 
 if run_btn:
     if not biz_name or not city: st.error("❌ Mandatory Fields Missing.")
@@ -183,7 +183,7 @@ if st.session_state.get('processing'):
             try:
                 st.write("<div class='swarm-pulse'></div> **Phase 1:** Researching market gaps...", unsafe_allow_html=True)
                 report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
-                st.write("🎨 **Phase 2:** Building creative assets and video prompts...")
+                st.write("🎨 **Phase 2:** Building creative assets & SEO content...")
                 st.write("👔 **Phase 3:** Finalizing ROI roadmap...")
                 st.session_state.report, st.session_state.gen = report, True
                 conn = sqlite3.connect('breatheeasy.db')
@@ -200,7 +200,7 @@ def render_seat(idx, title, icon, data_key, guide_text):
         with st.expander("💡 Strategy Guide"): st.info(guide_text)
         if st.session_state.get('gen'):
             report_dict = st.session_state.get('report', {})
-            agent_data = report_dict.get(data_key, "No data returned.")
+            agent_data = report_dict.get(data_key, "Agent results pending or disabled.")
             c1, c2, c3 = st.columns([2, 1, 1])
             with c1: st.success(f"Verified {title} Intelligence")
             with c2: st.download_button("📄 Word", create_word_doc(agent_data, user_row['logo_path']), f"{title}.docx", use_container_width=True, key=f"w_{data_key}")
@@ -208,7 +208,7 @@ def render_seat(idx, title, icon, data_key, guide_text):
             st.markdown(f"""<div class="insight-card">{agent_data.replace('•', '<br>•')}</div>""", unsafe_allow_html=True)
         else: st.info(f"Launch Swarm to populate {title} seat.")
 
-guides = {"analyst": "Identify gaps.", "creative": "Use AI art prompts.", "strategist": "ROI Roadmap.", "social": "Viral hooks.", "geo": "AI Search SEO.", "auditor": "Fix UX leaks."}
+guides = {"analyst": "Identify gaps.", "creative": "Use AI art prompts.", "strategist": "ROI Roadmap.", "social": "Viral hooks.", "geo": "AI Search SEO.", "auditor": "Fix UX leaks.", "seo": "Long-form 2k word authority content."}
 
 render_seat(0, "Market Analyst", "🕵️", "analyst", guides["analyst"])
 render_seat(1, "Creative Director", "🎨", "creative", guides["creative"])
@@ -216,34 +216,27 @@ render_seat(2, "Lead Strategist", "👔", "strategist", guides["strategist"])
 render_seat(3, "Social Content", "✍🏾", "social", guides["social"])
 render_seat(4, "GEO Specialist", "🧠", "geo", guides["geo"])
 render_seat(5, "Web Auditor", "🌐", "auditor", guides["auditor"])
+render_seat(6, "SEO Blogger", "✍️", "seo", guides["seo"])
 
-# --- 10. CINEMATIC STUDIO (CHAPTER 8: VEO) ---
-with tabs[6]:
+# --- 10. CINEMATIC STUDIO & ADMIN ---
+with tabs[7]:
     st.markdown("### 🎬 Veo Cinematic Studio")
-    st.info("Transform your Creative Brief into a high-end AI Video Ad using Veo (3 Credits Daily).")
     if st.session_state.get('gen'):
-        # Extract prompt from creative agent output
         raw_creative = st.session_state.report.get('creative', '')
-        # Simple extraction logic for the video prompt section
         default_video_prompt = raw_creative.split("Video Prompt:")[-1] if "Video Prompt:" in raw_creative else raw_creative[:300]
-        
-        video_prompt = st.text_area("Video Script/Scene Description", value=default_video_prompt, height=150)
-        
-        if st.button("📽️ GENERATE CINEMATIC AD"):
-            with st.spinner("Veo is rendering your ad..."):
+        video_prompt = st.text_area("Video script description", value=default_video_prompt, height=150)
+        if st.button("📽️ GENERATE AD"):
+            with st.spinner("Rendering..."):
                 video_file = generate_cinematic_ad(video_prompt)
-                if video_file:
-                    st.video(video_file)
-                    st.success("Cinematic Ad Rendered Successfully.")
-    else:
-        st.warning("Generate a swarm report first to unlock the Cinematic Studio.")
+                if video_file: st.video(video_file)
+    else: st.warning("Generate report first.")
 
 if user_row['role'] == 'admin':
     with tabs[-1]:
+        st.subheader("⚙️ System Administration")
         conn = sqlite3.connect('breatheeasy.db')
         st.dataframe(pd.read_sql("SELECT username, email, credits FROM users", conn), use_container_width=True)
         u_del = st.text_input("Terminate User")
         if st.button("❌ Remove User"):
-            conn.execute("DELETE FROM users WHERE username=?", (u_del,))
-            conn.commit(); st.rerun()
+            conn.execute("DELETE FROM users WHERE username=?", (u_del,)); conn.commit(); st.rerun()
         conn.close()
