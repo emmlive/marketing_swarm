@@ -50,7 +50,6 @@ st.markdown(f"""
     .st-emotion-cache-1kyx7g3 {{ background-color: {side} !important; border-radius: 12px; padding: 20px; margin-bottom: 10px; }}
     div.stButton > button {{ background-color: {btn}; color: white; border-radius: 10px; width: 100%; font-weight: 700; border: none; }}
     div.stButton > button:hover {{ transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }}
-    /* Swarm Active Pulse */
     .swarm-pulse {{ background-color: {btn}; border-radius: 50%; width: 12px; height: 12px; display: inline-block; margin-right: 10px; animation: pulse-animation 1.5s infinite; }}
     @keyframes pulse-animation {{ 0% {{ transform: scale(0.95); opacity: 0.7; }} 70% {{ transform: scale(1.1); opacity: 1; }} 100% {{ transform: scale(0.95); opacity: 0.7; }} }}
     </style>
@@ -74,7 +73,7 @@ def init_db():
 
 init_db()
 
-# --- 3. AUTHENTICATION (FIXED ATTRIBUTE ERROR) ---
+# --- 3. AUTHENTICATION ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -98,7 +97,6 @@ if not st.session_state.get("authentication_status"):
             reg_res = authenticator.register_user(location='main')
             if reg_res:
                 e, u, n = reg_res
-                # FIXED: Access password from freshly updated internal credentials object
                 pw = authenticator.credentials['usernames'][u]['password']
                 final_tid = join_team_id if join_team_id else f"TEAM_{u}"
                 conn = sqlite3.connect('breatheeasy.db')
@@ -174,7 +172,6 @@ with st.sidebar:
 hub_display_name = f"🔬 {final_ind} Diagnostic Hub" if final_ind else "🔬 Diagnostic Lab"
 tabs = st.tabs(["📝 Ad Copy", "🗓️ Roadmap", "📊 Ads Manager", hub_display_name, "🤝 Team Share", "⚙️ Admin Hub"])
 
-# ACTIVE SWARM FEEDBACK LOGIC
 if run_btn:
     if not biz_name or not city:
         st.error("❌ Brand Name and City are mandatory for Swarm coordination.")
@@ -188,7 +185,6 @@ if st.session_state.get('processing'):
         st.markdown(f"### <div class='swarm-pulse'></div> Swarm Active: Analyzing {final_ind} in {city}...", unsafe_allow_html=True)
         with st.status("🐝 **Specialist Agents Coordinating...**", expanded=True) as status:
             st.write("🕵️ Analyst: Diagnosing Neuromarketing Conversion Leaks...")
-            # KICKOFF SWARM
             report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
             st.write("✅ Creative Director: Branded Navy/White assets ready.")
             st.write("✅ SEO Lead: Information Gain content strategy verified.")
@@ -202,7 +198,7 @@ if st.session_state.get('processing'):
             conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id, is_shared) VALUES (?,?,?,?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, city, str(report), user_row['team_id'], 1))
             conn.commit(); conn.close(); st.rerun()
 
-with tabs[0]: # Strategic Output
+with tabs[0]: 
     if st.session_state.get('gen'):
         st.subheader("📥 Export Branded Deliverables")
         c1, c2 = st.columns(2)
@@ -210,20 +206,13 @@ with tabs[0]: # Strategic Output
         c1.download_button("📄 Word Document", create_word_doc(st.session_state['report'], report_logo), f"Report_{city}.docx", use_container_width=True)
         c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, report_logo), f"Report_{city}.pdf", use_container_width=True)
         st.markdown(st.session_state['report'])
-    elif not st.session_state.get('processing'):
-        st.info("👋 Welcome. Configure the sidebar and click **LAUNCH OMNI-SWARM** to deploy specialized agents.")
 
 with tabs[1]:
     st.subheader("🗓️ Your 30-Day Project Roadmap")
-    
-
-[Image of a project management Gantt chart]
-
     if st.session_state.get('gen'): st.write(st.session_state['report'])
 
-with tabs[2]: # ADS MANAGER & SOCIAL PUSH
+with tabs[2]:
     st.subheader("🚀 Ads Manager & Automated Budget Forecaster")
-    
     if st.session_state.get('gen'):
         data = {"Budget Tier": ["Conservative", "Aggressive", "Elite Scaling"], "Monthly Spend": ["$2,500", "$7,500", "$20,000+"], "Target ROAS": ["280%", "410%", "550%"]}
         st.table(pd.DataFrame(data))
@@ -232,34 +221,30 @@ with tabs[2]: # ADS MANAGER & SOCIAL PUSH
         if p1.button("Push to Facebook Ads"): st.success("Campaign Draft Synced to Meta API")
         if p2.button("Push to Google Ads"): st.success("Keywords Pushed to Ads Manager")
         if p3.button("Push to LinkedIn"): st.success("B2B Audience Synced")
-    else: st.warning("Launch Swarm to generate financial forecasts.")
 
 with tabs[3]:
     st.subheader(f"🛡️ {final_ind} Quality Audit")
     diag_up = st.file_uploader(f"Upload {final_ind} Field Evidence", type=['png', 'jpg'])
     if diag_up: 
         render_breatheeasy_gauge(8, final_ind)
-        st.success("AI Visual Audit complete. Risk metrics archived.")
 
-with tabs[4]: # TEAM SHARE & LEADERBOARD
+with tabs[4]:
     st.subheader("🤝 Team Collaboration Hub")
     st.info(f"Team ID: **{user_row['team_id']}**")
     conn = sqlite3.connect('breatheeasy.db')
     st.write("### 🏆 Team Leaderboard")
     leader_df = pd.read_sql_query("SELECT user as 'Team Member', COUNT(id) as 'Reports' FROM leads WHERE team_id = ? GROUP BY user ORDER BY Reports DESC", conn, params=(user_row['team_id'],))
     st.table(leader_df)
-    st.write("### 📂 Shared Project History")
     team_history = pd.read_sql_query("SELECT date, user, industry, service, city FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
     st.dataframe(team_history, use_container_width=True)
     conn.close()
 
-if user_row['role'] == 'admin': # ADMIN HUB RESTORED
+if user_row['role'] == 'admin':
     with tabs[-1]:
         st.subheader("👥 User & Credit Administration")
         conn = sqlite3.connect('breatheeasy.db')
         all_u = pd.read_sql("SELECT username, email, package, credits, team_id FROM users", conn)
         st.dataframe(all_u, use_container_width=True)
-        st.divider()
         user_to_del = st.text_input("Username to Terminate")
         if st.button("❌ Remove User"):
             conn.execute(f"DELETE FROM users WHERE username='{user_to_del}'")
