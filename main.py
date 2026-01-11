@@ -13,7 +13,7 @@ load_dotenv(override=True)
 
 # --- 1. SHARED STATE (ISOLATED FIELDS) ---
 class SwarmState(BaseModel):
-    # Isolated fields to prevent data overlap in Command Seats
+    # These fields correspond to the EXCLUSIVE Command Seats in app.py
     market_data: str = "Analysis pending..."
     ad_drafts: str = "Creative build pending..."
     website_audit: str = "Audit pending..."
@@ -77,7 +77,7 @@ def get_swarm_agents(inputs):
         )
     }
 
-# --- 4. THE STATEFUL WORKFLOW (ISOLATED EXECUTION) ---
+# --- 4. THE STATEFUL WORKFLOW (STRICT ISOLATION LOGIC) ---
 class MarketingSwarmFlow(Flow[SwarmState]):
     def __init__(self, inputs):
         super().__init__()
@@ -88,7 +88,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
     @start()
     def phase_1_discovery(self):
         """Phase 1: Research and Technical Auditing"""
-        # ANALYST TASK
         analyst_task = Task(
             description=(
                 f"Identify top 3 competitors for {self.inputs['biz_name']} in {self.inputs['city']}. "
@@ -99,7 +98,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             expected_output="JSON Market Truth Report."
         )
 
-        # AUDITOR TASK (Conditional)
         if self.toggles.get('audit'):
             auditor_task = Task(
                 description=f"Audit {self.inputs.get('url')} for conversion friction.",
@@ -110,9 +108,9 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             # Run parallel discovery
             crew = Crew(agents=[self.agents["analyst"], self.agents["web_auditor"]], 
                         tasks=[analyst_task, auditor_task])
-            result = crew.kickoff()
+            crew.kickoff()
             
-            # Isolated state assignment
+            # ISOLATED CAPTURE: Pull directly from task output to prevent merging
             self.state.market_data = str(analyst_task.output.raw)
             self.state.website_audit = str(auditor_task.output.raw)
         else:
@@ -124,7 +122,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
     @listen("discovery_complete")
     def phase_2_execution(self):
         """Phase 2: Creative Production and Specialist Plans"""
-        # CREATIVE TASK
         creative_task = Task(
             description="Create 3 Navy/White ad variants and 'Nano Banana' prompts using the Researcher's JSON.",
             agent=self.agents["creative"],
@@ -133,13 +130,11 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         tasks = [creative_task]
         agents = [self.agents["creative"]]
 
-        # SOCIAL TASK
         if self.toggles.get('social'):
             social_task = Task(description="Social hooks and distribution.", agent=self.agents["social_agent"], expected_output="Social Plan.")
             tasks.append(social_task)
             agents.append(self.agents["social_agent"])
 
-        # GEO TASK
         if self.toggles.get('geo'):
             geo_task = Task(description="AI Search velocity plan.", agent=self.agents["geo_specialist"], expected_output="GEO Report.")
             tasks.append(geo_task)
@@ -148,7 +143,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         crew = Crew(agents=agents, tasks=tasks, process=Process.sequential)
         crew.kickoff()
         
-        # Isolated state assignment to prevent mirror overlap
+        # Isolated state assignment
         self.state.ad_drafts = str(creative_task.output.raw)
         if self.toggles.get('social'): self.state.social_plan = str(social_task.output.raw)
         if self.toggles.get('geo'): self.state.geo_intel = str(geo_task.output.raw)
@@ -169,11 +164,12 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         self.state.production_schedule = str(result)
         return "swarm_finished"
 
-# --- 5. EXECUTION WRAPPER (ISOLATED DICTIONARY) ---
+# --- 5. EXECUTION WRAPPER (ISOLATED DICTIONARY & FORMATTED STRING) ---
 def run_marketing_swarm(inputs):
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
+    # Reconstruct the requested formatted string for the legacy view
     formatted_string_report = f"""
 # 🌬️ {inputs['biz_name']} Omni-Swarm Report
 
