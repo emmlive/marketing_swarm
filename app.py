@@ -36,7 +36,7 @@ if "GEMINI_API_KEY" in st.secrets:
 
 st.set_page_config(page_title="TechInAdvance AI | Enterprise Command", page_icon="Logo1.jpeg", layout="wide")
 
-# --- 2. ELITE UI CSS (SIDEBAR VISIBILITY & THEME RECONCILIATION) ---
+# --- 2. ELITE UI CSS (SIDEBAR & THEME) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
 bg, text, side = ("#0F172A", "#F8FAFC", "#1E293B") if st.session_state.theme == 'dark' else ("#F8FAFC", "#0F172A", "#E2E8F0")
 
@@ -44,7 +44,7 @@ st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stDeployButton {{display:none;}}
-    /* SIDEBAR TOGGLE VISIBILITY FIX - FORCED CONTRAST & BOLD */
+    /* SIDEBAR TOGGLE VISIBILITY FIX */
     [data-testid="sidebar-button"] {{
         background-color: {sidebar_color} !important;
         color: white !important;
@@ -81,7 +81,7 @@ def init_db():
 
 init_db()
 
-# --- 4. AUTH UTILS & EXPORTS ---
+# --- 4. AUTH UTILS ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -89,6 +89,7 @@ def get_db_creds():
         return {'usernames': {row['username']: {'email':row['email'], 'name':row['name'], 'password':row['password']} for _, row in df.iterrows()}}
     except: return {'usernames': {}}
 
+# Initialize data source
 config_creds = get_db_creds()
 authenticator = stauth.Authenticate(config_creds, st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
@@ -109,7 +110,7 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. AUTH FLOW (FIXED KEYERROR & RECOVERY) ---
+# --- 5. AUTH FLOW (PERMANENT ATTRIBUTE FIX) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team (Invite)", "❓ Recovery"])
@@ -126,20 +127,24 @@ if not st.session_state.get("authentication_status"):
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            pw = authenticator.credentials['usernames'][u]['password']
-            conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
-            conn.commit(); conn.close(); st.success("Account Created!"); st.button("Log In Now", on_click=switch_to_login)
+            # THE PERMANENT FIX: Access config_creds directly. 
+            # The library updates this dict by reference when reg_res is true.
+            if u in config_creds['usernames']:
+                pw = config_creds['usernames'][u]['password']
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
+                conn.commit(); conn.close(); st.success("Account Created!"); st.button("Log In Now", on_click=switch_to_login)
 
     with auth_tabs[2]:
         invite_id = st.text_input("Enter Team ID")
         join_reg = authenticator.register_user(location='main', key='join')
         if join_reg and invite_id:
             e, u, n = join_reg
-            pw = authenticator.credentials['usernames'][u]['password']
-            conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, pw, invite_id))
-            conn.commit(); conn.close(); st.success(f"Linked to {invite_id}!"); st.button("Proceed", on_click=switch_to_login)
+            if u in config_creds['usernames']:
+                pw = config_creds['usernames'][u]['password']
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, pw, invite_id))
+                conn.commit(); conn.close(); st.success(f"Linked to {invite_id}!"); st.button("Proceed", on_click=switch_to_login)
 
     with auth_tabs[3]: authenticator.forgot_password(location='main')
     st.stop()
@@ -177,7 +182,7 @@ with st.sidebar:
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 7. COMMAND CENTER TABS (THE 6 SEATS + HUB) ---
+# --- 7. COMMAND CENTER TABS ---
 hub_name = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
 tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", hub_name, "🤝 Team Share", "⚙️ Admin"])
 
@@ -205,7 +210,6 @@ def render_seat(idx, title, icon, data_key):
     with tabs[idx]:
         st.subheader(f"{icon} {title} Command Seat")
         if st.session_state.get('gen'):
-            # Fetch agent-specific data from the report dictionary returned by main.py
             agent_data = st.session_state['report'].get(data_key, "Intelligence pending...")
             
             if idx == 0: # Analyst Seat adds Exports
