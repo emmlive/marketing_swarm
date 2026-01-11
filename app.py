@@ -112,9 +112,9 @@ if not st.session_state.get("authentication_status"):
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            # PROACTIVE FIX: Check authenticator object directly for the newly generated hash
-            if u in authenticator.credentials['usernames']:
-                new_pw = authenticator.credentials['usernames'][u]['password']
+            # PROACTIVE FIX: Pull from the initial config_creds which is updated by the register_user method
+            if u in config_creds['usernames']:
+                new_pw = config_creds['usernames'][u]['password']
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',50,'Logo1.jpeg',?)", (u, e, n, new_pw, f"TEAM_{u}"))
                 conn.commit(); conn.close()
@@ -125,8 +125,8 @@ if not st.session_state.get("authentication_status"):
         join_reg = authenticator.register_user(location='main', key='join')
         if join_reg and invite_id:
             e, u, n = join_reg
-            if u in authenticator.credentials['usernames']:
-                new_pw = authenticator.credentials['usernames'][u]['password']
+            if u in config_creds['usernames']:
+                new_pw = config_creds['usernames'][u]['password']
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, new_pw, invite_id))
                 conn.commit(); conn.close()
