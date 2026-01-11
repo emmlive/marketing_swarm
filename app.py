@@ -45,18 +45,24 @@ st.markdown(f"""
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
+    # 1. username, 2. email, 3. name, 4. password, 5. role, 
+    # 6. package, 7. credits, 8. logo_path, 9. team_id (Total 9 columns)
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT, 
                   package TEXT, credits INTEGER DEFAULT 0, logo_path TEXT, team_id TEXT)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS leads 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, 
                   service TEXT, city TEXT, content TEXT, team_id TEXT, is_shared INTEGER DEFAULT 0, score INTEGER)''')
+    
     hashed_pw = stauth.Hasher.hash('admin123')
-    c.execute("INSERT OR IGNORE INTO users VALUES (?,?,?,?,'admin','Unlimited',9999,None,'HQ_001')", 
-              ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw))
-    conn.commit(); conn.close()
-
-init_db()
+    
+    # FIX: Added the 9th value (None) for logo_path before 'HQ_001'
+    c.execute("""INSERT OR IGNORE INTO users VALUES (?,?,?,?,?,?,?,?,?)""",
+              ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin', 'Unlimited', 9999, None, 'HQ_001'))
+    
+    conn.commit()
+    conn.close()
 
 # --- 3. EXPORT GENERATORS ---
 def create_word_doc(content, logo_path=None):
