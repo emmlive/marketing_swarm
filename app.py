@@ -36,7 +36,7 @@ if "GEMINI_API_KEY" in st.secrets:
 
 st.set_page_config(page_title="TechInAdvance AI | Enterprise Command", page_icon="Logo1.jpeg", layout="wide")
 
-# --- 2. ELITE UI CSS (SIDEBAR VISIBILITY & THEME) ---
+# --- 2. ELITE UI CSS (SIDEBAR VISIBILITY & THEME RECONCILIATION) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
 bg, text, side = ("#0F172A", "#F8FAFC", "#1E293B") if st.session_state.theme == 'dark' else ("#F8FAFC", "#0F172A", "#E2E8F0")
 
@@ -44,7 +44,7 @@ st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stDeployButton {{display:none;}}
-    /* SIDEBAR TOGGLE VISIBILITY FIX */
+    /* SIDEBAR TOGGLE VISIBILITY FIX - PRODUCTION GRADE */
     [data-testid="sidebar-button"] {{
         background-color: {sidebar_color} !important;
         color: white !important;
@@ -98,7 +98,7 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. AUTH FLOW (RECOVERY, INVITE, & KEYERROR FIX) ---
+# --- 5. AUTH FLOW (RECOVERY, INVITE, & DYNAMIC DATA FIX) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register", "🤝 Join Team (Invite)", "❓ Recovery"])
@@ -109,7 +109,7 @@ if not st.session_state.get("authentication_status"):
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            # THE FIX: Access the internal credentials dict of the object which IS updated
+            # FIX: Access the updated credentials from the authenticator object itself
             new_pw = authenticator.credentials['usernames'][u]['password']
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',50,'Logo1.jpeg',?)", (u, e, n, new_pw, f"TEAM_{u}"))
@@ -125,7 +125,7 @@ if not st.session_state.get("authentication_status"):
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, new_pw, invite_id))
             conn.commit(); conn.close(); st.success(f"Linked to {invite_id}"); st.button("Proceed", on_click=switch_to_login)
 
-    with auth_tabs[3]: # PASSWORD RECOVERY RESTORED
+    with auth_tabs[3]: # PASSWORD RECOVERY
         st.subheader("Credential Recovery")
         try:
             if authenticator.forgot_password(location='main'):
@@ -168,7 +168,8 @@ with st.sidebar:
     authenticator.logout('Sign Out', 'sidebar')
 
 # --- 7. COMMAND CENTER TABS ---
-tabs = st.tabs(["🕵️ Web Auditor", "📝 Ad Generator", "✍️ SEO Blog Creator", "🗓️ Roadmap", "📊 Ads Manager", "🔬 Diagnostic Lab", "🤝 Team Share", "⚙️ Admin Hub"])
+hub_display = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
+tabs = st.tabs(["🕵️ Web Auditor", "📝 Ad Generator", "✍️ SEO Blog Creator", "🗓️ Roadmap", "📊 Ads Manager", hub_display, "🤝 Team Share", "⚙️ Admin Hub"])
 
 if run_btn:
     if not biz_name or not city: st.error("❌ Brand Name and City required.")
