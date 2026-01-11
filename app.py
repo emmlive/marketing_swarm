@@ -36,7 +36,7 @@ os.environ["OTEL_SDK_DISABLED"] = "true"
 if "GEMINI_API_KEY" in st.secrets:
     os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
 
-st.set_page_config(page_title="TechInAdvance AI | Enterprise Hub", page_icon="Logo1.jpeg", layout="wide")
+st.set_page_config(page_title="TechInAdvance AI | Command Hub", page_icon="Logo1.jpeg", layout="wide")
 
 # --- 2. EXHAUSTIVE INDUSTRY & SERVICE LIBRARY ---
 INDUSTRY_LIBRARY = {
@@ -52,7 +52,7 @@ INDUSTRY_LIBRARY = {
 
 # --- 3. UI CSS (CREAM MAIN / SIDEBAR BOX BORDER) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
-bg = "#FDFCF0" # Champagne Cream Main
+bg = "#FDFCF0" # Locked Champagne Cream Main
 text = "#1E293B" 
 side_bg = "#1E293B" if st.session_state.theme == 'dark' else "#FFFFFF"
 side_text = "#F8FAFC" if st.session_state.theme == 'dark' else "#1E293B"
@@ -62,11 +62,17 @@ st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stApp {{ background-color: {bg}; color: {text}; }}
+    
+    /* CRISP SIDEBAR BOX DEFINITION */
     [data-testid="stSidebar"] {{ 
         background-color: {side_bg} !important; 
         border-right: 3px solid {side_border} !important;
         box-shadow: 4px 0px 15px rgba(0,0,0,0.1);
     }}
+    [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {{
+        color: {side_text} !important;
+    }}
+    
     .sidebar-brand {{ text-align: center; padding-bottom: 20px; border-bottom: 1px solid {side_border}; margin-bottom: 20px; }}
     .price-card {{
         background-color: white; padding: 25px; border-radius: 15px; border: 2px solid {sidebar_color};
@@ -74,7 +80,9 @@ st.markdown(f"""
     }}
     [data-testid="stMetric"] {{ background-color: {side_bg}; padding: 15px; border-radius: 10px; border: 1.5px solid {side_border}; }}
     .insight-card {{ background-color: white; padding: 25px; border-radius: 12px; border-left: 6px solid {sidebar_color}; line-height: 1.8; color: #1E293B; box-shadow: 0px 4px 10px rgba(0,0,0,0.08); overflow-wrap: break-word; }}
+    
     div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 8px; font-weight: 800 !important; width: 100%; height: 3.2em; }}
+    div.stButton > button:hover {{ transform: translateY(-2px); box-shadow: 0px 4px 15px {sidebar_color}66; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -123,7 +131,7 @@ def generate_cinematic_ad(prompt):
     except Exception as e:
         st.error(f"Veo Error: {e}"); return None
 
-# --- 6. LOGIN & REGISTRATION ---
+# --- 6. AUTHENTICATION & REGISTRATION ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "❓ Recovery"])
@@ -138,7 +146,7 @@ if not st.session_state.get("authentication_status"):
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            confirm_pw = st.text_input("Confirm Account Password", type="password", key="reg_pw_final")
+            confirm_pw = st.text_input("Create Account Password", type="password", key="reg_pw_final")
             if st.button("Complete Enrollment"):
                 hashed = stauth.Hasher.hash(confirm_pw)
                 conn = sqlite3.connect('breatheeasy.db')
@@ -220,7 +228,7 @@ def render_seat(idx, title, icon, key):
             st.markdown(f'<div class="insight-card">{clean_data}</div>', unsafe_allow_html=True)
         else: st.info(f"Launch swarm to populate {title}.")
 
-seats = [("Analyst", "🕵️", "analyst"), ("Ad Tracker", "📺", "ads"), ("Creative", "🎨", "creative"), ("Strategist", "👔", "strategist"), ("Social Hooks", "✍", "social"), ("GEO Map", "🧠", "geo"), ("Audit Scan", "🌐", "auditor"), ("SEO Blogger", "✍", "seo")]
+seats = [("Analyst", "🕵️", "analyst"), ("Ad Tracker", "📺", "ads"), ("Creative Director", "🎨", "creative"), ("Lead Strategist", "👔", "strategist"), ("Social Hooks", "✍", "social"), ("GEO Map", "🧠", "geo"), ("Audit Scan", "🌐", "auditor"), ("SEO Blogger", "✍", "seo")]
 for i, s in enumerate(seats): render_seat(i, s[0], s[1], s[2])
 
 with tabs[8]:
@@ -232,7 +240,8 @@ with tabs[9]:
     st.subheader("🎬 Veo Cinematic Studio")
     if st.session_state.get('gen'):
         creative_out = st.session_state.report.get('creative', '')
-        v_prompt = st.text_area("Video Scene Description", value=str(creative_out)[:300], height=150)
+        vp = creative_out.split("Video Prompt:")[-1] if "Video Prompt:" in creative_out else creative_out[:300]
+        v_prompt = st.text_area("Video Scene Description", value=str(vp), height=150)
         if st.button("📽️ GENERATE AD"):
             with st.spinner("Rendering..."):
                 v_file = generate_cinematic_ad(v_prompt)
@@ -243,16 +252,16 @@ with tabs[9]:
 with tabs[10]:
     st.header("🤝 Team Collaboration Hub")
     conn = sqlite3.connect('breatheeasy.db')
-    team_df = pd.read_sql_query("SELECT date, user, city, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
+    team_leads = pd.read_sql_query("SELECT date, user, city, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
     c1, c2 = st.columns([1, 2])
     with c1:
         st.subheader("Team Health")
-        st.metric("Total Swarms", len(team_df))
-        st.metric("Markets", len(team_df['city'].unique()))
+        st.metric("Total Swarms", len(team_leads))
+        st.metric("Markets", len(team_leads['city'].unique()))
     with c2:
         st.subheader("Project Pipeline")
-        st.dataframe(team_df, use_container_width=True)
-    st.divider(); st.subheader("🛡️ Security Trace"); st.code(f"Database Integrity: OK | Access Trace: {user_row['username']} | Time: {datetime.now()}")
+        st.dataframe(team_leads, use_container_width=True)
+    st.divider(); st.subheader("🛡️ Security Log"); st.code(f"Integrity: OK | Trace: {user_row['username']} | Time: {datetime.now()}")
     conn.close()
 
 if user_row['role'] == 'admin':
@@ -276,4 +285,4 @@ if user_row['role'] == 'admin':
             if st.button("💉 Inject Credits"):
                 conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amt, target))
                 conn.commit(); st.success(f"Injected {amt} to {target}"); st.rerun()
-        conn.close()
+        conn.close()      conn.close()
