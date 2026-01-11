@@ -44,13 +44,14 @@ st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stDeployButton {{display:none;}}
-    /* SIDEBAR TOGGLE VISIBILITY FIX - PRODUCTION GRADE */
+    /* SIDEBAR TOGGLE VISIBILITY FIX - FORCED CONTRAST */
     [data-testid="sidebar-button"] {{
         background-color: {sidebar_color} !important;
         color: white !important;
         border-radius: 5px !important;
         z-index: 999999;
         display: flex !important;
+        box-shadow: 0px 0px 10px rgba(0,0,0,0.5);
     }}
     [data-testid="stSidebar"] {{ background-color: {bg}; color: {text}; border-right: 1px solid #1E293B; }}
     div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 10px; width: 100%; font-weight: 700; border: none; }}
@@ -79,7 +80,7 @@ def get_db_creds():
         return {'usernames': {row['username']: {'email':row['email'], 'name':row['name'], 'password':row['password']} for _, row in df.iterrows()}}
     except: return {'usernames': {}}
 
-# Initialize with dictionary source
+# Initialize with standard dictionary
 config_creds = get_db_creds()
 authenticator = stauth.Authenticate(config_creds, st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
@@ -100,7 +101,7 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. AUTH FLOW (FIXED ATTRIBUTE ERROR & RECOVERY) ---
+# --- 5. AUTH FLOW (RECOVERY, INVITE, & DYNAMIC DATA FIX) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register", "🤝 Join Team (Invite)", "❓ Recovery"])
@@ -111,28 +112,32 @@ if not st.session_state.get("authentication_status"):
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            # PROACTIVE FIX: Pull password from the source dictionary config_creds
-            new_pw = config_creds['usernames'][u]['password']
-            conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',50,'Logo1.jpeg',?)", (u, e, n, new_pw, f"TEAM_{u}"))
-            conn.commit(); conn.close(); st.success("Account Created!"); st.button("Go to Login", on_click=switch_to_login)
+            # PROACTIVE FIX: Check authenticator object directly for the newly generated hash
+            if u in authenticator.credentials['usernames']:
+                new_pw = authenticator.credentials['usernames'][u]['password']
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',50,'Logo1.jpeg',?)", (u, e, n, new_pw, f"TEAM_{u}"))
+                conn.commit(); conn.close()
+                st.success("Account Created Successfully!"); st.button("Go to Login", on_click=switch_to_login)
 
     with auth_tabs[2]:
         invite_id = st.text_input("Team ID to Join")
         join_reg = authenticator.register_user(location='main', key='join')
         if join_reg and invite_id:
             e, u, n = join_reg
-            new_pw = config_creds['usernames'][u]['password']
-            conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, new_pw, invite_id))
-            conn.commit(); conn.close(); st.success(f"Linked to {invite_id}"); st.button("Proceed", on_click=switch_to_login)
+            if u in authenticator.credentials['usernames']:
+                new_pw = authenticator.credentials['usernames'][u]['password']
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, new_pw, invite_id))
+                conn.commit(); conn.close()
+                st.success(f"Linked to Team {invite_id}!"); st.button("Proceed to Login", on_click=switch_to_login)
 
     with auth_tabs[3]: # PASSWORD RECOVERY
         st.subheader("Credential Recovery")
         try:
             if authenticator.forgot_password(location='main'):
-                st.success('Recovery email sent.')
-        except Exception: st.info("Submit your username to reset.")
+                st.success('Recovery email dispatched.')
+        except Exception: st.info("Enter your username to reset via AI Swarm.")
     st.stop()
 
 # --- 6. DASHBOARD CONTROL ---
@@ -153,7 +158,7 @@ with st.sidebar:
     final_ind = st.text_input("Define Industry") if ind_choice == "Custom" else ind_choice
     
     svc_map = {"HVAC": ["Repair", "Install"], "Medical": ["Telehealth", "Growth"], "Law": ["Injury", "Litigation"], "Solar": ["Audit", "Install"]}
-    svc = st.selectbox("Service Choice", svc_map.get(ind_choice, ["Strategic Service"]))
+    svc = st.selectbox("Service Choice", svc_map.get(ind_choice, ["General Service"]))
     city = st.text_input("Market City"); web_url = st.text_input("Auditor URL")
 
     st.divider(); st.subheader("🤖 Active Swarm Agents")
@@ -170,8 +175,7 @@ with st.sidebar:
     authenticator.logout('Sign Out', 'sidebar')
 
 # --- 7. COMMAND CENTER TABS ---
-hub_display = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
-tabs = st.tabs(["🕵️ Web Auditor", "📝 Ad Generator", "✍️ SEO Blog Creator", "🗓️ Roadmap", "📊 Ads Manager", hub_display, "🤝 Team Share", "⚙️ Admin Hub"])
+tabs = st.tabs(["🕵️ Web Auditor", "📝 Ad Generator", "✍️ SEO Blog Creator", "🗓️ Roadmap", "📊 Ads Manager", "🔬 Diagnostic Lab", "🤝 Team Share", "⚙️ Admin Hub"])
 
 if run_btn:
     if not biz_name or not city: st.error("❌ Brand Name and City required.")
@@ -182,7 +186,7 @@ if st.session_state.get('processing'):
     with tabs[0]:
         st.markdown(f"### <div class='swarm-pulse'></div> Swarm Active: Deployment in Progress...", unsafe_allow_html=True)
         with st.status("🐝 **Specialist Agents Coordinating...**", expanded=True) as status:
-            report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'url': web_url, 'toggles': toggles})
+            report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
             status.update(label="🚀 Swarm Complete!", state="complete", expanded=False)
             
             st.session_state['report'] = report
@@ -206,7 +210,7 @@ with tabs[0]: # WEB AUDITOR SEAT
         st.divider(); st.subheader("🔥 Conversion Attention Heatmap")
         st.image("https://via.placeholder.com/1200x400/0F172A/3B82F6?text=Psychological+Attention+Heatmap", use_column_width=True)
 
-with tabs[1]: # AD GENERATOR
+with tabs[1]: # AD GENERATOR & API
     st.subheader("📝 Ad Generator Agent")
     if st.session_state.get('gen'):
         st.markdown(st.session_state['report'])
@@ -221,10 +225,10 @@ with tabs[2]: # SEO BLOG CREATOR
 with tabs[5]: # UNIVERSAL DIAGNOSTIC LAB
     st.subheader(f"🛡️ {final_ind} Quality & Compliance Audit")
     diag_up = st.file_uploader(f"Upload {final_ind} Evidence", type=['png', 'jpg'])
-    if diag_up: st.success("Visual Evidence Archived.")
+    if diag_up: st.success("Evidence Archived.")
 
-with tabs[6]: # TEAM HUB
-    st.subheader("🤝 Team Collaboration Hub")
+with tabs[6]: # TEAM Hub
+    st.subheader("🤝 Team Collaboration & Viral Invite")
     conn = sqlite3.connect('breatheeasy.db')
     st.write("### 🏆 Team Leaderboard")
     leader_df = pd.read_sql_query("SELECT user as 'Member', COUNT(id) as 'Reports' FROM leads WHERE team_id = ? GROUP BY user ORDER BY Reports DESC", conn, params=(user_row['team_id'],))
@@ -233,7 +237,7 @@ with tabs[6]: # TEAM HUB
 
 if user_row['role'] == 'admin': # ADMIN HUB
     with tabs[-1]:
-        st.subheader("👥 System Management")
+        st.subheader("👥 System Administration")
         conn = sqlite3.connect('breatheeasy.db')
         st.dataframe(pd.read_sql("SELECT username, email, credits FROM users", conn), use_container_width=True)
         u_del = st.text_input("Username to Terminate")
