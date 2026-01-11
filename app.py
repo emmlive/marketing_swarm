@@ -34,7 +34,7 @@ os.environ["OTEL_SDK_DISABLED"] = "true"
 if "GEMINI_API_KEY" in st.secrets:
     os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
 
-st.set_page_config(page_title="TechInAdvance AI | Enterprise Command", page_icon="Logo1.jpeg", layout="wide")
+st.set_page_config(page_title="TechInAdvance AI | Command", page_icon="Logo1.jpeg", layout="wide")
 
 # --- 2. EXHAUSTIVE INDUSTRY & SERVICE LIBRARY ---
 INDUSTRY_LIBRARY = {
@@ -65,7 +65,7 @@ st.markdown(f"""
     /* SIDEBAR STYLING WITH DISTINCT BORDER */
     [data-testid="stSidebar"] {{ 
         background-color: {side_bg} !important; 
-        border-right: 1.5px solid {side_border} !important;
+        border-right: 2px solid {side_border} !important;
         box-shadow: 4px 0px 15px rgba(0,0,0,0.05);
     }}
     [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {{
@@ -143,15 +143,15 @@ if not st.session_state.get("authentication_status"):
     with auth_tabs[1]:
         st.markdown("### Select Enterprise Tier")
         p1, p2, p3 = st.columns(3)
-        with p1: st.markdown('<div class="price-card"><div class="price-header">BASIC</div><div class="price-value">$99</div></div>', unsafe_allow_html=True)
-        with p2: st.markdown('<div class="price-card"><div class="price-header">PRO</div><div class="price-value">$499</div></div>', unsafe_allow_html=True)
-        with p3: st.markdown('<div class="price-card"><div class="price-header">ENTERPRISE</div><div class="price-value">$1,999</div></div>', unsafe_allow_html=True)
+        with p1: st.markdown(f'<div class="price-card"><div class="price-header">BASIC</div><div class="price-value">$99</div></div>', unsafe_allow_html=True)
+        with p2: st.markdown(f'<div class="price-card"><div class="price-header">PRO</div><div class="price-value">$499</div></div>', unsafe_allow_html=True)
+        with p3: st.markdown(f'<div class="price-card"><div class="price-header">ENTERPRISE</div><div class="price-value">$1,999</div></div>', unsafe_allow_html=True)
         plan = st.selectbox("Select Tier", ["Basic", "Pro", "Enterprise"])
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
             conn = sqlite3.connect('breatheeasy.db')
-            # HARDENED FIX: Pulling password directly from registration logic state mapping
+            # HARDENED FIX: Accessing credentials directly from the authenticator config mapping
             new_pw = authenticator.credentials['usernames'][u]['password']
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, new_pw, plan, f"TEAM_{u}"))
             conn.commit(); conn.close(); st.success("Account Created! Please Log In."); st.rerun()
@@ -233,7 +233,7 @@ with tabs[9]:
     if st.session_state.get('gen'):
         creative_out = st.session_state.report.get('creative', '')
         vp = creative_out.split("Video Prompt:")[-1] if "Video Prompt:" in creative_out else creative_out[:300]
-        v_prompt = st.text_area("Video Scene", value=vp, height=150)
+        v_prompt = st.text_area("Video Scene Description", value=vp, height=150)
         if st.button("📽️ GENERATE AD"):
             with st.spinner("Rendering..."):
                 v_file = generate_cinematic_ad(v_prompt)
@@ -246,7 +246,7 @@ with tabs[10]:
     team_df = pd.read_sql_query("SELECT date, user, service, city FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
     st.dataframe(team_df, use_container_width=True); conn.close()
 
-# --- 10. ADMIN CONTROL (ZERO OMISSIONS) ---
+# --- 10. ADMIN CONTROL ---
 if user_row['role'] == 'admin':
     with tabs[11]:
         st.header("⚙️ Admin Control")
@@ -254,20 +254,16 @@ if user_row['role'] == 'admin':
         all_users = pd.read_sql_query("SELECT username, email, credits, package FROM users", conn)
         st.dataframe(all_users, use_container_width=True)
         st.divider()
-        
-        u_del = st.text_input("Terminate User Username")
+        u_del = st.text_input("Purge Username")
         if st.button("❌ Remove User"):
             if u_del != 'admin':
                 conn.execute("DELETE FROM users WHERE username=?", (u_del,))
                 conn.commit(); st.success(f"Purged {u_del}"); st.rerun()
             else: st.error("Admin protected.")
-
         st.divider()
-        
         target_u = st.selectbox("Refill User Credits", all_users['username'])
         amount = st.number_input("Refill Amount", value=50)
         if st.button("💉 Inject Credits"):
             conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amount, target_u))
             conn.commit(); st.success("Credits Refilled."); st.rerun()
-        
         conn.close()
