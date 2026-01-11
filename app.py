@@ -109,7 +109,7 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. AUTH FLOW (RECOVERY, INVITE, & DYNAMIC DATA FIX) ---
+# --- 5. AUTH FLOW (FIXED KEYERROR & RECOVERY) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team (Invite)", "❓ Recovery"])
@@ -121,13 +121,13 @@ if not st.session_state.get("authentication_status"):
         c1, c2, c3 = st.columns(3)
         c1.metric("Basic", "$99/mo", "50 Credits")
         c2.metric("Pro", "$499/mo", "250 Credits")
-        c3.metric("Enterprise", "$1999/mo", "Unlimited Swarms")
+        c3.metric("Enterprise", "$1999/mo", "Unlimited")
         plan = st.selectbox("Select Tier", ["Basic", "Pro", "Enterprise"])
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            # THE FIX: Access password directly from the modified config_creds updated by component
-            pw = config_creds['usernames'][u]['password']
+            # FIX: Pull from the internal authenticator storage which IS updated in real-time
+            pw = authenticator.credentials['usernames'][u]['password']
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
             conn.commit(); conn.close(); st.success("Account Created!"); st.button("Log In Now", on_click=switch_to_login)
@@ -137,7 +137,7 @@ if not st.session_state.get("authentication_status"):
         join_reg = authenticator.register_user(location='main', key='join')
         if join_reg and invite_id:
             e, u, n = join_reg
-            pw = config_creds['usernames'][u]['password']
+            pw = authenticator.credentials['usernames'][u]['password']
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, pw, invite_id))
             conn.commit(); conn.close(); st.success(f"Linked to {invite_id}!"); st.button("Proceed", on_click=switch_to_login)
@@ -178,7 +178,7 @@ with st.sidebar:
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 7. COMMAND CENTER TABS ---
+# --- 7. COMMAND CENTER TABS (THE 6 SEATS) ---
 hub_name = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
 tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", "🤝 Team Share", "⚙️ Admin"])
 
@@ -206,10 +206,10 @@ def render_seat(idx, title, icon, data_key):
     with tabs[idx]:
         st.subheader(f"{icon} {title} Command Seat")
         if st.session_state.get('gen'):
-            # Proactively fetch agent-specific content from the returned dictionary
-            agent_data = st.session_state['report'].get(data_key, st.session_state['report'].get('full_report', 'Intelligence pending...'))
+            # Fetch agent-specific data from the report dictionary
+            agent_data = st.session_state['report'].get(data_key, "Intelligence pending...")
             
-            if idx == 0: # Analyst Seat adds Branded Exports
+            if idx == 0: # Analyst Seat adds Exports
                 st.subheader("📥 Export Deliverables")
                 c1, c2 = st.columns(2)
                 r_logo = user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg"
@@ -217,9 +217,8 @@ def render_seat(idx, title, icon, data_key):
                 c2.download_button("📕 PDF Report", create_pdf(agent_data, svc, city, r_logo), f"Report_{city}.pdf", use_container_width=True)
             
             st.markdown(agent_data)
-        else: st.info(f"Deploy Swarm to activate the {title} specialist.")
+        else: st.info(f"Deploy Swarm to populate {title} intelligence.")
 
-# Link Tabs to Agent Dictionary Keys
 render_seat(0, "Market Analyst", "🕵️", "analyst")
 render_seat(1, "Creative Director", "🎨", "creative")
 render_seat(2, "Lead Strategist", "👔", "strategist")
