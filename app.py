@@ -20,7 +20,7 @@ if "GEMINI_API_KEY" in st.secrets:
 
 st.set_page_config(page_title="BreatheEasy AI | Enterprise Command", page_icon="🌬️", layout="wide")
 
-# This CSS hides the top-right icons, hamburger menu, and Streamlit footer
+# This CSS hides the top-right icons, hamburger menu, and Streamlit footer for a White Label look
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -35,24 +35,27 @@ st.markdown("""
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
+    # Users Table
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT, 
                   package TEXT, credits INTEGER DEFAULT 0, logo_path TEXT, team_id TEXT)''')
+    # Leads Table
     c.execute('''CREATE TABLE IF NOT EXISTS leads 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, 
                   service TEXT, city TEXT, content TEXT, team_id TEXT, is_shared INTEGER DEFAULT 0, score INTEGER)''')
     
-    c.execute("SELECT username FROM users WHERE username='admin'")
-    if not c.fetchone():
-        hashed_pw = stauth.Hasher.hash('admin123')
-        c.execute("INSERT INTO users (username, email, name, password, role, package, credits, team_id) VALUES (?,?,?,?,?,?,?,?)",
-                  ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin', 'Unlimited', 9999, 'HQ_001'))
+    # FIX: Use INSERT OR IGNORE to prevent IntegrityError on app reload
+    hashed_pw = stauth.Hasher.hash('admin123')
+    c.execute("""INSERT OR IGNORE INTO users (username, email, name, password, role, package, credits, team_id) 
+                 VALUES (?,?,?,?,?,?,?,?)""",
+              ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin', 'Unlimited', 9999, 'HQ_001'))
     conn.commit(); conn.close()
 
 init_db()
 
 # --- 3. THE "BREATHEEASY" GAUGE (Diagnostic Component) ---
 def render_breatheeasy_gauge(score, industry):
+    """Renders a custom CSS gauge that adapts its labels based on the industry."""
     color = "#ff4b4b" if score < 4 else "#ffa500" if score < 7 else "#2ecc71"
     label = "BreatheEasy™ Score" if industry == "HVAC" else f"{industry} Health Score"
     st.markdown(f"""
@@ -91,6 +94,7 @@ def get_db_creds():
     df = pd.read_sql_query("SELECT * FROM users", conn); conn.close()
     return {'usernames': {row['username']: {'email': row['email'], 'name': row['name'], 'password': row['password']} for _, row in df.iterrows()}}
 
+# Authenticator setup using secrets.toml cookie settings
 authenticator = stauth.Authenticate(get_db_creds(), st.secrets['cookie']['name'], st.secrets['cookie']['key'], int(st.secrets['cookie']['expiry_days']))
 
 if not st.session_state.get("authentication_status"):
@@ -113,8 +117,6 @@ if not st.session_state.get("authentication_status"):
     st.stop()
 
 # --- 6. SIDEBAR & AGENT TOGGLES ---
-# Only reach here if authenticated
-user_creds = get_db_creds()['usernames'].get(st.session_state["username"])
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
@@ -158,7 +160,7 @@ with st.sidebar:
 # --- 7. TABS ---
 tabs = st.tabs(["📝 Ad Copy", "🗓️ Schedule", "🖼️ Visual Assets", "🚀 Push to Ads", "🔬 Diagnostic Lab", "🤝 Team Share", "📊 Database"])
 
-with tabs[0]: # 📝 Ad Copy Output
+with tabs[0]: # 📝 Ad Copy Output & Downloads
     if run_btn and city:
         if user_row['credits'] > 0:
             with st.status("🐝 Swarm Processing Phases...", expanded=True):
@@ -180,6 +182,12 @@ with tabs[0]: # 📝 Ad Copy Output
         st.divider()
         st.markdown(st.session_state['report'])
 
+with tabs[1]: # 🗓️ Schedule
+    st.subheader("🗓️ Production & Distribution Schedule")
+    if st.session_state.get('gen'):
+        st.info("Organized by the Time Management Director.")
+        st.write(st.session_state['report'])
+
 with tabs[3]: # 🚀 Push to Ads
     st.subheader("🚀 One-Tap Booking Channel")
     promo = "BREATHE2026"
@@ -192,9 +200,10 @@ with tabs[4]: # 🔬 Diagnostic Lab
     st.subheader(f"🔬 {main_cat} Diagnostic Lab")
     diag_up = st.file_uploader("Upload Evidence Photos", type=['png', 'jpg'])
     if diag_up:
+        # Autonomous score logic based on selected industry
         score = 4 if main_cat == "HVAC" else 9 if main_cat == "Medical" else 6
         render_breatheeasy_gauge(score, main_cat)
-        st.image(diag_up, caption="AI Vision Analysis in progress...", width=500)
+        st.image(diag_up, caption="Processing visual evidence...", width=500)
 
 with tabs[5]: # 🤝 Team Share
     st.subheader("🤝 Team Collaboration")
