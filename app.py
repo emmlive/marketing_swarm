@@ -3,7 +3,6 @@ import streamlit_authenticator as stauth
 import os
 import sqlite3
 import pandas as pd
-import stripe
 from datetime import datetime
 from main import run_marketing_swarm 
 from docx import Document
@@ -12,9 +11,14 @@ from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
 
-# --- 1. SYSTEM INITIALIZATION & STRIPE CONFIG ---
-stripe.api_key = st.secrets.get("STRIPE_API_KEY", "sk_test_placeholder")
+# --- STRIPE ERROR HANDLING ---
+try:
+    import stripe
+    stripe.api_key = st.secrets.get("STRIPE_API_KEY", "sk_test_placeholder")
+except ImportError:
+    st.error("Stripe library not found. Please add 'stripe' to requirements.txt")
 
+# --- 1. SYSTEM INITIALIZATION ---
 if 'theme' not in st.session_state:
     st.session_state.theme = 'dark'
 
@@ -67,7 +71,6 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS leads 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, 
                   service TEXT, city TEXT, content TEXT, team_id TEXT, is_shared INTEGER DEFAULT 0, score INTEGER)''')
-    
     hashed_pw = stauth.Hasher.hash('admin123')
     c.execute("""INSERT OR IGNORE INTO users (username, email, name, password, role, package, credits, logo_path, team_id) 
                  VALUES (?,?,?,?,?,?,?,?,?)""",
@@ -155,22 +158,18 @@ if not st.session_state.get("authentication_status"):
             "Enterprise ($1999/mo - Unlimited)": {"id": "price_ent", "creds": 9999}
         }
         selected_plan = st.selectbox("Select Subscription Plan", list(plan_options.keys()))
-        
         try:
             reg_result = authenticator.register_user(location='main')
             if reg_result:
                 email_reg, username_reg, name_reg = reg_result
                 hashed_password = authenticator.credentials['usernames'][username_reg]['password']
-                
-                # Stripe Checkout Redirect
                 payment_url = create_checkout_session(selected_plan, plan_options[selected_plan]["id"], email_reg)
                 st.link_button("💳 Proceed to Secure Payment", payment_url)
-                
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("INSERT OR IGNORE INTO users (username, email, name, password, role, package, credits, team_id, logo_path) VALUES (?,?,?,?,?,?,?,?,?)",
                              (username_reg, email_reg, name_reg, hashed_password, 'member', selected_plan.split()[0], plan_options[selected_plan]["creds"], f"TEAM_{username_reg}", "Logo1.jpeg"))
                 conn.commit(); conn.close()
-                st.success("Registration Successful! Redirecting to Payment...")
+                st.success("Registration Successful! Proceed to payment.")
                 st.session_state.auth_tab = "🔑 Login"
         except Exception: st.info("Please fill the form to join TechInAdvance.")
     st.stop()
@@ -186,31 +185,23 @@ with st.sidebar:
     st.markdown(f"### 👋 {st.session_state['name']} (`{user_row['package']}`)")
     st.metric("Credits Available", user_row['credits'])
     
-    # White-Labeling for Paid Users
     if user_row['package'] in ["Pro", "Enterprise", "Unlimited"]:
-        st.divider()
-        st.subheader("🎨 Custom White-Labeling")
+        st.divider(); st.subheader("🎨 Custom White-Labeling")
         custom_logo = st.file_uploader("Upload Company Logo", type=['png', 'jpg', 'jpeg'])
         if custom_logo:
             save_path = f"user_logos/{st.session_state['username']}_logo.png"
             os.makedirs("user_logos", exist_ok=True)
             with open(save_path, "wb") as f: f.write(custom_logo.getbuffer())
-            conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("UPDATE users SET logo_path = ? WHERE username = ?", (save_path, st.session_state['username']))
-            conn.commit(); conn.close(); st.success("Logo applied to all strategy reports!")
+            conn = sqlite3.connect('breatheeasy.db'); conn.execute("UPDATE users SET logo_path = ? WHERE username = ?", (save_path, st.session_state['username'])); conn.commit(); conn.close(); st.success("Logo applied!")
 
-    st.divider()
-    biz_name = st.text_input("Business Name")
-    biz_usp = st.text_area("Unique Selling Proposition")
-    
+    st.divider(); biz_name = st.text_input("Business Name"); biz_usp = st.text_area("Unique Selling Proposition")
     st.divider()
     toggles = {"audit": st.toggle("🌐 Web Auditor", value=True), "advice": st.toggle("👔 Advice Director", value=True), "sem": st.toggle("🔍 SEM Specialist"), "seo": st.toggle("✍️ SEO Creator"), "repurpose": st.toggle("✍🏾 Content Repurposer"), "geo": st.toggle("🧠 GEO Specialist", disabled=(user_row['package']=="Basic")), "analytics": st.toggle("📊 Analytics Specialist")}
     
     web_url = st.text_input("Website URL") if toggles["audit"] else ""
     ind_choice = st.selectbox("Industry", ["HVAC", "Medical", "Law", "Solar", "Real Estate", "Custom"])
     final_ind = st.text_input("Enter Industry Name") if ind_choice == "Custom" else ind_choice
-    svc = st.text_input("Service Type")
-    city = st.text_input("Target City")
+    svc = st.text_input("Service Type"); city = st.text_input("Target City")
     
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
@@ -219,15 +210,12 @@ with st.sidebar:
 hub_display_name = f"🔬 {final_ind} Diagnostic Hub" if final_ind else "🔬 Diagnostic Lab"
 tabs = st.tabs(["📝 Ad Copy", "🗓️ User Schedule", "🖼️ Visual Assets", "🚀 Push to Ads", hub_display_name, "⚙️ Admin"])
 
-with tabs[0]: # Strategic Output
+with tabs[0]:
     if run_btn and city and biz_name:
-        with st.status("🐝 Swarm Active: Domain Specialists Coordinating...", expanded=True):
+        with st.status("🐝 Swarm Active...", expanded=True):
             report = run_marketing_swarm({'city': city, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
             st.session_state['report'] = report; st.session_state['gen'] = True
-            conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
-            conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id, is_shared) VALUES (?,?,?,?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, city, str(report), user_row['team_id'], 1))
-            conn.commit(); conn.close(); st.rerun()
+            conn = sqlite3.connect('breatheeasy.db'); conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],)); conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id, is_shared) VALUES (?,?,?,?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, city, str(report), user_row['team_id'], 1)); conn.commit(); conn.close(); st.rerun()
 
     if st.session_state.get('gen'):
         st.subheader("📥 Export Deliverables")
@@ -237,22 +225,19 @@ with tabs[0]: # Strategic Output
         c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, report_logo), f"Report_{city}.pdf", use_container_width=True)
         st.markdown(st.session_state['report'])
 
-with tabs[1]: # Production Schedule
+with tabs[1]:
     st.subheader("🗓️ Your 30-Day Project Roadmap")
     if st.session_state.get('gen'): st.write(st.session_state['report'])
 
-with tabs[4]: # DYNAMIC DIAGNOSTIC HUB
+with tabs[4]:
     st.subheader(f"🛡️ {final_ind} Quality & Safety Audit")
-    diag_up = st.file_uploader(f"Upload {final_ind} Field Evidence", type=['png', 'jpg'])
+    diag_up = st.file_uploader(f"Upload {final_ind} Evidence", type=['png', 'jpg'])
     if diag_up:
         score = 8 if final_ind == "Medical" else 4 if final_ind == "HVAC" else 7
         render_breatheeasy_gauge(score, final_ind)
-        if st.button("💾 SAVE SCORE TO DATABASE"):
-            conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("UPDATE leads SET score = ? WHERE user = ? ORDER BY id DESC LIMIT 1", (score, st.session_state['username']))
-            conn.commit(); conn.close(); st.success("Score Saved!")
+        if st.button("💾 SAVE SCORE"):
+            conn = sqlite3.connect('breatheeasy.db'); conn.execute("UPDATE leads SET score = ? WHERE user = ? ORDER BY id DESC LIMIT 1", (score, st.session_state['username'])); conn.commit(); conn.close(); st.success("Score Saved!")
 
-# Admin Hub Restored
 if user_row['role'] == 'admin':
     with tabs[-1]:
         st.subheader("👥 User & Credit Administration")
