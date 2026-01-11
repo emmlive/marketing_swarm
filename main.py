@@ -128,7 +128,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
     @listen("discovery_complete")
     def phase_2_execution(self):
-        """Step 2: Creative, SEO & Content Production"""
+        """Step 2: Creative, SEO & Content Production (Hardened Assignment)"""
         creative_task = Task(
             description="Build 3 ad variants and a specific 'Video Prompt:' for Veo.",
             agent=self.agents["creative"],
@@ -137,27 +137,34 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         
         production_tasks = [creative_task]
         
+        # Chapter 9: SEO Blogger
+        seo_task = None
         if self.toggles.get('seo'):
             seo_task = Task(
-                description="Write a 2,000-word SEO Article based on findings.",
+                description="Write a 2,000-word authority SEO article based on research.",
                 agent=self.agents["seo_blogger"],
-                expected_output="SEO Article."
+                expected_output="2,000-word SEO Article."
             )
             production_tasks.append(seo_task)
 
+        # Distribution Logic
+        social_task = None
         if self.toggles.get('social'):
-            social_task = Task(description="Viral hooks.", agent=self.agents["social_agent"], expected_output="Social Hooks.")
+            social_task = Task(description="Viral hooks.", agent=self.agents["social_agent"], expected_output="Social Plan.")
             production_tasks.append(social_task)
 
+        geo_task = None
         if self.toggles.get('geo'):
-            geo_task = Task(description="GEO AI citation plan.", agent=self.agents["geo_specialist"], expected_output="GEO Report.")
+            geo_task = Task(description="GEO AI search plan.", agent=self.agents["geo_specialist"], expected_output="GEO Report.")
             production_tasks.append(geo_task)
 
         Crew(agents=list(self.agents.values()), tasks=production_tasks, process=Process.sequential).kickoff()
         
+        # HARDENED ASSIGNMENT: Mapping by object reference, not list index
         self.state.ad_drafts = creative_task.output.raw
-        if self.toggles.get('seo'): self.state.seo_article = production_tasks[1].output.raw
-        if self.toggles.get('social'): self.state.social_plan = production_tasks[-1].output.raw
+        if seo_task: self.state.seo_article = seo_task.output.raw
+        if social_task: self.state.social_plan = social_task.output.raw
+        if geo_task: self.state.geo_intel = geo_task.output.raw
         
         return "execution_complete"
 
@@ -173,12 +180,12 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         self.state.production_schedule = str(result)
         return "swarm_finished"
 
-# --- 5. EXECUTION WRAPPER (FULL REPORT RESTORED) ---
+# --- 5. EXECUTION WRAPPER (FULL REPORT INTEGRATED) ---
 def run_marketing_swarm(inputs):
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
-    # Unified report for global exports (RESTORED)
+    # Unified report for global exports
     formatted_string_report = f"""
 # 🌬️ {inputs['biz_name']} Omni-Swarm Report
 
@@ -198,6 +205,9 @@ def run_marketing_swarm(inputs):
 
 ### Long-Form SEO Content
 {flow.state.seo_article}
+
+### Local GEO AI Optimization
+{flow.state.geo_intel}
 
 ### Social Media Distribution
 {flow.state.social_plan}
