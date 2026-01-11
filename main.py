@@ -36,89 +36,93 @@ gemini_llm = LLM(
 search_tool = SerperDevTool(api_key=os.getenv("SERPER_API_KEY"))
 scrape_tool = ScrapeWebsiteTool()
 
-# --- 3. AGENT DEFINITIONS (Refined for Psychology & SaaS ROI) ---
+# --- 3. AGENT DEFINITIONS (13 Specialized Roles) ---
 def get_swarm_agents(inputs):
+    # Context-aware variables for agents
     biz = inputs.get('biz_name', 'The Business')
     usp = inputs.get('usp', 'High-quality service')
     ind = inputs.get('industry', 'General Industry')
+    city = inputs.get('city', 'the local area')
     url = inputs.get('url', 'the provided website')
 
     return {
         "analyst": Agent(
             role="Senior Conversion Psychologist & Market Analyst",
-            goal=f"Analyze competitors in {inputs['city']} and {url} through the lens of Consumer Behavior.",
+            goal=f"Identify real-time competitor gaps in {city} for {biz} through the lens of Consumer Behavior.",
             backstory=(
-                f"You are an expert in Neuromarketing and Cialdini's 6 Principles of Persuasion. "
-                f"Your job is to identify real-time competitor gaps in {inputs['city']} while diagnosing "
-                f"Conversion Leaks for {biz}. You look for Trust Deficits, Cognitive Friction, and "
-                f"Value Proposition gaps. You provide the 'Psychological Truth' of the market."
+                f"You are an expert in Neuromarketing and Cialdini's Principles of Persuasion. "
+                f"Your job is to find 'Conversion Leaks' on {url} and identify Trust Deficits "
+                f"among competitors. You identify where the psychological 'friction' is preventing sales."
             ),
             tools=[search_tool, scrape_tool], llm=gemini_llm, verbose=True
         ),
         "creative": Agent(
             role="Lead Creative Strategist",
-            goal=f"Transform the Analyst's psychological findings and {biz}'s USP ({usp}) into Navy/White branded ad assets.",
-            backstory="Psychological builder. You use the Navy (#000080) and White palette to convey elite trust and trigger emotional buying responses.",
+            goal=f"Transform {biz}'s USP ({usp}) into Navy/White branded ad assets that trigger emotional buying.",
+            backstory="Psychological builder. You use Navy (#000080) and White to convey elite trust and authority.",
             llm=gemini_llm, verbose=True
         ),
         "web_auditor": Agent(
             role="Website Audit Manager",
-            goal=f"Identify conversion leaks and UX friction on {url}.",
-            backstory="UX specialist. You apply Fitts's Law and Hick's Law to find exactly why visitors are not turning into leads for this specific brand.",
+            goal=f"Identify conversion 'leaks' on {url}.",
+            backstory="UX specialist focused on 'Cognitive Load' and Fitts's Law. You diagnose why visitors don't convert.",
             tools=[scrape_tool], llm=gemini_llm, verbose=True
         ),
         "advice_director": Agent(
             role="Marketing Advice Director",
-            goal=f"Provide a high-level strategic ROI roadmap for {biz} in {inputs['city']}.",
-            backstory="Veteran CMO who ensures the Swarm's tactical output aligns with long-term business growth and ROI.",
+            goal=f"Provide a CMO-level ROI strategy for {biz} in {city}.",
+            backstory="Veteran strategist. You ensure the brand avoids generic marketing and focuses on high-margin growth.",
             llm=gemini_llm, verbose=True
         ),
         "time_director": Agent(
             role="Time Management Director",
             goal="Create a bespoke project management roadmap for the client.",
-            backstory="Expert PM. You translate complex marketing tasks into a simple 30-day Gantt-style production schedule.",
+            backstory="Expert PM. You translate complex swarm outputs into a simple 30-day production schedule.",
             llm=gemini_llm, verbose=True
         ),
         "sem_specialist": Agent(
             role="SEM Specialist",
             goal="Build high-intent Google Ads keyword strategies.",
-            backstory="PPC expert focused on Quality Score and 'Bottom of Funnel' intent.",
+            backstory="PPC expert. You focus on 'Bottom of Funnel' triggers that drive immediate phone calls and leads.",
             llm=gemini_llm, verbose=True
         ),
         "geo_specialist": Agent(
-            role="GEO Specialist",
-            goal="Optimize brand citations for Generative AI Search Engines.",
-            backstory="AI Search expert focused on citation authority in Perplexity and Gemini.",
+            role="GEO Specialist (Generative Engine Optimization)",
+            goal=f"Force ChatGPT, Perplexity, and Gemini to cite {biz} as the #1 local authority.",
+            backstory=(
+                "AI Search expert. You focus on 'Citation Velocity' and 'Entity Linking.' "
+                "You ensure LLMs view the brand as a community pillar by mapping unique data points."
+            ),
             llm=gemini_llm, verbose=True
         ),
         "analytics_specialist": Agent(
             role="Web Analytics Specialist",
-            goal="Define the tracking plan (GTM/GA4) for the campaign.",
-            backstory="Data scientist focused on conversion tracking and precise attribution.",
+            goal="Define a precise conversion tracking plan (GTM/GA4).",
+            backstory="Data scientist focused on attribution and multi-touch conversion paths.",
             llm=gemini_llm, verbose=True
         ),
         "seo_creator": Agent(
             role="SEO Blog Creator",
-            goal="Generate keyword-optimized authority articles for local ranking.",
-            backstory="Content strategist who balances E-E-A-T requirements with high readability.",
+            goal="Generate E-E-A-T compliant local authority content.",
+            backstory="Content strategist balancing local search intent with reader value.",
             llm=gemini_llm, verbose=True
         ),
         "repurposer": Agent(
             role="Content Repurposer",
-            goal="Localize core assets into social hooks for GBP, Facebook, Quora, and Reddit.",
-            backstory="Neighborly communicator. You ensure the brand feels like a local pillar in the community.",
+            goal="Localize 1 asset into platform-specific social hooks (GBP/Reddit/Quora).",
+            backstory="Neighborly communicator. You ensure the brand sounds like a trusted local expert.",
             llm=gemini_llm, verbose=True
         ),
         "vision_inspector": Agent(
             role=f"Autonomous {ind} Vision Inspector",
-            goal=f"Analyze industry-specific evidence and safety protocols for {ind}.",
-            backstory=f"Risk management expert. You look for 'receipts' of safety and quality that build elite trust.",
+            goal=f"Analyze industry-specific visual evidence and safety protocols.",
+            backstory=f"Risk management expert for {ind}. You identify hazards or 'Receipts of Safety' visually.",
             llm=gemini_llm, verbose=True
         ),
         "strategist": Agent(
             role="Lead Strategist (The Manager)",
             goal="Audit the entire swarm output to ensure maximum user value and ROI.",
-            backstory="Quality controller. You ensure all agent outputs are non-generic and align with the Navy/White brand guidelines.",
+            backstory="Final gatekeeper. You ensure all output is non-generic, high-fidelity, and on-brand.",
             llm=gemini_llm, verbose=True
         )
     }
@@ -137,21 +141,18 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         """Phase 1: Discovery & Technical Audit."""
         active_tasks = []
         active_agents = [self.agents["analyst"]]
-        
-        # Mandatory Conversion Psychology Research
         active_tasks.append(Task(
-            description=f"Analyze the market psychology for {self.inputs['biz_name']} in {self.inputs['city']}. Find 3 competitors and diagnose their persuasion gaps.",
+            description=f"Analyze the market psychology and competitor gaps for {self.inputs['biz_name']} in {self.inputs['city']}.",
             agent=self.agents["analyst"],
-            expected_output="Conversion Psychology Map and Competitor Audit."
+            expected_output="Conversion Psychology Map and Market Truth Report."
         ))
 
-        # Optional Deep Website Audit
         if self.toggles.get('audit') and self.inputs.get('url'):
             active_agents.append(self.agents["web_auditor"])
             active_tasks.append(Task(
-                description=f"Audit {self.inputs['url']} for cognitive friction and UX conversion leaks.",
+                description=f"Audit {self.inputs['url']} for conversion leaks and cognitive load issues.",
                 agent=self.agents["web_auditor"],
-                expected_output="Technical UX and Conversion Audit Findings."
+                expected_output="Technical Site Audit findings."
             ))
 
         result = Crew(agents=active_agents, tasks=active_tasks).kickoff()
@@ -164,11 +165,11 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         active_tasks = []
         active_agents = [self.agents["creative"]]
         
-        # Mandatory Creative (Injecting Psychology into Copy)
+        # Mandatory Creative
         active_tasks.append(Task(
-            description=f"Create 3 ad variants using {self.inputs['usp']} and the Analyst's psychology findings. Focus on Elite Trust (Navy/White).",
+            description=f"Create Navy/White ad variants using {self.inputs['usp']} and findings from the Psychologist.",
             agent=self.agents["creative"],
-            expected_output="3 Ad variants (Punchy, Story, Urgency) and visual prompts."
+            expected_output="3 Ad variants and visual prompts."
         ))
 
         # Dynamic Modular Specialists
@@ -182,7 +183,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
         if self.toggles.get('geo'):
             active_agents.append(self.agents["geo_specialist"])
-            active_tasks.append(Task(description="AI Search Citations Map.", agent=self.agents["geo_specialist"], expected_output="GEO Report."))
+            active_tasks.append(Task(description="AI Search Citations Map (Perplexity/ChatGPT triggers).", agent=self.agents["geo_specialist"], expected_output="GEO Report."))
 
         if self.toggles.get('seo'):
             active_agents.append(self.agents["seo_creator"])
@@ -195,17 +196,21 @@ class MarketingSwarmFlow(Flow[SwarmState]):
     @listen("execution_complete")
     def phase_3_logistics_and_audit(self):
         """Phase 3: Logistics and Final Manager Audit."""
+        
+
+[Image of a project management Gantt chart]
+
         # Task 1: Schedule
         time_task = Task(
-            description="Build a 30-day Gantt-style roadmap for the implementation of these assets.",
+            description="Build a 30-day project roadmap for the user to execute these assets.",
             agent=self.agents["time_director"],
-            expected_output="30-Day Production Schedule."
+            expected_output="Gantt-style Production Schedule."
         )
         # Task 2: Final Gatekeeping
         val_task = Task(
-            description="Review all outputs. Ensure they are error-free, persuasive, and follow the Navy/White elite brand standard.",
+            description="Review all outputs for ROI, conversion psychology alignment, and brand consistency.",
             agent=self.agents["strategist"],
-            expected_output="Final Manager Approval Summary."
+            expected_output="Final Manager Approval and Summary."
         )
 
         result = Crew(agents=[self.agents["time_director"], self.agents["strategist"]], tasks=[time_task, val_task]).kickoff()
