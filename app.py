@@ -41,12 +41,12 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DATABASE ARCHITECTURE ---
+# --- 2. DATABASE ARCHITECTURE (BUG-FREE SCHEMA) ---
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
-    # 1. username, 2. email, 3. name, 4. password, 5. role, 
-    # 6. package, 7. credits, 8. logo_path, 9. team_id (Total 9 columns)
+    
+    # Ensure Table has all 9 columns
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT, 
                   package TEXT, credits INTEGER DEFAULT 0, logo_path TEXT, team_id TEXT)''')
@@ -57,12 +57,25 @@ def init_db():
     
     hashed_pw = stauth.Hasher.hash('admin123')
     
-    # FIX: Added the 9th value (None) for logo_path before 'HQ_001'
-    c.execute("""INSERT OR IGNORE INTO users VALUES (?,?,?,?,?,?,?,?,?)""",
+    # FIX: Use explicit column names to avoid count mismatch errors
+    c.execute("""INSERT OR IGNORE INTO users 
+                 (username, email, name, password, role, package, credits, logo_path, team_id) 
+                 VALUES (?,?,?,?,?,?,?,?,?)""",
               ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin', 'Unlimited', 9999, None, 'HQ_001'))
     
     conn.commit()
     conn.close()
+
+# SELF-HEALING: Recreate DB if schema is old
+try:
+    init_db()
+    conn = sqlite3.connect('breatheeasy.db')
+    pd.read_sql_query("SELECT team_id FROM users LIMIT 1", conn)
+    conn.close()
+except Exception:
+    if os.path.exists('breatheeasy.db'):
+        os.remove('breatheeasy.db')
+    init_db()
 
 # --- 3. EXPORT GENERATORS ---
 def create_word_doc(content, logo_path=None):
@@ -100,8 +113,14 @@ def render_breatheeasy_gauge(score, industry):
 # --- 5. AUTHENTICATION & SaaS REGISTRATION ---
 def get_db_creds():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
-    df = pd.read_sql_query("SELECT * FROM users", conn); conn.close()
-    return {'usernames': {row['username']: {k: row[k] for k in row.index} for _, row in df.iterrows()}}
+    # Selection restricted to core auth columns to prevent DatabaseError
+    df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
+    conn.close()
+    return {'usernames': {row['username']: {
+        'email': row['email'], 
+        'name': row['name'], 
+        'password': row['password']
+    } for _, row in df.iterrows()}}
 
 authenticator = stauth.Authenticate(get_db_creds(), st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
@@ -116,7 +135,8 @@ if not st.session_state.get("authentication_status"):
             e, u, n = res; pw = stauth.Hasher.hash(authenticator.credentials['usernames'][u]['password'])
             creds = 5 if "Basic" in plan else 50 if "Pro" in plan else 9999
             conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,?,?,?)", (u, e, n, pw, plan.split()[0], creds, None, f"TEAM_{u}"))
+            conn.execute("INSERT INTO users (username, email, name, password, role, package, credits, team_id) VALUES (?,?,?,?,?,?,?,?)", 
+                         (u, e, n, pw, 'member', plan.split()[0], creds, f"TEAM_{u}"))
             conn.commit(); conn.close(); st.success("Registered! Login to begin.")
     with f_tab: st.info("Manual Reset: Contact support@airductify.com")
     st.stop()
@@ -161,7 +181,7 @@ tabs = st.tabs(["📝 Ad Copy", "🗓️ User Schedule", "🖼️ Visual Assets"
 with tabs[0]: # Ad Copy & Strategic Logic
     if run_btn and city:
         if user_row['credits'] > 0 and biz_name:
-            with st.status("🐝 Swarm Processing: Managers, Analysts & Creatives active...", expanded=True):
+            with st.status("🐝 Swarm Active: Managers, Analysts & Creatives active...", expanded=True):
                 report = run_marketing_swarm({'city': city, 'industry': ind, 'service': svc, 'biz_name': biz_name, 'usp': biz_usp, 'url': web_url, 'toggles': toggles})
                 st.session_state['report'] = report
                 st.session_state['gen'] = True
