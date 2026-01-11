@@ -206,7 +206,8 @@ def render_seat(idx, title, icon, data_key, guide_text):
         with st.expander(f"💡 How to execute these {title} results"):
             st.info(guide_text)
         if st.session_state.get('gen'):
-            agent_data = st.session_state['report'].get(data_key, "Intelligence pending...")
+            # THE FIX: This pulls isolated data from the specific report dictionary keys
+            agent_data = st.session_state['report'].get(data_key, "Intelligence pending or specialist disabled.")
             if idx == 0:
                 st.subheader("📥 Export Deliverables")
                 c1, c2 = st.columns(2)
@@ -234,13 +235,13 @@ render_seat(5, "Web Auditor", "🌐", "auditor", guides["auditor"])
 
 with tabs[6]:
     st.subheader(f"🛡️ {final_ind} Diagnostic Lab")
-    diag_up = st.file_uploader(f"Upload Field Evidence", type=['png', 'jpg'])
+    diag_up = st.file_uploader(f"Upload Evidence", type=['png', 'jpg'])
     if diag_up: st.success("Evidence Archived for AI Risk Scoring.")
 
 with tabs[7]:
     st.info(f"Team ID: {user_row['team_id']}")
     conn = sqlite3.connect('breatheeasy.db')
-    st.table(pd.read_sql_query("SELECT user, COUNT(id) as 'Reports' FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],)))
+    st.table(pd.read_sql_query("SELECT user, COUNT(id) as 'Reports' FROM leads WHERE team_id = ? GROUP BY user", conn, params=(user_row['team_id'],)))
     conn.close()
 
 if user_row['role'] == 'admin':
