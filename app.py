@@ -47,7 +47,7 @@ INDUSTRY_LIBRARY = {
     "SaaS & Tech": ["Product Launch", "User Retention", "Enterprise Sales"],
     "E-commerce": ["DTC Brand Growth", "Amazon SEO", "Influencer Strategy"],
     "Real Estate": ["Luxury Listings", "Buyer Lead Gen", "Property Management"],
-    "Finance & Fintech": ["Wealth Management", "Crypto Adoption", "Mortgage Lending", "Tax Strategy", "Business Funding"]
+    "Finance & Fintech": ["Wealth Management", "Mortgage Lending", "Business Funding"]
 }
 
 # --- 3. UI CSS (CREAM MAIN / SIDEBAR BOX BORDER) ---
@@ -62,8 +62,6 @@ st.markdown(f"""
     <style>
     #MainMenu, footer, header {{visibility: hidden;}}
     .stApp {{ background-color: {bg}; color: {text}; }}
-    
-    /* CRISP SIDEBAR BOX DEFINITION */
     [data-testid="stSidebar"] {{ 
         background-color: {side_bg} !important; 
         border-right: 3px solid {side_border} !important;
@@ -72,7 +70,6 @@ st.markdown(f"""
     [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {{
         color: {side_text} !important;
     }}
-    
     .sidebar-brand {{ text-align: center; padding-bottom: 20px; border-bottom: 1px solid {side_border}; margin-bottom: 20px; }}
     .price-card {{
         background-color: white; padding: 25px; border-radius: 15px; border: 2px solid {sidebar_color};
@@ -80,7 +77,6 @@ st.markdown(f"""
     }}
     [data-testid="stMetric"] {{ background-color: {side_bg}; padding: 15px; border-radius: 10px; border: 1.5px solid {side_border}; }}
     .insight-card {{ background-color: white; padding: 25px; border-radius: 12px; border-left: 6px solid {sidebar_color}; line-height: 1.8; color: #1E293B; box-shadow: 0px 4px 10px rgba(0,0,0,0.08); overflow-wrap: break-word; }}
-    
     div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 8px; font-weight: 800 !important; width: 100%; height: 3.2em; }}
     div.stButton > button:hover {{ transform: translateY(-2px); box-shadow: 0px 4px 15px {sidebar_color}66; }}
     </style>
@@ -131,7 +127,7 @@ def generate_cinematic_ad(prompt):
     except Exception as e:
         st.error(f"Veo Error: {e}"); return None
 
-# --- 6. AUTHENTICATION & REGISTRATION ---
+# --- 6. LOGIN & REGISTRATION ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team", "❓ Recovery"])
@@ -146,7 +142,7 @@ if not st.session_state.get("authentication_status"):
         reg_res = authenticator.register_user(location='main')
         if reg_res:
             e, u, n = reg_res
-            confirm_pw = st.text_input("Create Account Password", type="password", key="reg_pw_final")
+            confirm_pw = st.text_input("Confirm Account Password", type="password", key="reg_pw_final")
             if st.button("Complete Enrollment"):
                 hashed = stauth.Hasher.hash(confirm_pw)
                 conn = sqlite3.connect('breatheeasy.db')
@@ -182,7 +178,15 @@ with st.sidebar:
     audit_url = st.text_input("Audit URL (Optional)")
     
     ind_cat = st.selectbox("Industry", list(INDUSTRY_LIBRARY.keys()) + ["Custom"])
-    svc = st.selectbox("Service", INDUSTRY_LIBRARY.get(ind_cat, ["Custom"]))
+    
+    # --- CRITICAL UI FIX FOR CUSTOM TYPING ---
+    if ind_cat == "Custom":
+        final_industry = st.text_input("Type Your Custom Industry")
+        svc = st.text_input("Type Your Custom Service")
+    else:
+        final_industry = ind_cat
+        svc = st.selectbox("Service", INDUSTRY_LIBRARY.get(ind_cat, ["Custom"]))
+
     st.divider(); st.subheader("🤖 Swarm Personnel")
     toggles = {k: st.toggle(v, value=True) for k, v in {"analyst": "🕵️ Analyst", "ads": "📺 Ad Tracker", "builder": "🎨 Creative", "manager": "👔 Strategist", "social": "✍ Social", "geo": "🧠 GEO", "audit": "🌐 Auditor", "seo": "✍ SEO"}.items()}
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
@@ -196,12 +200,12 @@ if run_btn:
     elif user_row['credits'] <= 0: st.error("❌ Out of credits.")
     else:
         with st.status("🛠️ Swarm Coordinating...", expanded=True) as status:
-            report = run_marketing_swarm({'city': full_loc, 'industry': ind_cat, 'service': svc, 'biz_name': biz_name, 'url': audit_url, 'toggles': toggles})
+            report = run_marketing_swarm({'city': full_loc, 'industry': final_industry, 'service': svc, 'biz_name': biz_name, 'url': audit_url, 'toggles': toggles})
             st.session_state.report, st.session_state.gen = report, True
             conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
+            conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (st.session_state["username"],))
             conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id) VALUES (?,?,?,?,?,?,?)", 
-                         (datetime.now().strftime("%Y-%m-%d"), user_row['username'], ind_cat, svc, full_loc, str(report), user_row['team_id']))
+                         (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_industry, svc, full_loc, str(report), user_row['team_id']))
             conn.commit(); conn.close(); status.update(label="✅ Swarm Success!", state="complete"); st.rerun()
 
 # --- 9. RENDER ALL 8 AGENT SEATS (ISOLATED + FORMATTER + EXPORTS) ---
@@ -240,8 +244,7 @@ with tabs[9]:
     st.subheader("🎬 Veo Cinematic Studio")
     if st.session_state.get('gen'):
         creative_out = st.session_state.report.get('creative', '')
-        vp = creative_out.split("Video Prompt:")[-1] if "Video Prompt:" in creative_out else creative_out[:300]
-        v_prompt = st.text_area("Video Scene Description", value=str(vp), height=150)
+        v_prompt = st.text_area("Video Scene Description", value=str(creative_out)[:300], height=150)
         if st.button("📽️ GENERATE AD"):
             with st.spinner("Rendering..."):
                 v_file = generate_cinematic_ad(v_prompt)
@@ -252,15 +255,15 @@ with tabs[9]:
 with tabs[10]:
     st.header("🤝 Team Collaboration Hub")
     conn = sqlite3.connect('breatheeasy.db')
-    team_leads = pd.read_sql_query("SELECT date, user, city, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
+    team_df = pd.read_sql_query("SELECT date, user, city, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
     c1, c2 = st.columns([1, 2])
     with c1:
         st.subheader("Team Health")
-        st.metric("Total Swarms", len(team_leads))
-        st.metric("Markets", len(team_leads['city'].unique()))
+        st.metric("Total Swarms", len(team_df))
+        st.metric("Markets", len(team_df['city'].unique()))
     with c2:
         st.subheader("Project Pipeline")
-        st.dataframe(team_leads, use_container_width=True)
+        st.dataframe(team_df, use_container_width=True)
     st.divider(); st.subheader("🛡️ Security Log"); st.code(f"Database Integrity: OK | Access Trace: {user_row['username']} | Time: {datetime.now()}")
     conn.close()
 
