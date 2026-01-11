@@ -36,7 +36,19 @@ if "GEMINI_API_KEY" in st.secrets:
 
 st.set_page_config(page_title="TechInAdvance AI | Enterprise Command", page_icon="Logo1.jpeg", layout="wide")
 
-# --- 2. ELITE UI CSS (SIDEBAR VISIBILITY & THEME RECONCILIATION) ---
+# --- 2. EXHAUSTIVE INDUSTRY & SERVICE LIBRARY ---
+INDUSTRY_LIBRARY = {
+    "HVAC & Home Services": ["AC Repair", "Heating Install", "Plumbing", "Roofing Audit", "Electrical", "Pest Control"],
+    "Medical & Healthcare": ["Telehealth Growth", "Dental Implants", "Plastic Surgery", "Physical Therapy", "Chiropractic Marketing"],
+    "Legal Services": ["Personal Injury", "Criminal Defense", "Family Law", "Corporate Litigation", "Immigration Law"],
+    "Solar & Energy": ["Residential ROI Audit", "Commercial Install", "Battery Storage", "EV Charging Infrastructure"],
+    "SaaS & Tech": ["Product Launch", "User Retention", "Enterprise Sales", "API Adoption", "Growth Hacking"],
+    "E-commerce": ["DTC Brand Growth", "Amazon SEO", "Email Automation", "Influencer Strategy", "Conversion Rate Optimization"],
+    "Real Estate": ["Luxury Listings", "Buyer Lead Gen", "Commercial Leasing", "Property Management", "Short-term Rental ROI"],
+    "Finance & Fintech": ["Wealth Management", "Crypto Adoption", "Mortgage Lending", "Tax Strategy", "Business Funding"]
+}
+
+# --- 3. ELITE UI CSS (SIDEBAR VISIBILITY & THEME RECONCILIATION) ---
 sidebar_color = "#3B82F6" if st.session_state.theme == 'dark' else "#2563EB"
 bg, text, side = ("#0F172A", "#F8FAFC", "#1E293B") if st.session_state.theme == 'dark' else ("#F8FAFC", "#0F172A", "#E2E8F0")
 
@@ -69,7 +81,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATABASE ENGINE ---
+# --- 4. DATABASE ENGINE ---
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
@@ -81,7 +93,7 @@ def init_db():
 
 init_db()
 
-# --- 4. AUTH UTILS & EXPORTS ---
+# --- 5. AUTH UTILS & EXPORTS ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -109,13 +121,11 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.set_font("Arial", size=10); pdf.multi_cell(0, 7, txt=str(content).encode('latin-1', 'ignore').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. AUTH FLOW (PERMANENT ATTRIBUTE FIX) ---
+# --- 6. AUTH FLOW (FIXED KEYERROR & RECOVERY) ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Register & Plans", "🤝 Join Team (Invite)", "❓ Recovery"])
-    
     with auth_tabs[0]: authenticator.login(location='main')
-    
     with auth_tabs[1]:
         st.subheader("Elite Subscription Tiers")
         c1, c2, c3 = st.columns(3)
@@ -131,7 +141,6 @@ if not st.session_state.get("authentication_status"):
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, pw, plan, f"TEAM_{u}"))
                 conn.commit(); conn.close(); st.success("Account Created!"); st.button("Log In Now", on_click=switch_to_login)
-
     with auth_tabs[2]:
         invite_id = st.text_input("Enter Team ID")
         join_reg = authenticator.register_user(location='main', key='join')
@@ -142,11 +151,10 @@ if not st.session_state.get("authentication_status"):
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("INSERT INTO users VALUES (?,?,?,?,'member','Pro',25,'Logo1.jpeg',?)", (u, e, n, pw, invite_id))
                 conn.commit(); conn.close(); st.success(f"Linked to {invite_id}!"); st.button("Proceed", on_click=switch_to_login)
-
     with auth_tabs[3]: authenticator.forgot_password(location='main')
     st.stop()
 
-# --- 6. DASHBOARD CONTROL ---
+# --- 7. DASHBOARD CONTROL ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
@@ -157,16 +165,19 @@ with st.sidebar:
     st.button("**🌓 TOGGLE THEME**", on_click=toggle_theme)
     st.metric("Credits Available", user_row['credits'])
     st.info(f"📍 Team ID: {user_row['team_id']}")
-    
     st.divider()
     biz_name = st.text_input("Brand Name"); biz_usp = st.text_area("Core USP")
-    ind_choice = st.selectbox("Industry", ["HVAC", "Medical", "Law", "Solar", "Real Estate", "Custom"])
-    final_ind = st.text_input("Define Industry") if ind_choice == "Custom" else ind_choice
     
-    svc_map = {"HVAC": ["Repair", "Install"], "Medical": ["Telehealth", "Clinical Audit"], "Law": ["Personal Injury", "Litigation"], "Solar": ["ROI Audit", "Install"], "Real Estate": ["Listing Swarm", "Buyer Lead Gen"]}
-    svc = st.selectbox("Specific Service", svc_map.get(ind_choice, ["Strategic Service"]))
+    # DYNAMIC INDUSTRY & SERVICE SELECTION
+    ind_cat = st.selectbox("Industry Sector", list(INDUSTRY_LIBRARY.keys()) + ["Custom"])
+    if ind_cat == "Custom":
+        final_ind = st.text_input("Define Industry")
+        svc = st.text_input("Define Specific Service")
+    else:
+        final_ind = ind_cat
+        svc = st.selectbox("Specific Service Focus", INDUSTRY_LIBRARY[ind_cat])
+    
     city = st.text_input("Market City"); web_url = st.text_input("Audit URL")
-
     st.divider(); st.subheader("🤖 Swarm Personnel")
     toggles = {
         "analyst": st.toggle("🕵️ Market Analyst (Researcher)", value=True),
@@ -179,9 +190,9 @@ with st.sidebar:
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 7. COMMAND CENTER TABS ---
-hub_name = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
-tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", hub_name, "🤝 Team Share", "⚙️ Admin"])
+# --- 8. COMMAND CENTER TABS ---
+hub_label = f"🔬 {final_ind} Diagnostic Lab" if final_ind else "🔬 Diagnostic Lab"
+tabs = st.tabs(["🕵️ Analyst", "🎨 Creative", "👔 Strategist", "✍🏾 Social", "🧠 GEO", "🌐 Auditor", hub_label, "🤝 Team Share", "⚙️ Admin"])
 
 if run_btn:
     if not biz_name or not city: st.error("❌ Mandatory Fields Missing.")
@@ -202,37 +213,30 @@ if st.session_state.get('processing'):
             conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id) VALUES (?,?,?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, city, str(report), user_row['team_id']))
             conn.commit(); conn.close(); st.rerun()
 
-# --- 8. SEAT OUTPUT LOGIC (GUIDE INTEGRATION) ---
+# --- 9. SEAT OUTPUT LOGIC (GUIDE INTEGRATION & DATA ISOLATION) ---
 def render_seat(idx, title, icon, data_key, guide_text):
     with tabs[idx]:
         st.subheader(f"{icon} {title} Command Seat")
-        
-        # PROACTIVE FEATURE: User Implementation Guide
         with st.expander(f"💡 How to execute these {title} results"):
             st.info(guide_text)
-
         if st.session_state.get('gen'):
-            # Fetch agent-specific data (Ensures Isolation)
             agent_data = st.session_state['report'].get(data_key, "Intelligence pending...")
-            
             if idx == 0: # Analyst Seat adds Exports
                 st.subheader("📥 Export Deliverables")
                 c1, c2 = st.columns(2)
                 r_logo = user_row['logo_path'] if user_row['logo_path'] else "Logo1.jpeg"
                 c1.download_button("📄 Word Document", create_word_doc(agent_data, r_logo), f"Report_{city}.docx", use_container_width=True)
                 c2.download_button("📕 PDF Report", create_pdf(agent_data, svc, city, r_logo), f"Report_{city}.pdf", use_container_width=True)
-            
             st.markdown(agent_data)
         else: st.info(f"Deploy Swarm to populate {title} intelligence.")
 
-# GUIDE CONTENT DEFINITIONS
 guides = {
-    "analyst": "Identify the top competitors listed and study their gaps. Use the provided JSON Personas to customize your messaging—address their specific 'pain points' and 'buying triggers' in every communication.",
-    "creative": "Take the 'Nano Banana' prompts to an AI image tool (like Midjourney). Use the Copy Variants for your social headlines or email subject lines. Ensure Navy/White aesthetics are maintained in your final graphics.",
-    "strategist": "This is your 30-day battle plan. Execute the phases sequentially. If a creative asset doesn't align with the Analyst's research, iterate until it does.",
-    "social": "Distribute these hooks across Meta, Google, and LinkedIn. Use the 'Punchy' version for high-engagement posts and the 'Story' version for newsletters or LinkedIn articles.",
-    "geo": "Verify your Google Business Profile and local citations. Ensure the keywords identified are present in your 'About' section and reviews to increase local AI citation velocity.",
-    "auditor": "Implement the UX fixes immediately. Focus on removing 'Conversion Leaks' on your landing page—like confusing forms or slow-loading hero sections—to ensure ad spend isn't wasted."
+    "analyst": "Identify competitors and gap-study their value props. Use the JSON Personas to customize email hooks—address their specific 'mood' and 'buying trigger'.",
+    "creative": "Input the 'Nano Banana' prompts into an AI image generator. Use the 3 Copy Variants for A/B testing on Meta or LinkedIn. Maintain Navy/White theme consistency.",
+    "strategist": "Execute this 30-day roadmap sequentially. If creative assets deviate from the research findings, use this brief to course-correct the 'Builder'.",
+    "social": "Distribute these viral hooks across your profiles. The 'Punchy' version is for High-Engagement stories, the 'Story' version for High-Authority LinkedIn/Blogs.",
+    "geo": "Verify your Google/Apple Maps business listings. Ensure these specific keywords are embedded in your 'About' metadata to drive AI Search citation velocity.",
+    "auditor": "Implement the UX/Conversion fixes immediately. Focus on removing landing page friction points identified here to stop wasting ad spend."
 }
 
 render_seat(0, "Market Analyst", "🕵️", "analyst", guides["analyst"])
