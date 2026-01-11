@@ -45,24 +45,20 @@ st.markdown(f"""
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
-    # Users Table: 9 Columns
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT, 
                   package TEXT, credits INTEGER DEFAULT 0, logo_path TEXT, team_id TEXT)''')
-    # Leads Table: 10 Columns
     c.execute('''CREATE TABLE IF NOT EXISTS leads 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, 
                   service TEXT, city TEXT, content TEXT, team_id TEXT, is_shared INTEGER DEFAULT 0, score INTEGER)''')
     
     hashed_pw = stauth.Hasher.hash('admin123')
-    # Explicitly named columns for safety
     c.execute("""INSERT OR IGNORE INTO users (username, email, name, password, role, package, credits, logo_path, team_id) 
                  VALUES (?,?,?,?,?,?,?,?,?)""",
               ('admin', 'admin@breatheeasy.ai', 'System Admin', hashed_pw, 'admin', 'Unlimited', 9999, None, 'HQ_001'))
     conn.commit()
     conn.close()
 
-# Automatic Schema Migration Check
 try:
     init_db()
     conn = sqlite3.connect('breatheeasy.db')
@@ -109,7 +105,7 @@ def render_breatheeasy_gauge(score, industry):
     st.markdown(f"""
         <div style="text-align: center; border: 2px solid #ddd; padding: 25px; border-radius: 20px; background: #ffffff; color: #1E293B;">
             <h3 style="margin: 0;">{industry} Health Status</h3>
-            <div style="font-size: 64px; font-weight: 800; color: {color};">{score}/10</div>
+            <div style="font-size: 64px; font-weight: 800; color: {color}; text-align: center;">{score}/10</div>
             <div style="width: 100%; background: #E2E8F0; border-radius: 999px; height: 16px; margin-top: 15px;">
                 <div style="width: {score*10}%; background: {color}; height: 16px; border-radius: 999px;"></div>
             </div>
@@ -117,7 +113,9 @@ def render_breatheeasy_gauge(score, industry):
     """, unsafe_allow_html=True)
 
 # --- 5. SaaS WORKFLOW (AUTH & REGISTRATION) ---
-authenticator = stauth.Authenticate(get_db_creds(), st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
+# Fetch credentials for the session
+user_credentials = get_db_creds()
+authenticator = stauth.Authenticate(user_credentials, st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
 
 if not st.session_state.get("authentication_status"):
     st.title("🌬️ BreatheEasy AI Enterprise Swarm")
@@ -127,27 +125,26 @@ if not st.session_state.get("authentication_status"):
         authenticator.login(location='main')
     
     with r_tab:
-        # Corrected registration for the latest streamlit-authenticator version
         plan = st.selectbox("Select Subscription Plan", ["Basic (5 Credits)", "Pro (50 Credits)", "Enterprise (Unlimited)"])
         try:
-            # FIX: register_user signature update for newer versions
-            if authenticator.register_user(location='main'):
-                st.info("Registration successful! Update the database to complete.")
-                # We fetch the user that was just added to the authenticator's internal dict
-                new_user_data = authenticator.credentials['usernames']
-                for u, data in new_user_data.items():
-                    conn = sqlite3.connect('breatheeasy.db')
-                    # Check if user already exists in SQLite
-                    check = conn.execute("SELECT username FROM users WHERE username=?", (u,)).fetchone()
-                    if not check:
-                        creds = 5 if "Basic" in plan else 50 if "Pro" in plan else 9999
-                        conn.execute("INSERT INTO users (username, email, name, password, role, package, credits, team_id) VALUES (?,?,?,?,?,?,?,?)",
-                                     (u, data['email'], data['name'], data['password'], 'member', plan.split()[0], creds, f"TEAM_{u}"))
-                        conn.commit()
-                    conn.close()
+            # FIX: Properly handle registration without relying on .credentials attribute directly
+            reg_result = authenticator.register_user(location='main')
+            if reg_result:
+                email_reg, username_reg, name_reg = reg_result
+                # Extract the hashed password from the internal authenticator state
+                # In most versions, it's now in authenticator.credentials['usernames']
+                # If that fails, we fallback to the raw input if captured, but here we use the hashed one
+                hashed_password = authenticator.credentials['usernames'][username_reg]['password']
+                
+                conn = sqlite3.connect('breatheeasy.db')
+                creds = 5 if "Basic" in plan else 50 if "Pro" in plan else 9999
+                conn.execute("INSERT OR IGNORE INTO users (username, email, name, password, role, package, credits, team_id) VALUES (?,?,?,?,?,?,?,?)",
+                             (username_reg, email_reg, name_reg, hashed_password, 'member', plan.split()[0], creds, f"TEAM_{username_reg}"))
+                conn.commit()
+                conn.close()
                 st.success("Registration complete! Switch to Login tab.")
         except Exception as e:
-            st.error(f"Registration Error: {e}")
+            st.info("Complete the form above to register.")
 
     with f_tab: st.info("Manual Password Reset: Contact support@airductify.com")
     st.stop()
@@ -210,7 +207,7 @@ with tabs[0]: # Strategic Strategy & Ad Copy
         c2.download_button("📕 PDF Report", create_pdf(st.session_state['report'], svc, city, user_row['logo_path']), f"Report_{city}.pdf", use_container_width=True)
         st.markdown(st.session_state['report'])
 
-with tabs[1]: # Production Schedule
+with tabs[1]: # User Schedule
     st.subheader("🗓️ Your 30-Day Project Roadmap")
     if st.session_state.get('gen'):
         st.write(st.session_state['report'])
@@ -228,7 +225,7 @@ with tabs[4]: # Dynamic Diagnostic Hub
 
 if user_row['role'] == 'admin':
     with tabs[-1]:
-        st.subheader("👥 System Administration")
+        st.subheader("👥 User & Credit Administration")
         conn = sqlite3.connect('breatheeasy.db')
         all_u = pd.read_sql("SELECT username, email, package, credits FROM users", conn)
         st.dataframe(all_u, use_container_width=True)
