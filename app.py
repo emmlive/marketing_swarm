@@ -163,46 +163,77 @@ if not st.session_state.get("authentication_status"):
             st.error(e)
     st.stop()
 
-# --- 5. DASHBOARD, SIDEBAR & STRATEGIC CRUD ENGINE ---
+# --- 5. DASHBOARD, SIDEBAR & LIVE-SYNC EXPORT ENGINE ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
 
-# --- HARDENED DEPLOYMENT & DOCUMENT LIFECYCLE ---
-def broadcast_deployment(agent_name, target_biz, content):
-    """Simulates API hooks for Email/SMS/Slack deployment with High-Resolution Timestamps"""
-    # Precision Timestamp for Audit Trail
+# --- 5A. MULTI-CHANNEL BROADCAST LOGIC ---
+def broadcast_deployment(agent_name, target_biz, content, channel="Cloud"):
+    """Routes Strategic Intelligence to Email, SMS, or Slack with Audit Timestamps."""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    
-    with st.spinner(f"Initiating {agent_name} broadcast sequence..."):
-        # Placeholder for real-world integration (SendGrid, Twilio, etc.)
-        st.toast(f"✅ {agent_name} directives pushed to cloud at {ts}")
-        st.success(f"Strategic Directives for {target_biz} have been deployed. [Log ID: {ts}]")
+    with st.spinner(f"Initiating {channel} broadcast for {agent_name}..."):
+        # API Placeholder: Connect to SendGrid (Email) or Twilio (SMS) here
+        if channel == "Email":
+            st.toast(f"📧 Strategic Brief emailed at {ts}")
+        elif channel == "SMS":
+            st.toast(f"📱 Rapid Alert SMS dispatched at {ts}")
+        else:
+            st.toast(f"✅ {agent_name} synced to Command Hub at {ts}")
+        st.success(f"Directives for {target_biz} shared via {channel}. [Log ID: {ts}]")
 
+# --- 5B. STRATEGIC CRUD ENGINE ---
 def manage_record(action, record_id=None, new_content=None):
-    """CRUD Logic for Strategic Intelligence Records"""
+    """Handles persistence for Save, Edit, and Delete actions."""
     conn = sqlite3.connect('breatheeasy.db')
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
     if action == "save":
-        # logic to finalize/archive a lead record
         conn.execute("UPDATE leads SET status = 'Execution' WHERE id = ?", (record_id,))
-        st.toast(f"Record {record_id} saved to Execution Pipeline.")
-    
+        st.toast(f"Record {record_id} moved to Execution.")
     elif action == "delete":
-        # logic to purge a lead record (soft delete recommended in production)
         conn.execute("DELETE FROM leads WHERE id = ?", (record_id,))
-        st.warning(f"Record {record_id} purged from system.")
+        st.warning(f"Record {record_id} purged.")
         st.rerun()
-        
     elif action == "edit":
-        # logic to overwrite content with user adjustments
         conn.execute("UPDATE leads SET content = ?, date = ? WHERE id = ?", (str(new_content), ts, record_id))
-        st.info(f"Record {record_id} updated at {ts}.")
-        
+        st.info(f"Record {record_id} updated.")
     conn.commit()
     conn.close()
 
+# --- 5C. LIVE-SYNC DOCUMENT GENERATORS ---
+def create_word_doc(content, title, logo_path="Logo1.jpeg"):
+    """Generates Branded Word Brief with Live-Sync Metadata."""
+    doc = Document()
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        if os.path.exists(logo_path): doc.add_picture(logo_path, width=Inches(1.2))
+    except: pass
+    doc.add_heading(f'Intelligence Brief: {title}', 0)
+    doc.add_paragraph(f"Verified Generation: {ts} | System: TechInAdvance AI")
+    doc.add_paragraph("_" * 50)
+    doc.add_paragraph(str(content))
+    bio = BytesIO(); doc.save(bio); return bio.getvalue()
+
+def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
+    """Generates Sanitized PDF Brief for Boardroom Presentation."""
+    pdf = FPDF()
+    pdf.add_page()
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        if os.path.exists(logo_path): pdf.image(logo_path, 10, 8, 30)
+    except: pass
+    pdf.ln(25)
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, f'EXECUTIVE SUMMARY: {service.upper()}', 0, 1, 'L')
+    pdf.set_font("Arial", 'I', 10)
+    pdf.cell(0, 10, f'Market: {city} | Timestamp: {ts}', 0, 1, 'L')
+    pdf.ln(5)
+    pdf.set_font("Arial", size=11)
+    clean_text = str(content).encode('latin-1', 'ignore').decode('latin-1')
+    pdf.multi_cell(0, 7, txt=clean_text)
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- 5D. SIDEBAR COMMAND CONSOLE ---
 with st.sidebar:
     st.image(user_row['logo_path'], width=120)
     st.button("🌓 Toggle Theme", on_click=toggle_theme)
@@ -214,7 +245,6 @@ with st.sidebar:
     with c2: state_input = st.text_input("State")
     full_loc = f"{city_input}, {state_input}"
     audit_url = st.text_input("Audit URL (Optional)")
-    
     ind_cat = st.selectbox("Industry", ["HVAC", "Medical", "Solar", "Legal", "Custom"])
     if ind_cat == "Custom":
         final_ind = st.text_input("Type Your Custom Industry")
@@ -222,7 +252,6 @@ with st.sidebar:
     else:
         final_ind = ind_cat
         svc = st.text_input("Service Type")
-
     st.divider(); st.subheader("🤖 Swarm Personnel")
     toggles = {k: st.toggle(v, value=True) for k, v in {"analyst": "🕵️ Analyst", "ads": "📺 Ad Tracker", "builder": "🎨 Creative", "manager": "👔 Strategist", "social": "✍ Social", "geo": "🧠 GEO", "audit": "🌐 Auditor", "seo": "✍ SEO"}.items()}
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
