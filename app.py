@@ -376,74 +376,48 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
     
-# --- 6. MULTIMODAL COMMAND CENTER (STRICT ARCHITECTURE) ---
+# --- 6. MULTIMODAL COMMAND CENTER (STRICT ARCHITECTURAL ISOLATION) ---
 
-# 1. INITIALIZE TAB OBJECTS
-# Index 0: Guide | 1-9: Agent Seats | 10: Veo | 11: Team Intel | 12: Admin
+# 1. INITIALIZE ALL 13 TABS
 tabs = st.tabs([
     "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", 
     "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", 
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# 2. DEFINE SHARED UTILITY FUNCTIONS
-def format_output(data):
-    if isinstance(data, str) and (data.startswith('{') or data.startswith('`')):
-        try:
-            clean_str = data.strip().strip('```json').strip('```').strip()
-            import json
-            parsed = json.loads(clean_str)
-            return pd.json_normalize(parsed).T.to_markdown()
-        except: return data
-    return data
+# 2. TAB 0: DETAILED AGENT INTELLIGENCE MANUAL
+with tabs[0]:
+    st.header("📖 Agent Intelligence Manual")
+    st.info("Operational directives for the Omni-Swarm Decision Engine.")
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        with st.expander("🕵️ Market Analyst & Ad Tracker", expanded=True):
+            st.markdown("""
+            **Capabilities:** Deep-scrapes local competitors in {city} to find price gaps and service failures.
+            **Implementation:** Use the 'Price Arbitrage' section to undercut rivals by 5-10% in Google Ads.
+            **Direct Link:** Use the 'Meta Ad Library' button to verify AI mockups against live rival spend.
+            """)
+        with st.expander("🎨 Creative & Social Architect"):
+            st.markdown("""
+            **Capabilities:** Engineers psychological 'hooks' based on rival weaknesses. Generates cinematic prompts for Veo.
+            **Implementation:** Paste 'Video Prompts' into Veo Studio. Schedule 'Viral Hooks' for 8:00 AM local time.
+            """)
+    with col_b:
+        with st.expander("👔 Chief Growth Strategist"):
+            st.markdown("""
+            **Capabilities:** Synthesizes all 8 agent outputs into a unified 30-day CEO roadmap.
+            **Implementation:** Export the 'Executive Brief' and use it as your primary pitch deck for stakeholders.
+            """)
+        with st.expander("🌐 Technical & Vision Auditor"):
+            st.markdown("""
+            **Capabilities:** Detects 'Conversion Leaks' on your URL and deconstructs rival design psychology.
+            **Implementation:** Send the 'Audit CSV' to your developer. Use the 'Vision Teardown' to pivot your ad design.
+            """)
 
-def render_executive_seat(idx, title, icon, key, guide):
-    """Renders agent seats into tabs 1 through 9."""
-    with tabs[idx + 1]: 
-        st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
-        st.markdown(f"### {icon} {title} Command Seat")
-        
-        # --- VISION INSPECTOR SPECIAL LOGIC (TAB 9) ---
-        if title == "Vision":
-            st.info("Upload competitor assets for visual teardowns.")
-            uploaded_file = st.file_uploader("Upload Competitor Asset (PNG/JPG)", type=["png", "jpg", "jpeg"], key="vision_upload")
-            if uploaded_file:
-                v1, v2 = st.columns([1, 1])
-                with v1: st.image(uploaded_file, caption="Target Asset", use_container_width=True)
-                with v2:
-                    if st.button("🚀 Analyze Visual Gaps", type="primary"):
-                        with st.spinner("Agent 'Vision' scanning..."):
-                            st.session_state.vision_report = f"### 👁️ Visual Intelligence Report\n- **Rival Hook:** Scarcity Abuse Detected.\n- **Leak:** No trust signals in hero fold.\n- **Move:** Human-first video disruption strategy."
-            if st.session_state.get('vision_report'):
-                st.markdown(f'<div class="insight-card">{st.session_state.vision_report}</div>', unsafe_allow_html=True)
-
-        # --- STANDARD AGENT OUTPUT DISPLAY ---
-        elif st.session_state.get('gen'):
-            raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
-            edited_intel = st.text_area("Refine Strategic Output", value=format_output(raw_data), height=350, key=f"area_{key}")
-            
-            if title == "Ad Tracker":
-                st.divider()
-                st.markdown("#### 🕵️ Rival Intelligence & Mockup")
-                lib_col, mock_col = st.columns(2)
-                with lib_col:
-                    search_q = f"{final_ind} {full_loc}".replace(" ", "%20")
-                    st.link_button("🔥 Meta Ad Library", f"https://www.facebook.com/ads/library/?q={search_q}")
-                with mock_col:
-                    st.markdown(f'<div style="border:1px solid #00FFAA; padding:10px; border-radius:10px; font-size:0.8em;"><b>{biz_name}</b><br>{edited_intel[:60]}...</div>', unsafe_allow_html=True)
-
-            k1, k2, k3 = st.columns([2, 1, 1])
-            with k1: st.success(f"Verified {title} Intelligence")
-            with k2: st.download_button("📄 Word", create_word_doc(edited_intel, title, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
-            with k3: st.download_button("📕 PDF", create_pdf(edited_intel, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
-            st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
-        else:
-            st.info(f"Launch swarm to populate {title} seat.")
-
-# 3. TAB 11: TEAM INTELLIGENCE (STRICT ISOLATION)
+# 3. TAB 11: 🤝 TEAM INTELLIGENCE (LOCKED)
 with tabs[11]:
     st.header("🤝 Team Intelligence & Market ROI")
-    
     try:
         conn = sqlite3.connect('breatheeasy.db')
         leads_df = pd.read_sql_query("SELECT city, industry, status FROM leads", conn)
@@ -457,22 +431,19 @@ with tabs[11]:
             geo_coords = {"Miami, Florida": [25.76, -80.19], "Austin, Texas": [30.26, -97.74], "Los Angeles, California": [34.05, -118.24]}
             map_data = [{"lat": geo_coords[loc][0], "lon": geo_coords[loc][1]} for loc in leads_df['city'] if loc in geo_coords]
             if map_data: st.map(pd.DataFrame(map_data), color="#00FFAA", size=20)
-        else:
-            st.info("Launch swarms to generate market intelligence.")
         conn.close()
     except Exception as e:
-        st.error(f"Team Intel Database Error: {e}")
+        st.error(f"Intel Recovery Error: {e}")
 
-# 4. TAB 12: ⚡ GOD-MODE ADMIN CONTROL (STRICT ISOLATION)
+# 4. TAB 12: ⚡ GOD-MODE ADMIN CONTROL (LOCKED)
 with tabs[12]:
     st.header("⚡ God-Mode Admin Control")
     st.warning("Critical Access: Database Governance & Session Management")
-    
     try:
         conn = sqlite3.connect('breatheeasy.db')
         leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
         h1, h2 = st.columns(2)
-        h1.metric("Total DB Records", len(leads_all))
+        h1.metric("Database Records", len(leads_all))
         h2.metric("System Health", "Operational")
         st.divider()
         admin_c1, admin_c2 = st.columns(2)
@@ -481,29 +452,67 @@ with tabs[12]:
                 csv = leads_all.to_csv(index=False).encode('utf-8')
                 st.download_button("📥 Export CSV", csv, "master_leads.csv", "text/csv")
         with admin_c2:
-            with st.expander("🚨 Critical Reset Zone"):
-                if st.button("Purge Demo Data", type="secondary", use_container_width=True):
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
-                    conn.commit(); st.success("Demo records purged."); st.rerun()
+            if st.button("Purge Demo Data", type="secondary", use_container_width=True):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
+                conn.commit(); st.success("Demo records purged."); st.rerun()
         st.divider(); st.subheader("📜 System Audit Trail")
         logs_df = pd.read_sql_query("SELECT timestamp, user, action, details FROM system_logs ORDER BY timestamp DESC LIMIT 50", conn)
         st.dataframe(logs_df, use_container_width=True, hide_index=True)
         conn.close()
     except Exception as e:
-        st.error(f"Admin Database Error: {e}")
+        st.error(f"Admin Access Error: {e}")
 
-# 5. RENDER AGENT SEAT LOOP LAST (TABS 1-9)
+# 5. DEFINE SEAT RENDERER
+def render_executive_seat(idx, title, icon, key, guide):
+    with tabs[idx + 1]: 
+        st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
+        st.markdown(f"### {icon} {title} Command Seat")
+        
+        if title == "Vision":
+            st.info("Upload competitor assets for visual teardowns.")
+            uploaded_file = st.file_uploader("Upload Competitor Asset (PNG/JPG)", type=["png", "jpg", "jpeg"], key="vision_upload")
+            if uploaded_file:
+                v1, v2 = st.columns([1, 1])
+                with v1: st.image(uploaded_file, caption="Target Asset", use_container_width=True)
+                with v2:
+                    if st.button("🚀 Analyze Visual Gaps", type="primary"):
+                        with st.spinner("Agent 'Vision' scanning..."):
+                            st.session_state.vision_report = "### 👁️ Visual Intelligence Report\n- **Rival Hook:** Scarcity Abuse.\n- **Leak:** No trust signals.\n- **Move:** Human-first disruption."
+            if st.session_state.get('vision_report'):
+                st.markdown(f'<div class="insight-card">{st.session_state.vision_report}</div>', unsafe_allow_html=True)
+
+        elif st.session_state.get('gen'):
+            raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
+            edited_intel = st.text_area("Refine Output", value=format_output(raw_data), height=350, key=f"area_{key}")
+            
+            if title == "Ad Tracker":
+                st.divider()
+                lib_col, mock_col = st.columns(2)
+                with lib_col:
+                    search_q = f"{final_ind} {full_loc}".replace(" ", "%20")
+                    st.link_button("🔥 Meta Ad Library", f"https://www.facebook.com/ads/library/?q={search_q}")
+                with mock_col:
+                    st.markdown(f'<div style="border:1px solid #00FFAA; padding:10px; border-radius:10px; font-size:0.8em;"><b>{biz_name}</b><br>{edited_intel[:60]}...</div>', unsafe_allow_html=True)
+            
+            st.divider()
+            k1, k2, k3 = st.columns([2, 1, 1])
+            with k1: st.success(f"Verified {title} Intelligence")
+            with k2: st.download_button("📄 Word", create_word_doc(edited_intel, title, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
+            with k3: st.download_button("📕 PDF", create_pdf(edited_intel, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
+            st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
+
+# 6. RENDER EXECUTION LOOP LAST (TABS 1-9)
 seats = [
-    ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
-    ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
-    ("Creative", "🎨", "creative", "Visual frameworks and prompts."),
-    ("Strategist", "👔", "strategist", "30-day ROI roadmap."),
-    ("Social Hooks", "✍", "social", "Viral hooks and schedules."),
-    ("GEO Map", "🧠", "geo", "AI Search and Map optimization."),
-    ("Audit Scan", "🌐", "auditor", "Technical conversion diagnostics."),
-    ("SEO Blogger", "✍", "seo", "High-authority technical articles."),
-    ("Vision", "👁️", "vision", "Multimodal visual gap analysis.")
+    ("Analyst", "🕵️", "analyst", "Deep market gap analysis and price arbitrage."),
+    ("Ad Tracker", "📺", "ads", "Rival hook deconstruction and ad library access."),
+    ("Creative", "🎨", "creative", "Psychological frameworks and Veo video prompts."),
+    ("Strategist", "👔", "strategist", "30-day CEO roadmap and ROI projection."),
+    ("Social Hooks", "✍", "social", "Viral hooks and 30-day distribution plan."),
+    ("GEO Map", "🧠", "geo", "AI search and local Map ranking dominance."),
+    ("Audit Scan", "🌐", "auditor", "Technical conversion leak diagnostics."),
+    ("SEO Blogger", "✍", "seo", "High-authority technical EEAT articles."),
+    ("Vision", "👁️", "vision", "Multimodal visual gap analysis of rival assets.")
 ]
 
 for i, s in enumerate(seats): 
