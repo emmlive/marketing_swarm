@@ -120,16 +120,53 @@ def generate_cinematic_ad(prompt):
     try: return st.video_generation(prompt=f"Elite cinematic marketing ad: {prompt}. 4k.", aspect_ratio="16:9")
     except Exception as e: st.error(f"Veo Error: {e}"); return None
 
-# --- 4. AUTHENTICATION (FULL RESTORATION) ---
+# --- 4. AUTHENTICATION & SYSTEM INITIALIZATION ---
+def init_db():
+    """Initializes all required tables for the Decision Intelligence Suite."""
+    conn = sqlite3.connect('breatheeasy.db')
+    cursor = conn.cursor()
+    
+    # 4A. Leads & Intelligence Table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS leads 
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, 
+                      industry TEXT, service TEXT, city TEXT, content TEXT, 
+                      team_id TEXT, status TEXT DEFAULT 'Discovery')''')
+    
+    # 4B. User & Credentials Table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users 
+                     (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, 
+                      role TEXT, plan TEXT, credits INTEGER, logo_path TEXT, team_id TEXT)''')
+    
+    # 4C. NEW: System Audit Logs (Tracks Purges & Maintenance)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS system_logs 
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, 
+                      action TEXT, user TEXT, details TEXT)''')
+    
+    conn.commit()
+    conn.close()
+
+# Ensure database is prepared
+init_db()
+
 def get_db_creds():
+    """Fetches credentials from the database for Streamlit Authenticator."""
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
-        df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn); conn.close()
+        df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
+        conn.close()
         return {'usernames': {row['username']: {'email':row['email'], 'name':row['name'], 'password':row['password']} for _, row in df.iterrows()}}
-    except: return {'usernames': {}}
+    except:
+        return {'usernames': {}}
 
-authenticator = stauth.Authenticate(get_db_creds(), st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
+# Initialize Authenticator with Cookie Management
+authenticator = stauth.Authenticate(
+    get_db_creds(), 
+    st.secrets['cookie']['name'], 
+    st.secrets['cookie']['key'], 
+    30 # Cookie expiry in days
+)
 
+# --- LOGIN & REGISTRATION OVERLAY ---
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment & Plans", "🤝 Join Team", "❓ Recovery"])
@@ -143,25 +180,39 @@ if not st.session_state.get("authentication_status"):
         with p1: st.markdown('<div class="price-card">BASIC<br><h3>$99</h3></div>', unsafe_allow_html=True)
         with p2: st.markdown('<div class="price-card">PRO<br><h3>$499</h3></div>', unsafe_allow_html=True)
         with p3: st.markdown('<div class="price-card">ENTERPRISE<br><h3>$1,999</h3></div>', unsafe_allow_html=True)
+        
         plan = st.selectbox("Select Business Plan", ["Basic", "Pro", "Enterprise"])
+        
+        # Streamlit-Authenticator built-in registration
         res = authenticator.register_user(location='main')
         if res:
             e, u, n = res
             raw_pw = st.text_input("Enrollment Security Password", type="password", key="reg_pw_main")
             if st.button("Finalize $1B Enrollment"):
-                h = stauth.Hasher.hash(raw_pw)
-                conn = sqlite3.connect('breatheeasy.db')
-                conn.execute("INSERT INTO users VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", (u, e, n, h, plan, f"TEAM_{u}"))
-                conn.commit(); conn.close(); st.success("Account Secured. Please Log In."); st.rerun()
+                if raw_pw:
+                    # Hash password before database storage
+                    h = stauth.Hasher([raw_pw]).generate()[0]
+                    conn = sqlite3.connect('breatheeasy.db')
+                    # Default: member role, 50 credits, generic logo
+                    conn.execute("INSERT INTO users (username, email, name, password, role, plan, credits, logo_path, team_id) VALUES (?,?,?,?,'member',?,50,'Logo1.jpeg',?)", 
+                                 (u, e, n, h, plan, f"TEAM_{u}"))
+                    conn.commit()
+                    conn.close()
+                    st.success("Account Secured. Please Log In.")
+                    st.rerun()
+                else:
+                    st.error("Security Password required to finalize enrollment.")
 
     with auth_tabs[3]:
         try:
             username_forgot_pw, email_forgot_password, new_random_password = authenticator.forgot_password(location='main')
             if username_forgot_pw:
+                # In a real app, logic to email 'new_random_password' to 'email_forgot_password' would go here
                 st.success("Recovery processed. Internal system reset initiated.")
         except Exception as e:
             st.error(e)
-    st.stop()
+            
+    st.stop() # Prevents app from loading behind the login wall
 
 # --- 5. DASHBOARD, SIDEBAR & LIVE-SYNC EXPORT ENGINE ---
 conn = sqlite3.connect('breatheeasy.db')
