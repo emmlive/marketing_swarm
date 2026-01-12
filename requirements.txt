@@ -3,7 +3,7 @@ streamlit==1.31.0
 streamlit-authenticator==0.3.1
 pandas
 
-# --- AI & Multi-Agent Swarm ---
+# --- AI & Multi-Agent Swarm (CrewAI Stack) ---
 crewai==0.28.8
 crewai-tools==0.1.7
 langchain-google-genai
