@@ -354,20 +354,13 @@ def format_output(data):
 
 def render_executive_seat(idx, title, icon, key, guide):
     with tabs[idx]:
-        # A. INSTRUCTIONAL LAYER
         st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
         st.markdown(f"### {icon} {title} Command Seat")
         
         if st.session_state.get('gen'):
             raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
+            edited_intel = st.text_area("Refine Strategic Output", value=format_output(raw_data), height=350, key=f"area_{key}")
             
-            # B. EDITABLE INTELLIGENCE LAYER
-            edited_intel = st.text_area("Refine Strategic Output", 
-                                        value=format_output(raw_data), 
-                                        height=350, 
-                                        key=f"area_{key}")
-            
-            # C. DYNAMIC EXPORT ROW
             k1, k2, k3 = st.columns([2, 1, 1])
             with k1: st.success(f"Verified {title} Intelligence | ID: #SW-{datetime.now().strftime('%y%m')}")
             with k2: st.download_button("📄 Word Brief", create_word_doc(edited_intel, title, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
@@ -375,11 +368,8 @@ def render_executive_seat(idx, title, icon, key, guide):
             
             st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
             
-            # D. MULTI-CHANNEL ACTION HUB
-            st.divider()
-            st.subheader("🚀 Strategic Deployment")
+            st.divider(); st.subheader("🚀 Strategic Deployment")
             d1, d2, d3, d4 = st.columns(4)
-            
             with d1:
                 if st.button("📧 Email Team", key=f"mail_{key}"):
                     broadcast_deployment(title, biz_name, edited_intel, channel="Email")
@@ -395,7 +385,7 @@ def render_executive_seat(idx, title, icon, key, guide):
         else:
             st.info(f"Launch swarm to populate {title} seat.")
 
-# --- ADMIN UTILITY: AUDIT LOGS & DEMO RESET (TAB 11 - "⚙ Admin") ---
+# --- ADMIN UTILITY: AUDIT LOGS & DEMO RESET (TAB 11) ---
 with tabs[11]:
     st.header("⚙️ System Administration")
     
@@ -414,8 +404,6 @@ with tabs[11]:
 
     st.subheader("🧹 Database Maintenance")
     with st.expander("🚨 Critical Reset Tools", expanded=False):
-        st.warning("These tools surgically remove demo data while preserving real client records.")
-        
         if st.button("Purge Demo Leads", type="secondary"):
             try:
                 conn = sqlite3.connect('breatheeasy.db')
@@ -423,49 +411,45 @@ with tabs[11]:
                 cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
                 deleted_count = cursor.rowcount
                 
-                # Log the action to system_logs
+                # --- STEP 2: LOGGING LOGIC ---
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cursor.execute("INSERT INTO system_logs (timestamp, action, user, details) VALUES (?, ?, ?, ?)",
                              (ts, "DEMO_PURGE", st.session_state["username"], f"Purged {deleted_count} demo records."))
                 
-                conn.commit()
-                conn.close()
-                if deleted_count > 0:
-                    st.success(f"Purged {deleted_count} demo records.")
-                    st.rerun()
-                else:
-                    st.info("No demo records found.")
+                conn.commit(); conn.close()
+                st.success(f"Purged {deleted_count} demo records."); st.rerun()
             except Exception as e:
                 st.error(f"Maintenance Error: {e}")
 
-    # 2. THE SYSTEM LOG TABLE (Audit Trail)
-    st.divider()
-    st.subheader("📜 System Audit Trail")
+    # --- STEP 3: RENDER THE SYSTEM LOG ---
+    st.divider(); st.subheader("📜 System Audit Trail")
     try:
         conn = sqlite3.connect('breatheeasy.db')
         logs_df = pd.read_sql_query("SELECT timestamp, user, action, details FROM system_logs ORDER BY timestamp DESC", conn)
-        conn.close()
+        
         if not logs_df.empty:
             st.dataframe(logs_df, use_container_width=True, hide_index=True)
+            if st.button("Clear Audit Logs"):
+                conn.execute("DELETE FROM system_logs")
+                conn.commit(); conn.close(); st.rerun()
         else:
             st.info("Audit trail is currently empty.")
+        conn.close()
     except:
-        st.warning("System log table initializing...")
+        st.warning("Audit system initializing...")
 
-# EXECUTION LOOP: RENDER ALL 8 AGENT SEATS
+# RENDER SEATS
 seats = [
     ("Analyst", "🕵️", "analyst", "Identify competitor price gaps and quality failures."),
-    ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks and build counter-ads."),
-    ("Creative", "🎨", "creative", "Visual frameworks and cinematic scene prompts."),
-    ("Strategist", "👔", "strategist", "The 30-day ROI roadmap for executive budget approval."),
-    ("Social Hooks", "✍", "social", "Viral hooks and platform-specific schedules."),
-    ("GEO Map", "🧠", "geo", "AI Search and Map citation velocity optimization."),
-    ("Audit Scan", "🌐", "auditor", "Technical conversion leak diagnostics."),
-    ("SEO Blogger", "✍", "seo", "High-authority E-E-A-T technical articles.")
+    ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
+    ("Creative", "🎨", "creative", "Visual frameworks and cinematic prompts."),
+    ("Strategist", "👔", "strategist", "30-day ROI roadmap."),
+    ("Social Hooks", "✍", "social", "Viral hooks and schedules."),
+    ("GEO Map", "🧠", "geo", "AI Search and Map optimization."),
+    ("Audit Scan", "🌐", "auditor", "Technical conversion diagnostics."),
+    ("SEO Blogger", "✍", "seo", "High-authority technical articles.")
 ]
-
-for i, s in enumerate(seats): 
-    render_executive_seat(i, s[0], s[1], s[2], s[3])
+for i, s in enumerate(seats): render_executive_seat(i, s[0], s[1], s[2], s[3])
 
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
