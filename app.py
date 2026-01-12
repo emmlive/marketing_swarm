@@ -170,10 +170,8 @@ conn.close()
 
 # --- 5A. MULTI-CHANNEL BROADCAST LOGIC ---
 def broadcast_deployment(agent_name, target_biz, content, channel="Cloud"):
-    """Routes Strategic Intelligence to Email, SMS, or Slack with Audit Timestamps."""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     with st.spinner(f"Initiating {channel} broadcast for {agent_name}..."):
-        # API Placeholder: Connect to SendGrid (Email) or Twilio (SMS) here
         if channel == "Email":
             st.toast(f"📧 Strategic Brief emailed at {ts}")
         elif channel == "SMS":
@@ -184,7 +182,6 @@ def broadcast_deployment(agent_name, target_biz, content, channel="Cloud"):
 
 # --- 5B. STRATEGIC CRUD ENGINE ---
 def manage_record(action, record_id=None, new_content=None):
-    """Handles persistence for Save, Edit, and Delete actions."""
     conn = sqlite3.connect('breatheeasy.db')
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if action == "save":
@@ -202,7 +199,6 @@ def manage_record(action, record_id=None, new_content=None):
 
 # --- 5C. LIVE-SYNC DOCUMENT GENERATORS ---
 def create_word_doc(content, title, logo_path="Logo1.jpeg"):
-    """Generates Branded Word Brief with Live-Sync Metadata."""
     doc = Document()
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
@@ -215,7 +211,6 @@ def create_word_doc(content, title, logo_path="Logo1.jpeg"):
     bio = BytesIO(); doc.save(bio); return bio.getvalue()
 
 def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
-    """Generates Sanitized PDF Brief for Boardroom Presentation."""
     pdf = FPDF()
     pdf.add_page()
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -233,18 +228,20 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.multi_cell(0, 7, txt=clean_text)
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5D. SIDEBAR COMMAND CONSOLE ---
+# --- 5D. SIDEBAR COMMAND CONSOLE & SESSION AUTOMATION ---
 with st.sidebar:
     st.image(user_row['logo_path'], width=120)
     st.button("🌓 Toggle Theme", on_click=toggle_theme)
     st.metric("Credits Available", user_row['credits'])
     st.divider()
+    
     biz_name = st.text_input("Brand Name", placeholder="e.g. Acme Solar")
     c1, c2 = st.columns(2)
     with c1: city_input = st.text_input("City")
     with c2: state_input = st.text_input("State")
     full_loc = f"{city_input}, {state_input}"
     audit_url = st.text_input("Audit URL (Optional)")
+    
     ind_cat = st.selectbox("Industry", ["HVAC", "Medical", "Solar", "Legal", "Custom"])
     if ind_cat == "Custom":
         final_ind = st.text_input("Type Your Custom Industry")
@@ -252,10 +249,44 @@ with st.sidebar:
     else:
         final_ind = ind_cat
         svc = st.text_input("Service Type")
+        
     st.divider(); st.subheader("🤖 Swarm Personnel")
     toggles = {k: st.toggle(v, value=True) for k, v in {"analyst": "🕵️ Analyst", "ads": "📺 Ad Tracker", "builder": "🎨 Creative", "manager": "👔 Strategist", "social": "✍ Social", "geo": "🧠 GEO", "audit": "🌐 Auditor", "seo": "✍ SEO"}.items()}
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
+    
+    # --- AUTOMATED CLEANUP TRIGGER ---
+    st.divider()
+    if st.button("🔒 End Demo Session", use_container_width=True, help="Purge demo leads and logout"):
+        st.session_state.show_cleanup_confirm = True
+
     authenticator.logout('Sign Out', 'sidebar')
+
+# --- 5E. MODAL-STYLE CLEANUP PROMPT ---
+if st.session_state.get('show_cleanup_confirm'):
+    st.markdown("---")
+    with st.status("🛠️ Session Termination Hub", expanded=True):
+        st.write("Would you like to surgically purge all **Demo Data** before finalizing your session?")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🗑️ Yes, Purge Demo Records", type="primary"):
+                try:
+                    conn = sqlite3.connect('breatheeasy.db')
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
+                    count = cursor.rowcount
+                    conn.commit()
+                    conn.close()
+                    st.success(f"Purged {count} demo records. Real data preserved.")
+                    st.session_state.show_cleanup_confirm = False
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Purge Error: {e}")
+                    
+        with col2:
+            if st.button("🛑 No, Logout Only", type="secondary"):
+                st.session_state.show_cleanup_confirm = False
+                st.rerun()
     
 # --- 6. MULTIMODAL COMMAND CENTER (VERIFIED ACTION HUB) ---
 tabs = st.tabs(["🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"])
