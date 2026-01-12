@@ -379,14 +379,14 @@ if st.session_state.get('show_cleanup_confirm'):
 # --- 6. MULTIMODAL COMMAND CENTER (STRICT ARCHITECTURE) ---
 
 # 1. INITIALIZE TAB OBJECTS
-# Explicitly defining 13 tabs to prevent index overflow
+# Explicitly defining 13 tabs to prevent index overflow and context bleeding
 tabs = st.tabs([
     "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", 
     "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", 
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# 2. DEFINE SHARED UTILITY FUNCTIONS (Must be defined before the loop)
+# 2. DEFINE SHARED UTILITY FUNCTIONS FIRST (Must be defined before the loop)
 def format_output(data):
     """Sanitize and format agent output for high-end executive display."""
     if isinstance(data, str) and (data.startswith('{') or data.startswith('`')):
@@ -414,7 +414,8 @@ def render_executive_seat(idx, title, icon, key, guide):
                 with v2:
                     if st.button("🚀 Analyze Visual Gaps", type="primary"):
                         with st.spinner("Agent 'Vision' scanning..."):
-                            st.session_state.vision_report = f"### 👁️ Visual Intelligence Report\n- **Rival Hook:** Scarcity Abuse Detected.\n- **Leak:** No trust signals in hero fold.\n- **Move:** Human-first video disruption."
+                            # Logic for multimodal analysis would be called here
+                            st.session_state.vision_report = f"### 👁️ Visual Intelligence Report\n- **Rival Hook:** Scarcity Abuse Detected.\n- **Leak:** No trust signals in hero fold.\n- **Move:** Human-first video disruption strategy."
             if st.session_state.get('vision_report'):
                 st.markdown(f'<div class="insight-card">{st.session_state.vision_report}</div>', unsafe_allow_html=True)
 
@@ -440,6 +441,7 @@ def render_executive_seat(idx, title, icon, key, guide):
             with k3: st.download_button("📕 PDF", create_pdf(edited_intel, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
             st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
             
+            # DEPLOYMENT ENGINE
             st.divider(); d1, d2, d3, d4 = st.columns(4)
             with d1: st.button("📧 Email", key=f"m_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "Email"))
             with d2: st.button("📱 SMS", key=f"s_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "SMS"))
@@ -454,6 +456,8 @@ with tabs[0]:
     st.header("📖 Agent Intelligence Manual")
     st.info("Maximize your ROI by understanding how to implement AI-generated directives.")
     
+    
+
     col_g1, col_g2 = st.columns(2)
     with col_g1:
         with st.expander("🕵️ Analyst & Ad Tracker", expanded=True):
@@ -481,6 +485,8 @@ with tabs[0]:
 with tabs[11]:
     st.header("🤝 Team Intelligence & Market ROI")
     
+    
+
     conn = sqlite3.connect('breatheeasy.db')
     leads_df = pd.read_sql_query("SELECT city, industry, status FROM leads", conn)
     if not leads_df.empty:
@@ -490,6 +496,8 @@ with tabs[11]:
         m_col1.metric("Pipeline Gross Value", f"${total_val:,.0f}", delta="Omni-Swarm Active")
         m_col2.metric("Market Reach", f"{len(leads_df['city'].unique())} Active Cities")
         st.divider(); st.subheader("📍 Swarm Geographic Density")
+        
+        # Geographic coordinates for mapping
         geo_coords = {"Miami, Florida": [25.76, -80.19], "Austin, Texas": [30.26, -97.74], "Los Angeles, California": [34.05, -118.24]}
         map_data = [{"lat": geo_coords[loc][0], "lon": geo_coords[loc][1]} for loc in leads_df['city'] if loc in geo_coords]
         if map_data: st.map(pd.DataFrame(map_data), color="#00FFAA", size=20)
@@ -501,23 +509,28 @@ with tabs[12]:
     st.header("⚡ God-Mode Admin Control")
     st.warning("Critical Access: Database Governance & Session Management")
     
+    
+
     conn = sqlite3.connect('breatheeasy.db')
     leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
     h1, h2 = st.columns(2)
     h1.metric("Total DB Records", len(leads_all))
     h2.metric("System Health", "Operational")
     st.divider()
+    
     admin_c1, admin_c2 = st.columns(2)
     with admin_c1:
         with st.expander("📥 Master Data Export"):
             csv = leads_all.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Export CSV", csv, "master_leads.csv", "text/csv")
-    with admin_c2: # FIXED: Name corrected from admin_col2 to admin_c2
+            st.download_button("📥 Export CSV", csv, "master_leads.csv", "text/csv", use_container_width=True)
+    
+    with admin_c2: 
         with st.expander("🚨 Critical Reset Zone"):
             if st.button("Purge Demo Data", type="secondary", use_container_width=True):
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
                 conn.commit(); st.success("Demo records purged."); st.rerun()
+    
     st.divider(); st.subheader("📜 System Audit Trail")
     logs_df = pd.read_sql_query("SELECT timestamp, user, action, details FROM system_logs ORDER BY timestamp DESC LIMIT 50", conn)
     st.dataframe(logs_df, use_container_width=True, hide_index=True)
@@ -536,7 +549,7 @@ seats = [
     ("Vision", "👁️", "vision", "Multimodal visual gap analysis.")
 ]
 
-# This renders seats 1 through 9.
+# This renders seats 1 through 9. Tabs 11 and 12 remain protected by their prior definitions.
 for i, s in enumerate(seats): 
     render_executive_seat(i, s[0], s[1], s[2], s[3])
 
