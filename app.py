@@ -279,7 +279,7 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.multi_cell(0, 7, txt=clean_text)
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5D. SIDEBAR COMMAND CONSOLE (DYNAMIC LOCATION UPGRADE) ---
+# --- 5D. SIDEBAR COMMAND CONSOLE (HYBRID LOCATION UPGRADE) ---
 with st.sidebar:
     st.image(user_row['logo_path'], width=120)
     st.button("🌓 Toggle Theme", on_click=toggle_theme)
@@ -288,17 +288,27 @@ with st.sidebar:
     
     biz_name = st.text_input("Brand Name", placeholder="e.g. Acme Solar")
 
-    # --- DYNAMIC LOCATION SELECTOR ---
+    # 1. EXPANDED GEOGRAPHIC DICTIONARY
     location_data = {
-        "Florida": ["Miami", "Orlando", "Tampa", "Jacksonville", "Fort Lauderdale"],
-        "Texas": ["Austin", "Dallas", "Houston", "San Antonio", "Fort Worth"],
-        "California": ["Los Angeles", "San Francisco", "San Diego", "San Jose", "Sacramento"],
-        "New York": ["New York City", "Buffalo", "Rochester", "Albany"],
+        "Alabama": ["Birmingham", "Huntsville", "Mobile"],
         "Arizona": ["Phoenix", "Scottsdale", "Mesa", "Tucson"],
-        "Colorado": ["Denver", "Boulder", "Colorado Springs", "Aspen"],
-        "Illinois": ["Chicago", "Naperville", "Aurora", "Rockford"]
+        "California": ["Los Angeles", "San Francisco", "San Diego", "San Jose", "Sacramento"],
+        "Colorado": ["Denver", "Boulder", "Colorado Springs"],
+        "Florida": ["Miami", "Orlando", "Tampa", "Jacksonville", "Fort Lauderdale"],
+        "Georgia": ["Atlanta", "Savannah", "Augusta"],
+        "Illinois": ["Chicago", "Naperville", "Aurora", "Rockford"],
+        "Massachusetts": ["Boston", "Cambridge", "Worcester"],
+        "Michigan": ["Detroit", "Grand Rapids", "Ann Arbor"],
+        "Nevada": ["Las Vegas", "Reno", "Henderson"],
+        "New York": ["New York City", "Buffalo", "Rochester", "Albany"],
+        "North Carolina": ["Charlotte", "Raleigh", "Durham"],
+        "Ohio": ["Columbus", "Cleveland", "Cincinnati"],
+        "Pennsylvania": ["Philadelphia", "Pittsburgh", "Allentown"],
+        "Texas": ["Austin", "Dallas", "Houston", "San Antonio", "Fort Worth"],
+        "Washington": ["Seattle", "Bellevue", "Spokane"]
     }
 
+    # 2. DYNAMIC LOCATION LOGIC
     state_list = sorted(list(location_data.keys())) + ["Other (Manual Entry)"]
     selected_state = st.selectbox("🎯 Target State", state_list)
 
@@ -308,9 +318,17 @@ with st.sidebar:
         with s_col: m_state = st.text_input("State")
         full_loc = f"{m_city}, {m_state}"
     else:
-        city_list = sorted(location_data[selected_state])
+        # Check if they want to type a city NOT in the list for a supported state
+        city_list = sorted(location_data[selected_state]) + ["City not listed..."]
         selected_city = st.selectbox(f"🏙️ Select City ({selected_state})", city_list)
-        full_loc = f"{selected_city}, {selected_state}"
+        
+        if selected_city == "City not listed...":
+            custom_city = st.text_input(f"Type City in {selected_state}")
+            full_loc = f"{custom_city}, {selected_state}"
+        else:
+            full_loc = f"{selected_city}, {selected_state}"
+
+    st.caption(f"📍 Intelligence focused on: **{full_loc}**")
 
     audit_url = st.text_input("Audit URL (Optional)")
     
@@ -326,7 +344,6 @@ with st.sidebar:
     toggles = {k: st.toggle(v, value=True) for k, v in {"analyst": "🕵️ Analyst", "ads": "📺 Ad Tracker", "builder": "🎨 Creative", "manager": "👔 Strategist", "social": "✍ Social", "geo": "🧠 GEO", "audit": "🌐 Auditor", "seo": "✍ SEO"}.items()}
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     
-    # --- AUTOMATED CLEANUP TRIGGER ---
     st.divider()
     if st.button("🔒 End Demo Session", use_container_width=True, help="Purge demo leads and logout"):
         st.session_state.show_cleanup_confirm = True
@@ -338,7 +355,6 @@ if st.session_state.get('show_cleanup_confirm'):
     st.markdown("---")
     with st.status("🛠️ Session Termination Hub", expanded=True):
         st.write("Would you like to surgically purge all **Demo Data** before finalizing your session?")
-        
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🗑️ Yes, Purge Demo Records", type="primary"):
