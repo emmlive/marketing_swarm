@@ -280,7 +280,6 @@ def render_executive_seat(idx, title, icon, key, guide):
             raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
             
             # B. EDITABLE INTELLIGENCE LAYER (The Decision Engine)
-            # Stakeholders refine output here. All downstream actions (Save/Email/Export) use this variable.
             edited_intel = st.text_area("Refine Strategic Output", 
                                         value=format_output(raw_data), 
                                         height=350, 
@@ -292,7 +291,6 @@ def render_executive_seat(idx, title, icon, key, guide):
             with k2: st.download_button("📄 Word Brief", create_word_doc(edited_intel, title, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
             with k3: st.download_button("📕 PDF Brief", create_pdf(edited_intel, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
             
-            # Displaying the final glassmorphism card view
             st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
             
             # D. MULTI-CHANNEL ACTION HUB (The Deployment Engine)
@@ -303,24 +301,45 @@ def render_executive_seat(idx, title, icon, key, guide):
             with d1:
                 if st.button("📧 Email Team", key=f"mail_{key}"):
                     broadcast_deployment(title, biz_name, edited_intel, channel="Email")
-            
             with d2:
                 if st.button("📱 SMS Rapid Alert", key=f"sms_{key}"):
                     broadcast_deployment(title, biz_name, edited_intel, channel="SMS")
-            
             with d3:
                 if st.button("💾 Save to Pipeline", key=f"save_{key}"):
-                    # Logic located in Section 5 manage_record
                     manage_record("save", record_id=None) 
-            
             with d4:
                 if st.button("✅ Push to Hub", key=f"cloud_{key}"):
                     broadcast_deployment(title, biz_name, edited_intel, channel="Cloud")
-
         else:
             st.info(f"Launch swarm to populate {title} seat.")
 
-# EXECUTION LOOP: RENDER ALL 8 AGENT SEATS
+# --- ADMIN UTILITY: DEMO RESET (TAB 11 - "⚙ Admin") ---
+with tabs[11]:
+    st.header("⚙️ System Administration")
+    st.subheader("🧹 Database Maintenance")
+    
+    with st.expander("🚨 Critical Reset Tools", expanded=False):
+        st.warning("The tools below surgically remove demo data while preserving real client records.")
+        
+        if st.button("Purge Demo Leads", type="secondary", help="Removes all leads tagged as DEMO_DATA_INTERNAL"):
+            try:
+                conn = sqlite3.connect('breatheeasy.db')
+                cursor = conn.cursor()
+                # Target the safety tag defined in seed_data.py
+                cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
+                deleted_count = cursor.rowcount
+                conn.commit()
+                conn.close()
+                
+                if deleted_count > 0:
+                    st.success(f"Successfully purged {deleted_count} demo records. Real data is safe.")
+                    st.rerun()
+                else:
+                    st.info("No demo records found in the database.")
+            except Exception as e:
+                st.error(f"Maintenance Error: {e}")
+
+# EXECUTION LOOP: RENDER ALL 8 AGENT SEATS (TABS 0-7)
 seats = [
     ("Analyst", "🕵️", "analyst", "Identify competitor price gaps and quality failures."),
     ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks and build counter-ads."),
