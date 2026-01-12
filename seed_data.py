@@ -22,25 +22,23 @@ def seed_master_data():
     industries = ["Solar", "HVAC", "Medical", "Legal", "Dental"]
     cities = ["Austin, TX", "Miami, FL", "Denver, CO", "Phoenix, AZ", "Chicago, IL"]
     services = ["Lead Gen Swarm", "SEO Domination", "Ad Hook Optimization", "GEO Mapping"]
-    statuses = ["Discovery", "Execution", "ROI Verified"]
     
-    # We'll assume the team_id is 'MASTER_TEAM' or match it to your admin user
-    # Replace 'admin' with your actual test username if different
+    # CRITICAL: Using the safety tag for targeted cleanup later
     test_user = "admin" 
-    test_team = "TEAM_A" 
+    test_team = "DEMO_DATA_INTERNAL" 
 
-    print("🚀 Seeding Master Data into TechInAdvance Database...")
+    print(f"🚀 Seeding Master Data with Safety Tag: {test_team}...")
 
     # 3. Generate 10 diverse leads
     for i in range(1, 11):
-        # Stagger dates over the last 30 days
-        past_date = (datetime.now() - timedelta(days=random.randint(0, 30))).strftime("%Y-%m-%d")
+        # Stagger dates over the last 30 days for visual variety
+        past_date = (datetime.now() - timedelta(days=random.randint(1, 30))).strftime("%Y-%m-%d %H:%M:%S")
         
         ind = random.choice(industries)
         city = random.choice(cities)
         svc = random.choice(services)
         
-        # Distribute statuses to show a full board
+        # Distribute statuses across the Kanban Board
         if i <= 3:
             stat = "Discovery"
         elif i <= 7:
@@ -48,7 +46,13 @@ def seed_master_data():
         else:
             stat = "ROI Verified"
 
-        sample_content = f"Executive Intelligence for {ind} in {city}. Primary Gaps: Local Authority and Ad Hooks."
+        # Mimicking the structured output format for better UI rendering
+        sample_content = f"""
+        ### 📊 Market Intelligence for {ind}
+        - **Market Entry Gap:** High demand in {city} for specialized {svc}.
+        - **Competitor Weakness:** Rivals failing on mobile UX and GEO citation velocity.
+        - **Strategy:** Deploy Omni-channel hooks focusing on 'Urgency' and 'Authority'.
+        """
 
         cursor.execute("""
             INSERT INTO leads (date, user, industry, service, city, content, team_id, status) 
