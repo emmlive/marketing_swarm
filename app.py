@@ -377,31 +377,142 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.rerun()
     
 # --- 6. MULTIMODAL COMMAND CENTER (VERIFIED ACTION HUB) ---
-# Index Mapping: 0:Guide, 1-9:Seats, 10:Veo, 11:Intel, 12:Admin
+
+# 1. INITIALIZE TABS
 tabs = st.tabs([
     "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", 
     "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", 
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# --- TAB 0: GUIDE CONTENT ---
+# 2. DEFINE SHARED UTILITY FUNCTIONS FIRST
+def format_output(data):
+    """Sanitize and format agent output for high-end executive display."""
+    if isinstance(data, str) and (data.startswith('{') or data.startswith('`')):
+        try:
+            clean_str = data.strip().strip('```json').strip('```').strip()
+            import json
+            parsed = json.loads(clean_str)
+            return pd.json_normalize(parsed).T.to_markdown()
+        except: return data
+    return data
+
+def render_executive_seat(idx, title, icon, key, guide):
+    """Renders agent seats into tabs 1 through 9."""
+    with tabs[idx + 1]: 
+        st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
+        st.markdown(f"### {icon} {title} Command Seat")
+        
+        # --- SPECIAL LOGIC FOR VISION INSPECTOR (TAB 9) ---
+        if title == "Vision":
+            st.info("Upload competitor assets for visual teardowns.")
+            uploaded_file = st.file_uploader("Upload Competitor Asset (PNG/JPG)", type=["png", "jpg", "jpeg"], key="vision_upload")
+            if uploaded_file:
+                v1, v2 = st.columns([1, 1])
+                with v1: st.image(uploaded_file, caption="Target Asset", use_container_width=True)
+                with v2:
+                    if st.button("🚀 Analyze Visual Gaps", type="primary"):
+                        with st.spinner("Agent 'Vision' scanning..."):
+                            st.session_state.vision_report = f"### 👁️ Visual Intelligence Report\n- **Rival Hook:** Aggressive scarcity.\n- **Leak:** No trust signals.\n- **Move:** Human-first video disruption."
+            if st.session_state.get('vision_report'):
+                st.markdown(f'<div class="insight-card">{st.session_state.vision_report}</div>', unsafe_allow_html=True)
+
+        # --- STANDARD AGENT DISPLAY ---
+        elif st.session_state.get('gen'):
+            raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
+            edited_intel = st.text_area("Refine Strategic Output", value=format_output(raw_data), height=350, key=f"area_{key}")
+            
+            # AD TRACKER LOGIC (Mockups & Library)
+            if title == "Ad Tracker":
+                st.divider()
+                st.markdown("#### 🕵️ Rival Intelligence & Mockup")
+                lib_col, mock_col = st.columns(2)
+                with lib_col:
+                    search_q = f"{final_ind} {full_loc}".replace(" ", "%20")
+                    st.link_button("🔥 Meta Ad Library", f"https://www.facebook.com/ads/library/?q={search_q}")
+                with mock_col:
+                    st.markdown(f'<div style="border:1px solid #00FFAA; padding:10px; border-radius:10px; font-size:0.8em;"><b>{biz_name}</b><br>{edited_intel[:60]}...</div>', unsafe_allow_html=True)
+
+            k1, k2, k3 = st.columns([2, 1, 1])
+            with k1: st.success(f"Verified {title} Intelligence")
+            with k2: st.download_button("📄 Word", create_word_doc(edited_intel, title, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
+            with k3: st.download_button("📕 PDF", create_pdf(edited_intel, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
+            st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
+            
+            # DEPLOYMENT HUB
+            st.divider(); d1, d2, d3, d4 = st.columns(4)
+            with d1: st.button("📧 Email", key=f"m_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "Email"))
+            with d2: st.button("📱 SMS", key=f"s_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "SMS"))
+            with d3: st.button("💾 Save", key=f"sv_{key}", on_click=manage_record, args=("save", None))
+            with d4: st.button("✅ Hub", key=f"c_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "Cloud"))
+        else:
+            st.info(f"Launch swarm to populate {title} seat.")
+
+# 3. DEFINE STATIC TABS (GUIDE, INTEL, ADMIN)
 with tabs[0]:
     st.header("📖 Agent Intelligence Manual")
     st.info("Maximize your ROI by understanding how to implement AI-generated directives.")
     doc_cols = st.columns(2)
     with doc_cols[0]:
         with st.expander("🕵️ Market Analyst & Ad Tracker", expanded=True):
-            st.markdown("**What it Does:** Identifies competitor price gaps and ad hooks.\n**Implementation:** Launch price-match campaigns or exploit rival service gaps.")
+            st.markdown("**What it Does:** Identifies competitor price gaps.\n**Implementation:** Launch price-match campaigns.")
         with st.expander("🎨 Creative & Social Architect"):
-            st.markdown("**What it Does:** Video prompts and viral hooks.\n**Implementation:** Copy prompts into video generators; schedule hooks on TikTok/Reels.")
+            st.markdown("**What it Does:** Video prompts and viral hooks.\n**Implementation:** Copy prompts into video generators.")
     with doc_cols[1]:
         with st.expander("👔 Chief Growth Strategist"):
-            st.markdown("**What it Does:** 30-day executive ROI roadmaps.\n**Implementation:** Use as a foundational agenda for stakeholder meetings.")
+            st.markdown("**What it Does:** 30-day executive ROI roadmaps.\n**Implementation:** Foundation for stakeholder meetings.")
         with st.expander("🌐 Technical Conversion Auditor"):
-            st.markdown("**What it Does:** Scans URLs for UX leaks.\n**Implementation:** Hand directives to developers for immediate performance patches.")
+            st.markdown("**What it Does:** Scans URLs for UX leaks.\n**Implementation:** Action items for developers.")
 
-# --- AGENT SEAT EXECUTION LOOP (TABS 1-9) ---
-# We render these first to ensure the loop doesn't bleed into Tab 11/12
+with tabs[11]:
+    st.header("🤝 Team Intelligence & Market ROI")
+    conn = sqlite3.connect('breatheeasy.db')
+    leads_df = pd.read_sql_query("SELECT city, industry, status FROM leads", conn)
+    if not leads_df.empty:
+        val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000, "Dental": 4500, "Custom": 10000}
+        total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
+        m_col1, m_col2 = st.columns(2)
+        m_col1.metric("Pipeline Gross Value", f"${total_val:,.0f}")
+        m_col2.metric("Market Reach", f"{len(leads_df['city'].unique())} Active Cities")
+        st.divider()
+        st.subheader("📍 Swarm Geographic Density")
+        geo_coords = {"Miami, Florida": [25.76, -80.19], "Austin, Texas": [30.26, -97.74], "Los Angeles, California": [34.05, -118.24]}
+        map_data = [{"lat": geo_coords[loc][0], "lon": geo_coords[loc][1]} for loc in leads_df['city'] if loc in geo_coords]
+        if map_data: st.map(pd.DataFrame(map_data), color="#00FFAA", size=20)
+        c1, c2 = st.columns(2)
+        with c1: st.write("**📊 Industry Mix**"); st.bar_chart(leads_df['industry'].value_counts())
+        with c2: st.write("**📈 Status Pipeline**"); st.line_chart(leads_df['status'].value_counts())
+    else:
+        st.info("No market data available yet.")
+    conn.close()
+
+with tabs[12]:
+    st.header("⚡ God-Mode Admin Control")
+    st.warning("Critical Access: Database Governance & Session Management")
+    conn = sqlite3.connect('breatheeasy.db')
+    leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
+    h1, h2 = st.columns(2)
+    h1.metric("Total Records", len(leads_all))
+    h2.metric("System Health", "Operational")
+    st.divider()
+    admin_col1, admin_col2 = st.columns(2)
+    with admin_col1:
+        with st.expander("📥 Master Data Export"):
+            csv = leads_all.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Export CSV", csv, "master_leads.csv", "text/csv")
+    with admin_col2:
+        with st.expander("🚨 Critical Reset Zone"):
+            if st.button("Purge Demo Data", type="secondary", use_container_width=True):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
+                conn.commit()
+                st.success("Demo records purged."); st.rerun()
+    st.divider(); st.subheader("📜 System Audit Trail")
+    logs_df = pd.read_sql_query("SELECT timestamp, user, action, details FROM system_logs ORDER BY timestamp DESC LIMIT 50", conn)
+    st.dataframe(logs_df, use_container_width=True, hide_index=True)
+    conn.close()
+
+# 4. RENDER EXECUTION LOOP (LAST)
 seats = [
     ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
     ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
@@ -414,88 +525,8 @@ seats = [
     ("Vision", "👁️", "vision", "Multimodal visual gap analysis.")
 ]
 
-for i, s in enumerate(seats):
+for i, s in enumerate(seats): 
     render_executive_seat(i, s[0], s[1], s[2], s[3])
-
-# --- TAB 11: TEAM INTEL & HEATMAP (RESTORED FEATURES) ---
-with tabs[11]:
-    st.header("🤝 Team Intelligence & Market ROI")
-    conn = sqlite3.connect('breatheeasy.db')
-    leads_df = pd.read_sql_query("SELECT city, industry, status FROM leads", conn)
-    
-    if not leads_df.empty:
-        # A. Revenue Projection & Metrics
-        val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000, "Dental": 4500, "Custom": 10000}
-        total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
-        
-        m_col1, m_col2 = st.columns(2)
-        m_col1.metric("Pipeline Gross Value", f"${total_val:,.0f}", delta="Omni-Swarm Active")
-        m_col2.metric("Market Reach", f"{len(leads_df['city'].unique())} Active Cities")
-        
-        st.divider()
-        
-        # B. Geographic Heatmap
-        st.subheader("📍 Swarm Geographic Density")
-        
-        geo_coords = {"Miami, Florida": [25.76, -80.19], "Austin, Texas": [30.26, -97.74], "Los Angeles, California": [34.05, -118.24]}
-        map_data = [{"lat": geo_coords[loc][0], "lon": geo_coords[loc][1]} for loc in leads_df['city'] if loc in geo_coords]
-        if map_data: 
-            st.map(pd.DataFrame(map_data), color="#00FFAA", size=20)
-        
-        # C. Industry Charts
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("**📊 Industry Mix**")
-            st.bar_chart(leads_df['industry'].value_counts())
-        with c2:
-            st.write("**📈 Status Pipeline**")
-            st.line_chart(leads_df['status'].value_counts())
-    else:
-        st.info("No market data available yet.")
-    conn.close()
-
-# --- TAB 12: ⚡ GOD-MODE ADMIN CONTROL (ISOLATED & FIXED) ---
-with tabs[12]:
-    st.header("⚡ God-Mode Admin Control")
-    st.warning("Critical Access: Database Governance & Session Management")
-    
-    conn = sqlite3.connect('breatheeasy.db')
-    
-    # 1. System Health Metrics
-    leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
-    h1, h2 = st.columns(2)
-    h1.metric("Total Database Records", len(leads_all))
-    h2.metric("System Health", "Operational", delta="Stable")
-    
-    # 2. Data Governance Hub
-    st.divider()
-    st.subheader("🧹 System Maintenance Hub")
-    
-    admin_col1, admin_col2 = st.columns(2)
-    with admin_col1:
-        with st.expander("📥 Master Data Export"):
-            csv = leads_all.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Export All Leads (CSV)", csv, "master_leads.csv", "text/csv", use_container_width=True)
-            st.caption("Download full database for CRM integration.")
-
-    with admin_col2:
-        with st.expander("🚨 Critical Reset Zone"):
-            if st.button("Purge Demo Data", type="secondary", use_container_width=True):
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
-                count = cursor.rowcount
-                conn.commit()
-                st.success(f"Successfully purged {count} demo records.")
-                st.rerun()
-
-    # 3. Real-Time Audit Trail
-    st.divider()
-    st.subheader("📜 System Audit Trail")
-    
-    logs_df = pd.read_sql_query("SELECT timestamp, user, action, details FROM system_logs ORDER BY timestamp DESC LIMIT 50", conn)
-    st.dataframe(logs_df, use_container_width=True, hide_index=True)
-    
-    conn.close()
 
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
