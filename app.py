@@ -280,20 +280,19 @@ def render_executive_seat(idx, title, icon, key, guide):
             raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
             
             # B. EDITABLE INTELLIGENCE LAYER (The Decision Engine)
-            # Stakeholders can refine output here before sharing/saving
+            # Stakeholders refine output here. All downstream actions (Save/Email/Export) use this variable.
             edited_intel = st.text_area("Refine Strategic Output", 
                                         value=format_output(raw_data), 
                                         height=350, 
                                         key=f"area_{key}")
             
             # C. DYNAMIC EXPORT ROW (Live-Sync)
-            # Note: These now use 'edited_intel' to ensure manual changes are captured
             k1, k2, k3 = st.columns([2, 1, 1])
             with k1: st.success(f"Verified {title} Intelligence | ID: #SW-{datetime.now().strftime('%y%m')}")
             with k2: st.download_button("📄 Word Brief", create_word_doc(edited_intel, title, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
             with k3: st.download_button("📕 PDF Brief", create_pdf(edited_intel, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
             
-            # Displaying the final card view
+            # Displaying the final glassmorphism card view
             st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
             
             # D. MULTI-CHANNEL ACTION HUB (The Deployment Engine)
@@ -311,7 +310,7 @@ def render_executive_seat(idx, title, icon, key, guide):
             
             with d3:
                 if st.button("💾 Save to Pipeline", key=f"save_{key}"):
-                    # Syncs with the Kanban Board in Section 9
+                    # Logic located in Section 5 manage_record
                     manage_record("save", record_id=None) 
             
             with d4:
