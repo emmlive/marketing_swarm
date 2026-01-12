@@ -385,7 +385,7 @@ tabs = st.tabs([
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# 2. DEFINE SHARED UTILITY FUNCTIONS FIRST
+# 2. DEFINE SHARED UTILITY FUNCTIONS FIRST (Prevents NameError)
 def format_output(data):
     """Sanitize and format agent output for high-end executive display."""
     if isinstance(data, str) and (data.startswith('{') or data.startswith('`')):
@@ -398,12 +398,12 @@ def format_output(data):
     return data
 
 def render_executive_seat(idx, title, icon, key, guide):
-    """Renders agent seats into tabs 1 through 9."""
+    """Renders agent seats into tabs 1 through 9 with index-shifting logic."""
     with tabs[idx + 1]: 
         st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
         st.markdown(f"### {icon} {title} Command Seat")
         
-        # --- SPECIAL LOGIC FOR VISION INSPECTOR (TAB 9) ---
+        # --- VISION INSPECTOR SPECIAL LOGIC ---
         if title == "Vision":
             st.info("Upload competitor assets for visual teardowns.")
             uploaded_file = st.file_uploader("Upload Competitor Asset (PNG/JPG)", type=["png", "jpg", "jpeg"], key="vision_upload")
@@ -413,16 +413,16 @@ def render_executive_seat(idx, title, icon, key, guide):
                 with v2:
                     if st.button("🚀 Analyze Visual Gaps", type="primary"):
                         with st.spinner("Agent 'Vision' scanning..."):
-                            st.session_state.vision_report = f"### 👁️ Visual Intelligence Report\n- **Rival Hook:** Aggressive scarcity.\n- **Leak:** No trust signals.\n- **Move:** Human-first video disruption."
+                            st.session_state.vision_report = f"### 👁️ Visual Intelligence Report\n- **Rival Hook:** Scarcity Abuse.\n- **Leak:** No trust signals.\n- **Move:** Contrast disruption."
             if st.session_state.get('vision_report'):
                 st.markdown(f'<div class="insight-card">{st.session_state.vision_report}</div>', unsafe_allow_html=True)
 
-        # --- STANDARD AGENT DISPLAY ---
+        # --- STANDARD AGENT OUTPUT DISPLAY ---
         elif st.session_state.get('gen'):
             raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
             edited_intel = st.text_area("Refine Strategic Output", value=format_output(raw_data), height=350, key=f"area_{key}")
             
-            # AD TRACKER LOGIC (Mockups & Library)
+            # AD TRACKER SPECIAL LOGIC (Mockups & Library)
             if title == "Ad Tracker":
                 st.divider()
                 st.markdown("#### 🕵️ Rival Intelligence & Mockup")
@@ -439,7 +439,7 @@ def render_executive_seat(idx, title, icon, key, guide):
             with k3: st.download_button("📕 PDF", create_pdf(edited_intel, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
             st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
             
-            # DEPLOYMENT HUB
+            # DEPLOYMENT ENGINE
             st.divider(); d1, d2, d3, d4 = st.columns(4)
             with d1: st.button("📧 Email", key=f"m_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "Email"))
             with d2: st.button("📱 SMS", key=f"s_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "SMS"))
@@ -454,36 +454,30 @@ with tabs[0]:
     st.info("Maximize your ROI by understanding how to implement AI-generated directives.")
     doc_cols = st.columns(2)
     with doc_cols[0]:
-        with st.expander("🕵️ Market Analyst & Ad Tracker", expanded=True):
-            st.markdown("**What it Does:** Identifies competitor price gaps.\n**Implementation:** Launch price-match campaigns.")
-        with st.expander("🎨 Creative & Social Architect"):
-            st.markdown("**What it Does:** Video prompts and viral hooks.\n**Implementation:** Copy prompts into video generators.")
+        with st.expander("🕵️ Analyst & Ad Tracker", expanded=True):
+            st.markdown("**What it Does:** Identifies price gaps and psychological ad hooks.\n**Implementation:** Launch price-match campaigns immediately.")
     with doc_cols[1]:
         with st.expander("👔 Chief Growth Strategist"):
-            st.markdown("**What it Does:** 30-day executive ROI roadmaps.\n**Implementation:** Foundation for stakeholder meetings.")
-        with st.expander("🌐 Technical Conversion Auditor"):
-            st.markdown("**What it Does:** Scans URLs for UX leaks.\n**Implementation:** Action items for developers.")
+            st.markdown("**What it Does:** 30-day ROI roadmaps.\n**Implementation:** Foundation for stakeholder meetings.")
 
 with tabs[11]:
     st.header("🤝 Team Intelligence & Market ROI")
+    st.info("Aggregated market data from all launched swarms.")
     conn = sqlite3.connect('breatheeasy.db')
     leads_df = pd.read_sql_query("SELECT city, industry, status FROM leads", conn)
     if not leads_df.empty:
         val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000, "Dental": 4500, "Custom": 10000}
         total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
         m_col1, m_col2 = st.columns(2)
-        m_col1.metric("Pipeline Gross Value", f"${total_val:,.0f}")
+        m_col1.metric("Pipeline Value", f"${total_val:,.0f}", delta="Omni-Swarm Active")
         m_col2.metric("Market Reach", f"{len(leads_df['city'].unique())} Active Cities")
         st.divider()
         st.subheader("📍 Swarm Geographic Density")
         geo_coords = {"Miami, Florida": [25.76, -80.19], "Austin, Texas": [30.26, -97.74], "Los Angeles, California": [34.05, -118.24]}
         map_data = [{"lat": geo_coords[loc][0], "lon": geo_coords[loc][1]} for loc in leads_df['city'] if loc in geo_coords]
         if map_data: st.map(pd.DataFrame(map_data), color="#00FFAA", size=20)
-        c1, c2 = st.columns(2)
-        with c1: st.write("**📊 Industry Mix**"); st.bar_chart(leads_df['industry'].value_counts())
-        with c2: st.write("**📈 Status Pipeline**"); st.line_chart(leads_df['status'].value_counts())
     else:
-        st.info("No market data available yet.")
+        st.info("Launch swarms to generate market intelligence.")
     conn.close()
 
 with tabs[12]:
@@ -492,14 +486,14 @@ with tabs[12]:
     conn = sqlite3.connect('breatheeasy.db')
     leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
     h1, h2 = st.columns(2)
-    h1.metric("Total Records", len(leads_all))
-    h2.metric("System Health", "Operational")
+    h1.metric("Database Records", len(leads_all))
+    h2.metric("System Health", "Operational", delta="Stable")
     st.divider()
     admin_col1, admin_col2 = st.columns(2)
     with admin_col1:
         with st.expander("📥 Master Data Export"):
             csv = leads_all.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Export CSV", csv, "master_leads.csv", "text/csv")
+            st.download_button("📥 Export Master CSV", csv, "master_leads.csv", "text/csv", use_container_width=True)
     with admin_col2:
         with st.expander("🚨 Critical Reset Zone"):
             if st.button("Purge Demo Data", type="secondary", use_container_width=True):
@@ -512,7 +506,7 @@ with tabs[12]:
     st.dataframe(logs_df, use_container_width=True, hide_index=True)
     conn.close()
 
-# 4. RENDER EXECUTION LOOP (LAST)
+# 4. RENDER EXECUTION LOOP (LAST - Prevents context-swiping)
 seats = [
     ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
     ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
