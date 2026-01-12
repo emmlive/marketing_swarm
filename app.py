@@ -361,13 +361,13 @@ def render_executive_seat(idx, title, icon, key, guide):
         if st.session_state.get('gen'):
             raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
             
-            # B. EDITABLE INTELLIGENCE LAYER (The Decision Engine)
+            # B. EDITABLE INTELLIGENCE LAYER
             edited_intel = st.text_area("Refine Strategic Output", 
                                         value=format_output(raw_data), 
                                         height=350, 
                                         key=f"area_{key}")
             
-            # C. DYNAMIC EXPORT ROW (Live-Sync)
+            # C. DYNAMIC EXPORT ROW
             k1, k2, k3 = st.columns([2, 1, 1])
             with k1: st.success(f"Verified {title} Intelligence | ID: #SW-{datetime.now().strftime('%y%m')}")
             with k2: st.download_button("📄 Word Brief", create_word_doc(edited_intel, title, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
@@ -375,7 +375,7 @@ def render_executive_seat(idx, title, icon, key, guide):
             
             st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
             
-            # D. MULTI-CHANNEL ACTION HUB (The Deployment Engine)
+            # D. MULTI-CHANNEL ACTION HUB
             st.divider()
             st.subheader("🚀 Strategic Deployment")
             d1, d2, d3, d4 = st.columns(4)
@@ -395,33 +395,64 @@ def render_executive_seat(idx, title, icon, key, guide):
         else:
             st.info(f"Launch swarm to populate {title} seat.")
 
-# --- ADMIN UTILITY: DEMO RESET (TAB 11 - "⚙ Admin") ---
+# --- ADMIN UTILITY: AUDIT LOGS & DEMO RESET (TAB 11 - "⚙ Admin") ---
 with tabs[11]:
     st.header("⚙️ System Administration")
-    st.subheader("🧹 Database Maintenance")
     
+    # 1. System Health Metrics
+    conn = sqlite3.connect('breatheeasy.db')
+    try:
+        total_leads = pd.read_sql_query("SELECT COUNT(*) as count FROM leads", conn)['count'][0]
+        total_purges = pd.read_sql_query("SELECT COUNT(*) as count FROM system_logs WHERE action='DEMO_PURGE'", conn)['count'][0]
+    except:
+        total_leads, total_purges = 0, 0
+    
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Database Records", total_leads)
+    m2.metric("Demo Purges", total_purges)
+    m3.metric("System Status", "Operational", delta="Stable")
+
+    st.subheader("🧹 Database Maintenance")
     with st.expander("🚨 Critical Reset Tools", expanded=False):
-        st.warning("The tools below surgically remove demo data while preserving real client records.")
+        st.warning("These tools surgically remove demo data while preserving real client records.")
         
-        if st.button("Purge Demo Leads", type="secondary", help="Removes all leads tagged as DEMO_DATA_INTERNAL"):
+        if st.button("Purge Demo Leads", type="secondary"):
             try:
                 conn = sqlite3.connect('breatheeasy.db')
                 cursor = conn.cursor()
-                # Target the safety tag defined in seed_data.py
                 cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
                 deleted_count = cursor.rowcount
+                
+                # Log the action to system_logs
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                cursor.execute("INSERT INTO system_logs (timestamp, action, user, details) VALUES (?, ?, ?, ?)",
+                             (ts, "DEMO_PURGE", st.session_state["username"], f"Purged {deleted_count} demo records."))
+                
                 conn.commit()
                 conn.close()
-                
                 if deleted_count > 0:
-                    st.success(f"Successfully purged {deleted_count} demo records. Real data is safe.")
+                    st.success(f"Purged {deleted_count} demo records.")
                     st.rerun()
                 else:
-                    st.info("No demo records found in the database.")
+                    st.info("No demo records found.")
             except Exception as e:
                 st.error(f"Maintenance Error: {e}")
 
-# EXECUTION LOOP: RENDER ALL 8 AGENT SEATS (TABS 0-7)
+    # 2. THE SYSTEM LOG TABLE (Audit Trail)
+    st.divider()
+    st.subheader("📜 System Audit Trail")
+    try:
+        conn = sqlite3.connect('breatheeasy.db')
+        logs_df = pd.read_sql_query("SELECT timestamp, user, action, details FROM system_logs ORDER BY timestamp DESC", conn)
+        conn.close()
+        if not logs_df.empty:
+            st.dataframe(logs_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Audit trail is currently empty.")
+    except:
+        st.warning("System log table initializing...")
+
+# EXECUTION LOOP: RENDER ALL 8 AGENT SEATS
 seats = [
     ("Analyst", "🕵️", "analyst", "Identify competitor price gaps and quality failures."),
     ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks and build counter-ads."),
