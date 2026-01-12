@@ -24,10 +24,11 @@ class SwarmState(BaseModel):
     production_schedule: str = "Roadmap pending..."
 
 # --- 2. ENGINE INITIALIZATION ---
+# Using the advanced Gemini 2.0 Flash for ultra-low latency and complex reasoning
 gemini_llm = LLM(
     model="google/gemini-2.0-flash", 
     api_key=os.getenv("GOOGLE_API_KEY"),
-    temperature=0.3 # Reduced for high-precision business logic
+    temperature=0.3 # Precision-focused
 )
 
 search_tool = SerperDevTool(api_key=os.getenv("SERPER_API_KEY"))
@@ -43,59 +44,53 @@ def get_swarm_agents(inputs):
         "analyst": Agent(
             role="Chief Market Strategist (McKinsey Level)",
             goal=f"Identify high-value market entry gaps and price arbitrage opportunities for {biz} in {city}.",
-            backstory="""You are an expert market scientist. You don't just list competitors; you 
-            quantify 'Market Entry Gaps' and 'Competitor Fatigue'. Your reports focus on 
-            vulnerabilities and unmet local demand.""",
+            backstory="""You are an expert market scientist. You quantify 'Market Entry Gaps' and 
+            'Competitor Fatigue' to find local vulnerabilities.""",
             tools=[search_tool, scrape_tool], llm=gemini_llm, verbose=True
         ),
         "creative": Agent(
             role="Executive Creative Director (Direct Response Expert)",
             goal="Engineer psychological ad hooks and high-end cinematic video concepts.",
-            backstory="""You specialize in 'Pain-Point' marketing. You take data and convert 
-            it into emotional triggers. You provide A/B test variables and precise cinematic 
-            scene descriptions for Veo video generation.""",
+            backstory="""You convert emotional triggers into A/B test variables and precise 
+            cinematic scene descriptions for Veo video generation.""",
             llm=gemini_llm, verbose=True
         ),
         "seo_blogger": Agent(
             role="SEO Content Architect (E-E-A-T Specialist)",
-            goal="Compose a high-authority technical article that secures AI search engine trust.",
-            backstory="""You are the master of authority content. You write 2,000+ word technical 
-            guides that establish {biz} as the definitive local leader in their sector.""",
+            goal="Compose high-authority technical articles that secure AI search engine trust.",
+            backstory=f"You establish {biz} as the definitive local leader through technical authority content.",
             llm=gemini_llm, verbose=True
         ),
         "web_auditor": Agent(
             role="Conversion UX Auditor",
             goal=f"Diagnose technical conversion leaks and psychological friction on {url}.",
-            backstory="""You are a UX psychologist. You use tools to find where money is 
-            leaking from the funnel. Your reports are purely actionable directives for developers.""",
+            backstory="""You identify where money is leaking from the funnel and provide 
+            developer-ready action items.""",
             tools=[scrape_tool], llm=gemini_llm, verbose=True
         ),
         "social_agent": Agent(
             role="Social Distribution Architect",
             goal="Repurpose strategy into a viral Omni-channel broadcast plan.",
-            backstory="""Expert in LinkedIn, Meta, and X algorithms. You create 'scroll-stopping' 
-            hooks and precise deployment schedules for maximum ROI.""",
+            backstory="Expert in viral hooks and precise deployment schedules for maximum ROI.",
             llm=gemini_llm, verbose=True
         ),
         "geo_specialist": Agent(
             role="GEO Specialist (Local AI Search Optimization)",
-            goal=f"Optimize citation velocity and Map visibility for {biz}.",
-            backstory="""Expert in Local Ranking Factors. You identify the citations needed 
-            to dominate Google Maps and AI Search (SGE) specifically in {city}.""",
+            goal=f"Optimize citation velocity and Map visibility for {biz} in {city}.",
+            backstory="Expert in Local Ranking Factors and AI Search (SGE) dominance.",
             llm=gemini_llm, verbose=True
         ),
         "strategist": Agent(
             role="Chief Growth Officer (The Swarm Commander)",
             goal="Synthesize all agent intelligence into a 30-day CEO roadmap.",
-            backstory="""The ultimate decision maker. You validate every agent's work for 
-            ROI alignment. Your output is a quarterly execution plan that a CEO would 
-            sign off on immediately.""",
+            backstory="The ultimate decision maker. You validate every agent's work for ROI alignment.",
             llm=gemini_llm, verbose=True
         )
     }
 
 # --- 4. THE STATEFUL WORKFLOW ---
-# 
+
+
 class MarketingSwarmFlow(Flow[SwarmState]):
     def __init__(self, inputs):
         super().__init__()
@@ -107,13 +102,13 @@ class MarketingSwarmFlow(Flow[SwarmState]):
     def phase_1_discovery(self):
         """Step 1: Stakeholder Discovery & Ad Tracking"""
         analyst_task = Task(
-            description=f"Identify the 'Market Entry Gap' in {self.inputs['city']}. Quantify rival weaknesses.",
+            description=f"Identify the 'Market Entry Gap' in {self.inputs['city']}.",
             agent=self.agents["analyst"],
-            expected_output="A professional Markdown Executive Market Report including a 'Competitor Fatigue' table."
+            expected_output="Markdown Executive Market Report with 'Competitor Fatigue' table."
         )
         
         ad_track_task = Task(
-            description=f"Extract and analyze live ad hooks of rivals in {self.inputs['city']}.",
+            description=f"Analyze live ad hooks of rivals in {self.inputs['city']}.",
             agent=self.agents["analyst"],
             expected_output="Detailed breakdown of psychological hooks used by local competitors."
         )
@@ -131,10 +126,10 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             
         Crew(agents=list(self.agents.values()), tasks=active_tasks, process=Process.sequential).kickoff()
         
-        self.state.market_data = analyst_task.output.raw
-        self.state.competitor_ads = ad_track_task.output.raw
+        self.state.market_data = str(analyst_task.output.raw)
+        self.state.competitor_ads = str(ad_track_task.output.raw)
         if auditor_task:
-            self.state.website_audit = auditor_task.output.raw
+            self.state.website_audit = str(auditor_task.output.raw)
             
         return "discovery_complete"
 
@@ -149,28 +144,25 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         
         production_tasks = [creative_task]
         
-        seo_task = None
         if self.toggles.get('seo'):
             seo_task = Task(
-                description="Compose a 2,000-word SEO Technical Article based on market research.",
+                description="Compose a technical SEO article based on market research.",
                 agent=self.agents["seo_blogger"],
-                expected_output="High-authority technical article in professional Markdown."
+                expected_output="High-authority technical article."
             )
             production_tasks.append(seo_task)
 
-        social_task = None
         if self.toggles.get('social'):
             social_task = Task(
-                description="Repurpose research into a viral Omni-channel posting roadmap.",
+                description="Create a 30-day viral distribution schedule.",
                 agent=self.agents["social_agent"],
-                expected_output="Viral Hooks and 30-day Distribution Schedule."
+                expected_output="Viral Hooks and Distribution Schedule."
             )
             production_tasks.append(social_task)
 
-        geo_task = None
         if self.toggles.get('geo'):
             geo_task = Task(
-                description="Develop a Local GEO citation and Map dominance plan.",
+                description="Develop a local GEO dominance plan.",
                 agent=self.agents["geo_specialist"],
                 expected_output="Technical GEO Intelligence Report."
             )
@@ -178,21 +170,22 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
         Crew(agents=list(self.agents.values()), tasks=production_tasks, process=Process.sequential).kickoff()
         
-        # OBJECT-REFERENCE ASSIGNMENT
-        self.state.ad_drafts = creative_task.output.raw
-        if seo_task: self.state.seo_article = seo_task.output.raw
-        if social_task: self.state.social_plan = social_task.output.raw
-        if geo_task: self.state.geo_intel = geo_task.output.raw
-        
+        self.state.ad_drafts = str(creative_task.output.raw)
+        # Match State to Toggled Tasks
+        for task in production_tasks:
+            if "SEO Content" in task.description: self.state.seo_article = str(task.output.raw)
+            if "viral" in task.description: self.state.social_plan = str(task.output.raw)
+            if "GEO" in task.description: self.state.geo_intel = str(task.output.raw)
+            
         return "execution_complete"
 
     @listen("execution_complete")
     def phase_3_validation(self):
         """Step 3: CEO Level Synthesis & ROI Roadmap"""
         val_task = Task(
-            description="Synthesize all Swarm data into a 30-day ROI Growth Roadmap.",
+            description="Synthesize all data into a 30-day ROI Growth Roadmap.",
             agent=self.agents["strategist"],
-            expected_output="Master Growth Brief: Milestones, ROI Projections, and Final Directives."
+            expected_output="Master Growth Brief: Milestones and ROI Projections."
         )
         result = Crew(agents=[self.agents["strategist"]], tasks=[val_task]).kickoff()
         self.state.strategist_brief = str(result)
@@ -201,10 +194,15 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
 # --- 5. EXECUTION WRAPPER (HUMAN-READABLE INTEGRATION) ---
 def run_marketing_swarm(inputs):
+    """
+    Kicks off the Stateful CrewAI Flow and returns a structured 
+    dictionary for the Streamlit UI.
+    """
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
     # Global Executive Report Builder
+    # This string is the source for 'Full Report' downloads and master views
     formatted_string_report = f"""
 # 🚀 {inputs['biz_name']} | EXECUTIVE INTELLIGENCE SUMMARY
 
