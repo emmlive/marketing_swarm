@@ -377,65 +377,30 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.rerun()
     
 # --- 6. MULTIMODAL COMMAND CENTER (VERIFIED ACTION HUB) ---
-
-# UPDATE: Added "📖 Guide" as the first tab
 tabs = st.tabs([
     "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", 
     "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", 
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# --- NEW: AGENT INTELLIGENCE MANUAL CONTENT (TAB 0) ---
+# --- TAB 0: AGENT INTELLIGENCE MANUAL ---
 with tabs[0]:
     st.header("📖 Agent Intelligence Manual")
     st.info("Maximize your ROI by understanding how to implement AI-generated directives.")
-    
-    # documentation Layout
     doc_cols = st.columns(2)
-    
     with doc_cols[0]:
         with st.expander("🕵️ Market Analyst & Ad Tracker", expanded=True):
-            st.markdown("""
-            **What it Does:** Identifies competitor price gaps, service failures, and psychological ad hooks.
-            **Limitations:** Cannot access private financial records or real-time internal ad spend of rivals.
-            **How to Implement:** Use the 'Competitor Fatigue' data to launch aggressive price-match campaigns or exploit service gaps in your Google Business posts.
-            """)
-            
+            st.markdown("**What it Does:** Identifies competitor price gaps and ad hooks.\n**Implementation:** Launch price-match campaigns or exploit rival service gaps.")
         with st.expander("🎨 Creative & Social Architect"):
-            st.markdown("""
-            **What it Does:** Generates cinematic video prompts (for Veo) and viral-hook social captions.
-            **Limitations:** AI visuals require human oversight to ensure brand-safety and legal compliance.
-            **How to Implement:** Copy 'Scene Prompts' directly into video generators. Schedule the 'Viral Hooks' across TikTok and Reels on a 3:1 value-to-sales ratio.
-            """)
-
-        with st.expander("🧠 GEO & SEO Specialist"):
-            st.markdown("""
-            **What it Does:** Maps citation gaps for Google Maps and writes technical E-E-A-T authority articles.
-            **Limitations:** SEO is a long-term play; citations can take 2-4 weeks to index.
-            **How to Implement:** Publish the technical articles on your blog to gain AI-search authority and update your GMB profile with the citation list.
-            """)
-
+            st.markdown("**What it Does:** Video prompts and viral hooks.\n**Implementation:** Copy prompts into video generators; schedule hooks on TikTok/Reels.")
     with doc_cols[1]:
         with st.expander("👔 Chief Growth Strategist"):
-            st.markdown("""
-            **What it Does:** Synthesizes all data into a 30-day executive roadmap with ROI projections.
-            **Limitations:** Strategist assumes standard market conditions and requires human context for seasonal shifts.
-            **How to Implement:** Use this brief as the foundation for your weekly team meetings or when requesting a budget increase from stakeholders.
-            """)
-
+            st.markdown("**What it Does:** 30-day executive ROI roadmaps.\n**Implementation:** Use as a foundational agenda for stakeholder meetings.")
         with st.expander("🌐 Technical Conversion Auditor"):
-            st.markdown("""
-            **What it Does:** Scans URLs for "Conversion Leaks" and UX friction points.
-            **Limitations:** Identifies the technical issue but does not rewrite your website code.
-            **How to Implement:** Hand the generated 'Audit Directives' to your web developer for immediate performance patches.
-            """)
-
-    st.divider()
-    st.caption("🚀 PRO TIP: Use the 'Refine Output' box in each seat to add your own personal expertise before exporting.")
+            st.markdown("**What it Does:** Scans URLs for UX leaks.\n**Implementation:** Hand directives to developers for immediate performance patches.")
 
 # --- SHARED UTILITY FUNCTIONS ---
 def format_output(data):
-    """Sanitize and format agent output for high-end executive display."""
     if isinstance(data, str) and (data.startswith('{') or data.startswith('`')):
         try:
             clean_str = data.strip().strip('```json').strip('```').strip()
@@ -445,58 +410,74 @@ def format_output(data):
     return data
 
 def render_executive_seat(idx, title, icon, key, guide):
-    # OFFSET: We use idx + 1 because Tab 0 is now the Intelligence Manual
-    with tabs[idx + 1]:
+    with tabs[idx + 1]: # Offset for Guide Tab
         st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
         st.markdown(f"### {icon} {title} Command Seat")
-        
         if st.session_state.get('gen'):
             raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
             edited_intel = st.text_area("Refine Strategic Output", value=format_output(raw_data), height=350, key=f"area_{key}")
-            
             k1, k2, k3 = st.columns([2, 1, 1])
             with k1: st.success(f"Verified {title} Intelligence | ID: #SW-{datetime.now().strftime('%y%m')}")
             with k2: st.download_button("📄 Word Brief", create_word_doc(edited_intel, title, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
             with k3: st.download_button("📕 PDF Brief", create_pdf(edited_intel, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
-            
             st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
-            
             st.divider(); st.subheader("🚀 Strategic Deployment")
             d1, d2, d3, d4 = st.columns(4)
-            with d1:
-                if st.button("📧 Email Team", key=f"mail_{key}"):
-                    broadcast_deployment(title, biz_name, edited_intel, channel="Email")
-            with d2:
-                if st.button("📱 SMS Rapid Alert", key=f"sms_{key}"):
-                    broadcast_deployment(title, biz_name, edited_intel, channel="SMS")
-            with d3:
-                if st.button("💾 Save to Pipeline", key=f"save_{key}"):
-                    manage_record("save", record_id=None) 
-            with d4:
-                if st.button("✅ Push to Hub", key=f"cloud_{key}"):
-                    broadcast_deployment(title, biz_name, edited_intel, channel="Cloud")
-        else:
-            st.info(f"Launch swarm to populate {title} seat.")
+            with d1: 
+                if st.button("📧 Email", key=f"m_{key}"): broadcast_deployment(title, biz_name, edited_intel, "Email")
+            with d2: 
+                if st.button("📱 SMS", key=f"s_{key}"): broadcast_deployment(title, biz_name, edited_intel, "SMS")
+            with d3: 
+                if st.button("💾 Save", key=f"sv_{key}"): manage_record("save", record_id=None)
+            with d4: 
+                if st.button("✅ Hub", key=f"c_{key}"): broadcast_deployment(title, biz_name, edited_intel, "Cloud")
+        else: st.info(f"Launch swarm to populate {title} seat.")
 
-# --- ADMIN UTILITY (STAYS AT TAB 12) ---
+# --- TAB 11: TEAM INTEL & MARKET HEATMAP ---
+with tabs[11]:
+    st.header("🤝 Team Intelligence & Market Distribution")
+    conn = sqlite3.connect('breatheeasy.db')
+    leads_df = pd.read_sql_query("SELECT city, industry, status FROM leads", conn)
+    conn.close()
+
+    if not leads_df.empty:
+        st.subheader("📍 Swarm Geographic Density")
+        # Static Geocoding for High-Value Demo Hubs
+        geo_coords = {
+            "Miami, Florida": [25.76, -80.19], "Austin, Texas": [30.26, -97.74],
+            "Los Angeles, California": [34.05, -118.24], "New York City, New York": [40.71, -74.00],
+            "Chicago, Illinois": [41.87, -87.62], "Phoenix, Arizona": [33.44, -112.07],
+            "Denver, Colorado": [39.73, -104.99], "Seattle, Washington": [47.60, -122.33]
+        }
+        map_data = [{"lat": geo_coords[loc][0], "lon": geo_coords[loc][1]} for loc in leads_df['city'] if loc in geo_coords]
+        
+        if map_data:
+            st.map(pd.DataFrame(map_data), color="#00FFAA", size=20)
+        else:
+            st.info("No major hub data found. Deploy swarms in cities like Miami, Austin, or NYC to see heatmap.")
+
+        st.divider()
+        c1, c2 = st.columns(2)
+        with c1: st.write("**📊 Industry Mix**"); st.bar_chart(leads_df['industry'].value_counts())
+        with c2: st.write("**📈 Pipeline Velocity**"); st.line_chart(leads_df['status'].value_counts())
+    else: st.info("No market data available yet.")
+
+# --- TAB 12: ADMIN UTILITY ---
 with tabs[12]:
     st.header("⚙️ System Administration")
-    # ... (Include your existing Health Metrics, Purge, and Audit Log code here) ...
-    # [Rest of your Admin logic as per your previous code]
+    # Health Metrics and Purge Logic (Refer to previous logic)
 
 # --- RENDER EXECUTION LOOP ---
 seats = [
-    ("Analyst", "🕵️", "analyst", "Identify competitor price gaps and quality failures."),
+    ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
     ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
-    ("Creative", "🎨", "creative", "Visual frameworks and cinematic prompts."),
+    ("Creative", "🎨", "creative", "Visual frameworks and prompts."),
     ("Strategist", "👔", "strategist", "30-day ROI roadmap."),
     ("Social Hooks", "✍", "social", "Viral hooks and schedules."),
     ("GEO Map", "🧠", "geo", "AI Search and Map optimization."),
     ("Audit Scan", "🌐", "auditor", "Technical conversion diagnostics."),
     ("SEO Blogger", "✍", "seo", "High-authority technical articles.")
 ]
-
-# Render seats starting from index 1 to 8
 for i, s in enumerate(seats): render_executive_seat(i, s[0], s[1], s[2], s[3])
 
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
