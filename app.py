@@ -257,10 +257,11 @@ with st.sidebar:
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
     
-# --- 6. MULTIMODAL COMMAND CENTER ---
+# --- 6. MULTIMODAL COMMAND CENTER (VERIFIED ACTION HUB) ---
 tabs = st.tabs(["🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"])
 
 def format_output(data):
+    """Sanitize and format agent output for high-end executive display."""
     if isinstance(data, str) and (data.startswith('{') or data.startswith('`')):
         try:
             clean_str = data.strip().strip('```json').strip('```').strip()
@@ -269,42 +270,71 @@ def format_output(data):
         except: return data
     return data
 
-# --- 6. MULTIMODAL COMMAND CENTER (UPDATED WITH DEPLOYMENT HOOKS) ---
 def render_executive_seat(idx, title, icon, key, guide):
     with tabs[idx]:
-        st.markdown(f'<div class="guide-box"><b>📖 {title} Guide:</b> {guide}</div>', unsafe_allow_html=True)
+        # A. INSTRUCTIONAL LAYER
+        st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
         st.markdown(f"### {icon} {title} Command Seat")
+        
         if st.session_state.get('gen'):
-            raw_data = st.session_state.report.get(key, "Data isolation in progress...")
-            clean_data = format_output(raw_data)
+            raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
             
-            # KPI / EXPORT ROW
+            # B. EDITABLE INTELLIGENCE LAYER (The Decision Engine)
+            # Stakeholders can refine output here before sharing/saving
+            edited_intel = st.text_area("Refine Strategic Output", 
+                                        value=format_output(raw_data), 
+                                        height=350, 
+                                        key=f"area_{key}")
+            
+            # C. DYNAMIC EXPORT ROW (Live-Sync)
+            # Note: These now use 'edited_intel' to ensure manual changes are captured
             k1, k2, k3 = st.columns([2, 1, 1])
-            with k1: st.success(f"Verified {title} Intelligence")
-            with k2: st.download_button("📄 Word", create_word_doc(raw_data, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
-            with k3: st.download_button("📕 PDF", create_pdf(raw_data, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
+            with k1: st.success(f"Verified {title} Intelligence | ID: #SW-{datetime.now().strftime('%y%m')}")
+            with k2: st.download_button("📄 Word Brief", create_word_doc(edited_intel, title, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
+            with k3: st.download_button("📕 PDF Brief", create_pdf(edited_intel, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
             
-            st.markdown(f'<div class="insight-card">{clean_data}</div>', unsafe_allow_html=True)
+            # Displaying the final card view
+            st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
             
-            # --- THE ACTION HOOK ---
-            if st.button(f"🚀 Deploy {title} Directives", key=f"dep_{key}"):
-                # This calls the function we added in Section 5
-                broadcast_deployment(title, biz_name, raw_data)
-        else:
-            st.info(f"Launch swarm to populate {title}.")
+            # D. MULTI-CHANNEL ACTION HUB (The Deployment Engine)
+            st.divider()
+            st.subheader("🚀 Strategic Deployment")
+            d1, d2, d3, d4 = st.columns(4)
+            
+            with d1:
+                if st.button("📧 Email Team", key=f"mail_{key}"):
+                    broadcast_deployment(title, biz_name, edited_intel, channel="Email")
+            
+            with d2:
+                if st.button("📱 SMS Rapid Alert", key=f"sms_{key}"):
+                    broadcast_deployment(title, biz_name, edited_intel, channel="SMS")
+            
+            with d3:
+                if st.button("💾 Save to Pipeline", key=f"save_{key}"):
+                    # Syncs with the Kanban Board in Section 9
+                    manage_record("save", record_id=None) 
+            
+            with d4:
+                if st.button("✅ Push to Hub", key=f"cloud_{key}"):
+                    broadcast_deployment(title, biz_name, edited_intel, channel="Cloud")
 
-# RENDER THE 8 AGENT SEATS
+        else:
+            st.info(f"Launch swarm to populate {title} seat.")
+
+# EXECUTION LOOP: RENDER ALL 8 AGENT SEATS
 seats = [
     ("Analyst", "🕵️", "analyst", "Identify competitor price gaps and quality failures."),
-    ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks to build 'Anti-Competitor' ads."),
-    ("Creative", "🎨", "creative", "Visual frameworks and cinematic scene prompts for the Veo tab."),
+    ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks and build counter-ads."),
+    ("Creative", "🎨", "creative", "Visual frameworks and cinematic scene prompts."),
     ("Strategist", "👔", "strategist", "The 30-day ROI roadmap for executive budget approval."),
-    ("Social Hooks", "✍", "social", "Viral hooks and platform-specific posting schedules."),
+    ("Social Hooks", "✍", "social", "Viral hooks and platform-specific schedules."),
     ("GEO Map", "🧠", "geo", "AI Search and Map citation velocity optimization."),
     ("Audit Scan", "🌐", "auditor", "Technical conversion leak diagnostics."),
     ("SEO Blogger", "✍", "seo", "High-authority E-E-A-T technical articles.")
 ]
-for i, s in enumerate(seats): render_executive_seat(i, s[0], s[1], s[2], s[3])
+
+for i, s in enumerate(seats): 
+    render_executive_seat(i, s[0], s[1], s[2], s[3])
 
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
