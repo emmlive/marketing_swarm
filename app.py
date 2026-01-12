@@ -279,7 +279,7 @@ def create_pdf(content, service, city, logo_path="Logo1.jpeg"):
     pdf.multi_cell(0, 7, txt=clean_text)
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5D. SIDEBAR COMMAND CONSOLE & SESSION AUTOMATION ---
+# --- 5D. SIDEBAR COMMAND CONSOLE (DYNAMIC LOCATION UPGRADE) ---
 with st.sidebar:
     st.image(user_row['logo_path'], width=120)
     st.button("🌓 Toggle Theme", on_click=toggle_theme)
@@ -287,10 +287,31 @@ with st.sidebar:
     st.divider()
     
     biz_name = st.text_input("Brand Name", placeholder="e.g. Acme Solar")
-    c1, c2 = st.columns(2)
-    with c1: city_input = st.text_input("City")
-    with c2: state_input = st.text_input("State")
-    full_loc = f"{city_input}, {state_input}"
+
+    # --- DYNAMIC LOCATION SELECTOR ---
+    location_data = {
+        "Florida": ["Miami", "Orlando", "Tampa", "Jacksonville", "Fort Lauderdale"],
+        "Texas": ["Austin", "Dallas", "Houston", "San Antonio", "Fort Worth"],
+        "California": ["Los Angeles", "San Francisco", "San Diego", "San Jose", "Sacramento"],
+        "New York": ["New York City", "Buffalo", "Rochester", "Albany"],
+        "Arizona": ["Phoenix", "Scottsdale", "Mesa", "Tucson"],
+        "Colorado": ["Denver", "Boulder", "Colorado Springs", "Aspen"],
+        "Illinois": ["Chicago", "Naperville", "Aurora", "Rockford"]
+    }
+
+    state_list = sorted(list(location_data.keys())) + ["Other (Manual Entry)"]
+    selected_state = st.selectbox("🎯 Target State", state_list)
+
+    if selected_state == "Other (Manual Entry)":
+        c_col, s_col = st.columns(2)
+        with c_col: m_city = st.text_input("City")
+        with s_col: m_state = st.text_input("State")
+        full_loc = f"{m_city}, {m_state}"
+    else:
+        city_list = sorted(location_data[selected_state])
+        selected_city = st.selectbox(f"🏙️ Select City ({selected_state})", city_list)
+        full_loc = f"{selected_city}, {selected_state}"
+
     audit_url = st.text_input("Audit URL (Optional)")
     
     ind_cat = st.selectbox("Industry", ["HVAC", "Medical", "Solar", "Legal", "Custom"])
