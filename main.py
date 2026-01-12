@@ -191,18 +191,18 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         self.state.strategist_brief = str(result)
         self.state.production_schedule = str(result)
         return "swarm_finished"
-
 # --- 5. EXECUTION WRAPPER (HUMAN-READABLE INTEGRATION) ---
 def run_marketing_swarm(inputs):
     """
     Kicks off the Stateful CrewAI Flow and returns a structured 
-    dictionary for the Streamlit UI.
+    dictionary for the Streamlit UI, including the Master PDF/Word source.
     """
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
-    # Global Executive Report Builder
-    # This string is the source for 'Full Report' downloads and master views
+    # --- GLOBAL EXECUTIVE REPORT BUILDER ---
+    # This string is the source for 'Full Report' downloads and master views.
+    # We include the new 'Vision Intelligence' for a complete audit trail.
     formatted_string_report = f"""
 # 🚀 {inputs['biz_name']} | EXECUTIVE INTELLIGENCE SUMMARY
 
@@ -212,6 +212,9 @@ def run_marketing_swarm(inputs):
 
 ### Competitor Ad Intelligence
 {flow.state.competitor_ads}
+
+### 👁️ Visual Intelligence & Rival Asset Audit
+{flow.state.vision_intel}
 
 ### Technical Website Audit
 {flow.state.website_audit}
@@ -239,11 +242,12 @@ def run_marketing_swarm(inputs):
     return {
         "analyst": flow.state.market_data,
         "ads": flow.state.competitor_ads,
+        "vision": flow.state.vision_intel, # Sync with Tab 9
         "creative": flow.state.ad_drafts,
         "strategist": flow.state.strategist_brief,
         "social": flow.state.social_plan,
         "geo": flow.state.geo_intel,
         "seo": flow.state.seo_article,
         "auditor": flow.state.website_audit,
-        "full_report": formatted_string_report
+        "full_report": formatted_string_report # The master source for downloads
     }
