@@ -33,7 +33,7 @@ if "GEMINI_API_KEY" in st.secrets:
 
 st.set_page_config(page_title="TechInAdvance AI | Enterprise Command", page_icon="Logo1.jpeg", layout="wide")
 
-# --- 2. $1B EXECUTIVE UI CSS (INCLUDING PRICE CARDS) ---
+# --- 2. $1B EXECUTIVE UI CSS (INCLUDING KANBAN & PRICE CARDS) ---
 sidebar_color = "#2563EB"
 st.markdown(f"""
     <style>
@@ -57,6 +57,34 @@ st.markdown(f"""
     }}
     .guide-box {{ background: #F1F5F9; padding: 15px; border-radius: 8px; border: 1px dashed {sidebar_color}; font-size: 0.85rem; margin-bottom: 20px; color: #475569; }}
     div.stButton > button {{ background-color: {sidebar_color}; color: white; border-radius: 8px; font-weight: 800; height: 3.2em; }}
+    
+    /* --- NEW KANBAN SYSTEM CLASSES --- */
+    .kanban-column {{ 
+        background: rgba(255, 255, 255, 0.5); 
+        padding: 15px; 
+        border-radius: 12px; 
+        border: 1px solid rgba(0,0,0,0.05); 
+        min-height: 500px; 
+    }}
+    .kanban-card {{ 
+        background: white; 
+        padding: 18px; 
+        border-radius: 10px; 
+        margin-bottom: 12px; 
+        border-left: 5px solid {sidebar_color}; 
+        box-shadow: 0px 2px 6px rgba(0,0,0,0.04); 
+    }}
+    .kanban-header {{ 
+        font-weight: 900; 
+        text-align: center; 
+        color: {sidebar_color}; 
+        margin-bottom: 20px; 
+        text-transform: uppercase; 
+        letter-spacing: 1.5px; 
+        font-size: 0.9rem; 
+        border-bottom: 2px solid {sidebar_color}33; 
+        padding-bottom: 8px;
+    }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -135,10 +163,45 @@ if not st.session_state.get("authentication_status"):
             st.error(e)
     st.stop()
 
-# --- 5. DASHBOARD & SIDEBAR ---
+# --- 5. DASHBOARD, SIDEBAR & STRATEGIC CRUD ENGINE ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
+
+# --- HARDENED DEPLOYMENT & DOCUMENT LIFECYCLE ---
+def broadcast_deployment(agent_name, target_biz, content):
+    """Simulates API hooks for Email/SMS/Slack deployment with High-Resolution Timestamps"""
+    # Precision Timestamp for Audit Trail
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    
+    with st.spinner(f"Initiating {agent_name} broadcast sequence..."):
+        # Placeholder for real-world integration (SendGrid, Twilio, etc.)
+        st.toast(f"✅ {agent_name} directives pushed to cloud at {ts}")
+        st.success(f"Strategic Directives for {target_biz} have been deployed. [Log ID: {ts}]")
+
+def manage_record(action, record_id=None, new_content=None):
+    """CRUD Logic for Strategic Intelligence Records"""
+    conn = sqlite3.connect('breatheeasy.db')
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    if action == "save":
+        # logic to finalize/archive a lead record
+        conn.execute("UPDATE leads SET status = 'Execution' WHERE id = ?", (record_id,))
+        st.toast(f"Record {record_id} saved to Execution Pipeline.")
+    
+    elif action == "delete":
+        # logic to purge a lead record (soft delete recommended in production)
+        conn.execute("DELETE FROM leads WHERE id = ?", (record_id,))
+        st.warning(f"Record {record_id} purged from system.")
+        st.rerun()
+        
+    elif action == "edit":
+        # logic to overwrite content with user adjustments
+        conn.execute("UPDATE leads SET content = ?, date = ? WHERE id = ?", (str(new_content), ts, record_id))
+        st.info(f"Record {record_id} updated at {ts}.")
+        
+    conn.commit()
+    conn.close()
 
 with st.sidebar:
     st.image(user_row['logo_path'], width=120)
@@ -164,7 +227,7 @@ with st.sidebar:
     toggles = {k: st.toggle(v, value=True) for k, v in {"analyst": "🕵️ Analyst", "ads": "📺 Ad Tracker", "builder": "🎨 Creative", "manager": "👔 Strategist", "social": "✍ Social", "geo": "🧠 GEO", "audit": "🌐 Auditor", "seo": "✍ SEO"}.items()}
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
-
+    
 # --- 6. MULTIMODAL COMMAND CENTER ---
 tabs = st.tabs(["🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"])
 
@@ -177,21 +240,29 @@ def format_output(data):
         except: return data
     return data
 
+# --- 6. MULTIMODAL COMMAND CENTER (UPDATED WITH DEPLOYMENT HOOKS) ---
 def render_executive_seat(idx, title, icon, key, guide):
     with tabs[idx]:
         st.markdown(f'<div class="guide-box"><b>📖 {title} Guide:</b> {guide}</div>', unsafe_allow_html=True)
         st.markdown(f"### {icon} {title} Command Seat")
         if st.session_state.get('gen'):
-            raw_data = st.session_state.report.get(key, "Isolation in progress...")
+            raw_data = st.session_state.report.get(key, "Data isolation in progress...")
             clean_data = format_output(raw_data)
+            
+            # KPI / EXPORT ROW
             k1, k2, k3 = st.columns([2, 1, 1])
             with k1: st.success(f"Verified {title} Intelligence")
             with k2: st.download_button("📄 Word", create_word_doc(raw_data, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
             with k3: st.download_button("📕 PDF", create_pdf(raw_data, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
+            
             st.markdown(f'<div class="insight-card">{clean_data}</div>', unsafe_allow_html=True)
+            
+            # --- THE ACTION HOOK ---
             if st.button(f"🚀 Deploy {title} Directives", key=f"dep_{key}"):
-                st.toast("Syncing with stakeholders..."); st.success("Directives Pushed.")
-        else: st.info(f"Launch swarm to populate {title}.")
+                # This calls the function we added in Section 5
+                broadcast_deployment(title, biz_name, raw_data)
+        else:
+            st.info(f"Launch swarm to populate {title}.")
 
 # RENDER THE 8 AGENT SEATS
 seats = [
@@ -206,19 +277,54 @@ seats = [
 ]
 for i, s in enumerate(seats): render_executive_seat(i, s[0], s[1], s[2], s[3])
 
-# --- 7. SWARM EXECUTION ---
+# --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
-    if not biz_name or not city_input: st.error("❌ Identification required.")
-    elif user_row['credits'] <= 0: st.error("❌ Out of credits.")
+    if not biz_name or not city_input: 
+        st.error("❌ Identification required: Please provide Brand Name and City.")
+    elif user_row['credits'] <= 0: 
+        st.error("❌ Out of credits: Please contact your administrator for a credit injection.")
     else:
-        with st.status("🛠️ Coordinating Swarm...", expanded=True) as status:
-            report = run_marketing_swarm({'city': full_loc, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'url': audit_url, 'toggles': toggles})
+        with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
+            # 7A. Execute Strategic Logic via main.py
+            report = run_marketing_swarm({
+                'city': full_loc, 
+                'industry': final_ind, 
+                'service': svc, 
+                'biz_name': biz_name, 
+                'url': audit_url, 
+                'toggles': toggles
+            })
+            
+            # 7B. Update Session State for Instant UI Rendering
             st.session_state.report, st.session_state.gen = report, True
+            
+            # 7C. Database Transaction: Credit Deduction & Kanban Entry
             conn = sqlite3.connect('breatheeasy.db')
+            # Deduct 1 Enterprise Credit
             conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
-            conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id) VALUES (?,?,?,?,?,?,?)", 
-                         (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, full_loc, str(report), user_row['team_id']))
-            conn.commit(); conn.close(); status.update(label="✅ Success!", state="complete"); st.rerun()
+            
+            # Create Lead Entry with initial 'Discovery' status for Kanban Board
+            conn.execute("""
+                INSERT INTO leads (date, user, industry, service, city, content, team_id, status) 
+                VALUES (?,?,?,?,?,?,?,?)
+            """, (
+                datetime.now().strftime("%Y-%m-%d"), 
+                user_row['username'], 
+                final_ind, 
+                svc, 
+                full_loc, 
+                str(report), 
+                user_row['team_id'], 
+                'Discovery'
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            # 7D. Finalize UI State
+            status.update(label="✅ Strategy Engine Synced!", state="complete")
+            st.toast(f"Swarm for {biz_name} successfully initialized.")
+            st.rerun()
 
 # --- 8. MULTIMODAL SPECIALTY TABS ---
 with tabs[8]:
@@ -239,38 +345,94 @@ with tabs[9]:
 
 # --- 9. TEAM INTEL & ADMIN (FULL FEATURE RESTORATION) ---
 with tabs[10]:
-    st.header("🤝 Team Collaboration Hub")
+    st.header("🤝 Global Pipeline Kanban")
+    st.markdown('<div class="guide-box"><b>Executive Overview:</b> Monitor swarm progression. Transition leads from Discovery to ROI Verified as milestones are met.</div>', unsafe_allow_html=True)
+    
     conn = sqlite3.connect('breatheeasy.db')
-    team_df = pd.read_sql_query("SELECT date, user, city, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
-    c1, c2 = st.columns([1, 2])
-    with c1:
-        st.subheader("Team Health")
-        st.metric("Total Swarms", len(team_df))
-        st.metric("Markets", len(team_df['city'].unique()))
-    with c2:
-        st.subheader("Project Pipeline")
-        st.dataframe(team_df, use_container_width=True)
-    st.divider(); st.subheader("🛡️ Security Log"); st.code(f"Integrity: OK | Trace: {user_row['username']} | Time: {datetime.now()}")
+    # Fetch lead data
+    team_df = pd.read_sql_query("SELECT id, date, city, industry, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
+    
+    # 9A. TEAM HEALTH METRICS
+    m1, m2, m3 = st.columns(3)
+    with m1: st.metric("Total Swarms", len(team_df))
+    with m2: st.metric("Active Markets", len(team_df['city'].unique()))
+    with m3: st.metric("Team Velocity", f"{len(team_df[team_df['status'] == 'ROI Verified'])} Wins")
+
+    st.divider()
+
+    # 9B. KANBAN PIPELINE LOGIC
+    stages = ["Discovery", "Execution", "ROI Verified"]
+    kanban_cols = st.columns(3)
+    
+    for i, stage in enumerate(stages):
+        with kanban_cols[i]:
+            st.markdown(f'<div class="kanban-header">{stage}</div>', unsafe_allow_html=True)
+            stage_leads = team_df[team_df['status'] == stage]
+            
+            if stage_leads.empty:
+                st.caption(f"Zero leads in {stage}")
+            
+            for _, lead in stage_leads.iterrows():
+                with st.container():
+                    st.markdown(f"""
+                    <div class="kanban-card">
+                        <small style="color:gray;">{lead['date']}</small><br>
+                        <b style="font-size:1.05rem; color:#1E293B;">{lead['city']}</b><br>
+                        <div style="margin-top:5px; font-size:0.8rem;">
+                            <span style="background:#E0E7FF; padding:2px 6px; border-radius:4px; color:#3730A3;">{lead['service']}</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Transition Control
+                    new_status = st.selectbox(
+                        "Move Stage", 
+                        stages, 
+                        index=stages.index(stage), 
+                        key=f"kb_move_{lead['id']}",
+                        label_visibility="collapsed"
+                    )
+                    if new_status != stage:
+                        conn.execute("UPDATE leads SET status = ? WHERE id = ?", (new_status, lead['id']))
+                        conn.commit()
+                        st.toast(f"Updated: {lead['city']} -> {new_status}")
+                        st.rerun()
+
+    st.divider()
+    st.subheader("🛡️ Security Log")
+    st.code(f"Integrity: OK | Trace: {user_row['username']} | Sync Time: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     conn.close()
 
+# 9C. GOD-MODE ADMIN CONTROL
 if user_row['role'] == 'admin':
     with tabs[11]:
         st.header("⚙️ God-Mode Admin Control")
         conn = sqlite3.connect('breatheeasy.db')
         all_u = pd.read_sql_query("SELECT username, email, credits, package FROM users", conn)
         st.dataframe(all_u, use_container_width=True)
+        
+        st.divider()
         col1, col2 = st.columns(2)
+        
         with col1:
-            u_del = st.text_input("Terminate User Username")
+            st.subheader("User Termination")
+            u_del = st.text_input("Username to Purge", placeholder="Enter exact username")
             if st.button("❌ Terminate User"):
                 if u_del != 'admin':
                     conn.execute("DELETE FROM users WHERE username=?", (u_del,))
-                    conn.commit(); st.success(f"Purged {u_del}"); st.rerun()
-                else: st.error("Cannot delete primary admin.")
+                    conn.commit()
+                    st.success(f"System purged: {u_del}")
+                    st.rerun()
+                else:
+                    st.error("Access Denied: Cannot delete primary Root Admin.")
+        
         with col2:
-            target = st.selectbox("Select Target User", all_u['username'])
-            amt = st.number_input("Refill Amount", value=50)
-            if st.button("💉 Inject Credits"):
+            st.subheader("Credit Injection")
+            target = st.selectbox("Target User", all_u['username'])
+            amt = st.number_input("Injection Volume", value=50, step=10)
+            if st.button("💉 Finalize Injection"):
                 conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amt, target))
-                conn.commit(); st.success(f"Injected {amt} credits."); st.rerun()
+                conn.commit()
+                st.success(f"Successfully injected {amt} credits into {target}.")
+                st.rerun()
         conn.close()
