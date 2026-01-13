@@ -375,37 +375,48 @@ if st.session_state.get('show_cleanup_confirm'):
             if st.button("🛑 No, Logout Only", type="secondary"):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
-# --- 6. MULTIMODAL COMMAND CENTER (STRICT ARCHITECTURAL ISOLATION) ---
+                
+# --- 6. MULTIMODAL COMMAND CENTER (PHASE 1: ADMIN RESTORATION) ---
 
-# 1. INITIALIZE ALL 13 TABS
+# 1. INITIALIZE TABS (Team Intel is removed from this list for now)
+# Index Mapping: 0:Guide, 1-9:Seats, 10:Veo, 11:EMPTY, 12:Admin
 tabs = st.tabs([
     "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", 
     "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", 
-    "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
+    "🎬 Veo Studio", "🚫 [TEMPORARY]", "⚙ Admin"
 ])
 
-# 2. DEFINE THE SEAT RENDERER (FULL LOGIC RESTORED)
+# 2. TAB 0: DETAILED AGENT INTELLIGENCE MANUAL
+with tabs[0]:
+    st.header("📖 Agent Intelligence Manual")
+    st.info("Directives for the Omni-Swarm Decision Engine.")
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+        with st.expander("🕵️ Intelligence Seats", expanded=True):
+            st.markdown("Detailed instructions for Analyst, Ad Tracker, and Vision agents.")
+    with col_g2:
+        with st.expander("👔 Strategic Seats"):
+            st.markdown("Detailed instructions for Strategist and SEO agents.")
+
+# 3. DEFINE THE SEAT RENDERER (FULL LOGIC)
 def render_executive_seat(idx, title, icon, key, guide):
-    """Renders agent seats into tabs 1 through 9 with strict container isolation."""
+    """Renders agent seats into tabs 1 through 9."""
     with tabs[idx + 1]: 
         st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
         st.markdown(f"### {icon} {title} Command Seat")
         
-        # --- SPECIAL CASE: VISION AGENT (TAB 9) ---
         if title == "Vision":
             st.info("Upload competitor assets for visual deconstruction.")
-            uploaded_file = st.file_uploader("Upload Rival Asset (PNG/JPG)", type=["png", "jpg", "jpeg"], key="vision_up")
+            uploaded_file = st.file_uploader("Upload Rival Asset", type=["png", "jpg"], key="vision_up")
             if uploaded_file:
-                v1, v2 = st.columns([1, 1])
-                with v1: st.image(uploaded_file, caption="Target Asset", use_container_width=True)
+                v1, v2 = st.columns(2)
+                with v1: st.image(uploaded_file, use_container_width=True)
                 with v2:
                     if st.button("🚀 Analyze Visual Gaps", type="primary"):
-                        with st.spinner("Vision Agent scanning..."):
-                            st.session_state.vision_report = "### 👁️ Visual Intelligence Report\n- **Rival Hook:** Scarcity Abuse Detected.\n- **Leak:** No trust signals in hero fold.\n- **Move:** Human-first disruption strategy."
+                        st.session_state.vision_report = "### 👁️ Visual Intelligence Report\n- **Rival Hook:** Scarcity Abuse Detected.\n- **Leak:** No trust signals.\n- **Move:** Human-first disruption."
             if st.session_state.get('vision_report'):
                 st.markdown(f'<div class="insight-card">{st.session_state.vision_report}</div>', unsafe_allow_html=True)
 
-        # --- STANDARD AGENT OUTPUT ---
         elif st.session_state.get('gen'):
             raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
             edited_intel = st.text_area("Refine Output", value=format_output(raw_data), height=350, key=f"area_{key}")
@@ -419,26 +430,6 @@ def render_executive_seat(idx, title, icon, key, guide):
             with k2: st.download_button("📄 Word", "...", f"{title}.docx", key=f"w_{key}")
             with k3: st.download_button("📕 PDF", "...", f"{title}.pdf", key=f"p_{key}")
             st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
-            
-            st.divider(); d1, d2, d3, d4 = st.columns(4)
-            with d1: st.button("📧 Email", key=f"m_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "Email"))
-            with d2: st.button("📱 SMS", key=f"s_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "SMS"))
-            with d3: st.button("💾 Save", key=f"sv_{key}", on_click=manage_record, args=("save", None))
-            with d4: st.button("✅ Hub", key=f"c_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "Cloud"))
-        else:
-            st.info(f"Launch swarm to populate {title} seat.")
-
-# 3. TAB 0: DETAILED AGENT INTELLIGENCE MANUAL
-with tabs[0]:
-    st.header("📖 Agent Intelligence Manual")
-    
-    col_a, col_b = st.columns(2)
-    with col_a:
-        with st.expander("🕵️ Analyst & Ad Tracker", expanded=True):
-            st.markdown("**What it Does:** Scans for competitor price gaps and ad hooks.\n**Implementation:** Use 'Price Arbitrage' to adjust your hero offers.")
-    with col_b:
-        with st.expander("👔 Chief Growth Strategist"):
-            st.markdown("**What it Does:** Synthesizes all data into 30-day CEO roadmaps.")
 
 # 4. RENDER AGENT SEAT LOOP (TABS 1-9)
 seats = [
@@ -455,40 +446,52 @@ seats = [
 for i, s in enumerate(seats): 
     render_executive_seat(i, s[0], s[1], s[2], s[3])
 
-# 5. TAB 11: 🤝 TEAM INTELLIGENCE (LOCKED & ISOLATED)
-with tabs[11]:
-    st.header("🤝 Team Intelligence & Market ROI")
-    
-    conn = sqlite3.connect('breatheeasy.db')
-    leads_df = pd.read_sql_query("SELECT city, industry FROM leads", conn)
-    if not leads_df.empty:
-        val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
-        total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
-        m1, m2 = st.columns(2)
-        m1.metric("Pipeline Value", f"${total_val:,.0f}")
-        m2.metric("Market Reach", f"{len(leads_df['city'].unique())} Cities")
-        st.map(pd.DataFrame({"lat": [25.76], "lon": [-80.19]})) 
-    conn.close()
-
-# 6. TAB 12: ⚡ GOD-MODE ADMIN CONTROL (LOCKED & ISOLATED)
+# 5. TAB 12: ⚡ GOD-MODE ADMIN CONTROL (THE FINAL FIX)
+# We skip tabs[11] entirely to force this content into index 12.
 with tabs[12]:
     st.header("⚡ God-Mode Admin Control")
     st.warning("Critical Database Access: Session Management & Exports")
     
-    conn = sqlite3.connect('breatheeasy.db')
-    leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
-    st.metric("Total DB Records", len(leads_all))
     
-    admin_c1, admin_c2 = st.columns(2)
-    with admin_c1:
-        st.download_button("📥 Export CSV", leads_all.to_csv(index=False), "master.csv")
-    with admin_c2:
-        if st.button("🚨 Purge Demo Data", type="secondary"):
-            conn.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
-            conn.commit()
-            st.success("Demo data purged.")
-            st.rerun()
-    conn.close()
+
+    try:
+        conn = sqlite3.connect('breatheeasy.db')
+        
+        # A. USER REGISTRY
+        st.subheader("👥 System User Registry")
+        user_data = pd.read_sql_query("SELECT username, email, credits, package FROM users", conn)
+        st.dataframe(user_data, use_container_width=True, hide_index=True)
+        
+        # B. MAINTENANCE HUB
+        st.divider()
+        st.subheader("🧹 Maintenance & Master Export")
+        adm_c1, adm_c2 = st.columns(2)
+        
+        with adm_c1:
+            st.write("**Master Data Export**")
+            leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
+            csv = leads_all.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Export Master CSV", csv, "master_leads.csv", "text/csv", use_container_width=True)
+            
+        with adm_c2:
+            st.write("**Critical System Purge**")
+            if st.button("🚨 Purge Demo Data", type="secondary", use_container_width=True):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
+                conn.commit()
+                st.success("Internal records purged successfully.")
+                st.rerun()
+
+        # C. AUDIT TRAIL
+        st.divider()
+        st.subheader("📜 System Audit Trail")
+        logs_df = pd.read_sql_query("SELECT timestamp, user, action, details FROM system_logs ORDER BY timestamp DESC LIMIT 50", conn)
+        st.dataframe(logs_df, use_container_width=True, hide_index=True)
+        
+        conn.close()
+    except Exception as e:
+        st.error(f"God-Mode Access Error: {e}")
+        
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
     if not biz_name or not city_input: 
