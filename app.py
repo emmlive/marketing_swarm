@@ -376,22 +376,23 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
                 
-# --- 6. MULTIMODAL COMMAND CENTER (RECONSTRUCTED ARCHITECTURE) ---
+# --- 6. MULTIMODAL COMMAND CENTER (FINAL VERIFIED LOCKDOWN) ---
 
-# 1. INITIALIZE TABS (Team Intel is isolated and hard-coded at slot 11)
+# 1. INITIALIZE ALL 13 TABS
 tabs = st.tabs([
     "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", 
     "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", 
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# 2. RESTORED TAB 0: COMPREHENSIVE AGENT MANUAL (ALL DESCRIPTIONS)
+# 2. TAB 0: COMPREHENSIVE AGENT MANUAL (RESTORED & VERIFIED)
 with tabs[0]:
     st.header("📖 Agent Intelligence Manual")
-    st.info("Directives for the Omni-Swarm Decision Engine.")
+    st.info("Operational directives for the Omni-Swarm Decision Engine.")
     
-    col_g1, col_g2 = st.columns(2)
-    with col_g1:
+    
+    col_guide_left, col_guide_right = st.columns(2)
+    with col_guide_left:
         with st.expander("🕵️ Intelligence Protocols", expanded=True):
             st.markdown("""
             - **Analyst:** Scans local markets for competitor price gaps and service failures.
@@ -399,7 +400,7 @@ with tabs[0]:
             - **Creative Architect:** Engineers high-converting ad copy and visual frameworks.
             - **Vision Agent:** Performs multimodal teardowns of competitor landing pages and creative assets.
             """)
-    with col_b1: # Use col_g2 if col_b1 is undefined in your scope
+    with col_guide_right:
         with st.expander("👔 Strategic Alignment", expanded=True):
             st.markdown("""
             - **Strategist:** Synthesizes all swarm data into a unified, 30-day ROI growth roadmap.
@@ -409,7 +410,7 @@ with tabs[0]:
             - **SEO Blogger:** Crafts high-authority, technical EEAT articles for domain dominance.
             """)
 
-# 3. DEFINE THE SEAT RENDERER (WORD/PDF RESTORED)
+# 3. DEFINE THE SEAT RENDERER (WORD/PDF/LOGIC RESTORED)
 def render_executive_seat(idx, title, icon, key, guide_txt):
     """Strictly renders agent seats into tabs 1 through 9."""
     with tabs[idx + 1]: 
@@ -433,7 +434,7 @@ def render_executive_seat(idx, title, icon, key, guide_txt):
         else:
             st.info(f"Launch swarm to populate {title} seat.")
 
-# 4. RENDER AGENT SEAT LOOP (TABS 1-9)
+# 4. RENDER AGENT SEAT LOOP (TABS 1-9 ONLY)
 seats_data = [
     ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
     ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
@@ -449,10 +450,10 @@ seats_data = [
 for i, s in enumerate(seats_data): 
     render_executive_seat(i, s[0], s[1], s[2], s[3])
 
-# 5. TAB 11: 🤝 TEAM INTELLIGENCE (CLEAN REBUILD)
+# 5. TAB 11: 🤝 TEAM INTELLIGENCE (HARD-CODED ISOLATION)
 with tabs[11]:
     st.header("🤝 Team Intelligence & Market ROI")
-    st.info("Market performance and pipeline value tracking.")
+    
     
     conn_intel = sqlite3.connect('breatheeasy.db')
     try:
@@ -463,60 +464,58 @@ with tabs[11]:
             
             m_a, m_b = st.columns(2)
             m_a.metric("Pipeline Value", f"${total_val:,.0f}", delta="Omni-Swarm Active")
-            m_b.metric("Market Cities", len(leads_df['city'].unique()))
+            m_b.metric("Active Cities", len(leads_df['city'].unique()))
             
             st.divider()
             st.subheader("📍 Swarm Geographic Density")
-            st.map(pd.DataFrame({"lat": [25.76], "lon": [-80.19]})) # Heatmap placeholder
+            st.map(pd.DataFrame({"lat": [25.76], "lon": [-80.19]})) 
         else:
-            st.info("Awaiting swarm data to generate market intelligence.")
+            st.info("Launch swarms to generate market intelligence.")
     finally:
         conn_intel.close()
 
-# 6. TAB 12: ⚙️ ADMIN / GOD-MODE (COMPLETE ISOLATION)
+# 6. TAB 12: ⚙️ ADMIN HUB (STRICT GOD-MODE ISOLATION)
 with tabs[12]:
     st.header("⚙️ Admin System Control")
     st.warning("⚡ God-Mode: Critical System Access")
     
+    
     conn_admin = sqlite3.connect('breatheeasy.db')
     try:
-        # A. USER MANAGEMENT TABLE
+        # A. USER MANAGEMENT
         st.subheader("👥 User Management")
         u_data = pd.read_sql_query("SELECT username, email, credits, package FROM users", conn_admin)
         st.dataframe(u_data, use_container_width=True, hide_index=True)
         
         st.divider()
-        adm_1, adm_2 = st.columns(2)
+        adm_c1, adm_c2 = st.columns(2)
         
-        # B. USER TERMINATION
-        with adm_1:
+        # B. TERMINATION
+        with adm_c1:
             st.subheader("👤 User Termination")
-            t_user = st.text_input("Username to Purge", key="GOD_MODE_FINAL_PURGE")
-            if st.button("❌ Terminate User", type="primary", key="GOD_MODE_FINAL_TERM"):
+            t_user = st.text_input("Username to Purge", key="GOD_MODE_FINAL_PURGE_LOCK")
+            if st.button("❌ Terminate User", type="primary", key="GOD_MODE_FINAL_TERM_LOCK"):
                 if t_user:
                     conn_admin.execute("DELETE FROM users WHERE username = ?", (t_user,))
                     conn_admin.commit()
                     st.success(f"User {t_user} terminated."); st.rerun()
 
-        # C. CREDIT INJECTION
-        with adm_2:
+        # C. INJECTION
+        with adm_c2:
             st.subheader("🚀 Credit Injection")
-            i_user = st.selectbox("Select Target", u_data['username'], key="GOD_MODE_FINAL_SELECT")
-            v_vol = st.number_input("Injection Volume", min_value=1, value=100, key="GOD_MODE_FINAL_VOL")
-            if st.button("💉 Finalize Injection", key="GOD_MODE_FINAL_INJECT"):
+            i_user = st.selectbox("Select Target", u_data['username'], key="GOD_MODE_FINAL_SELECT_LOCK")
+            v_vol = st.number_input("Injection Volume", min_value=1, value=100, key="GOD_MODE_FINAL_VOL_LOCK")
+            if st.button("💉 Finalize Injection", key="GOD_MODE_FINAL_INJECT_LOCK"):
                 conn_admin.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (v_vol, i_user))
                 conn_admin.commit()
                 st.success(f"Injected {v_vol} credits into {i_user}."); st.rerun()
                 
+        # D. MASTER DATA
         st.divider()
-        # D. MAINTENANCE HUB
         with st.expander("📥 Master Data Management"):
             m_leads = pd.read_sql_query("SELECT * FROM leads", conn_admin)
-            st.download_button("Export master_leads.csv", m_leads.to_csv(index=False), "master.csv", key="GOD_MODE_FINAL_CSV")
-            if st.button("🚨 Purge Demo Data", key="GOD_MODE_FINAL_DEMO"):
-                conn_admin.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
-                conn_admin.commit(); st.success("Demo data purged."); st.rerun()
-                
+            st.download_button("Export master_leads.csv", m_leads.to_csv(index=False), "master.csv", key="GOD_MODE_FINAL_CSV_LOCK")
+            
     finally:
         conn_admin.close()
         
