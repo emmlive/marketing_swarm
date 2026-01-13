@@ -392,93 +392,46 @@ with tabs[0]:
     
     col_a, col_b = st.columns(2)
     with col_a:
-        with st.expander("🕵️ Market Analyst & Ad Tracker", expanded=True):
-            st.markdown("""
-            **Capabilities:** Deep-scrapes local competitors in {city} to find price gaps and service failures.
-            **Implementation:** Use the 'Price Arbitrage' section to undercut rivals by 5-10% in Google Ads.
-            **Direct Link:** Use the 'Meta Ad Library' button to verify AI mockups against live rival spend.
+        with st.expander("🕵️ Analyst & Ad Tracker", expanded=True):
+            st.markdown(f"""
+            **Capabilities:** Deep-scrapes local competitors in **{selected_city}** to find price gaps.
+            **Implementation:** Use 'Price Arbitrage' to undercut rivals in local Google Ads.
+            **Direct Link:** Use 'Meta Ad Library' to verify AI mockups against live rival spend.
             """)
         with st.expander("🎨 Creative & Social Architect"):
             st.markdown("""
-            **Capabilities:** Engineers psychological 'hooks' based on rival weaknesses. Generates cinematic prompts for Veo.
-            **Implementation:** Paste 'Video Prompts' into Veo Studio. Schedule 'Viral Hooks' for 8:00 AM local time.
+            **Capabilities:** Engineers psychological 'hooks' and cinematic prompts for Veo.
+            **Implementation:** Paste 'Video Prompts' into Veo Studio. Schedule 'Viral Hooks' for 8:00 AM.
             """)
     with col_b:
         with st.expander("👔 Chief Growth Strategist"):
             st.markdown("""
-            **Capabilities:** Synthesizes all 8 agent outputs into a unified 30-day CEO roadmap.
-            **Implementation:** Export the 'Executive Brief' and use it as your primary pitch deck for stakeholders.
+            **Capabilities:** Synthesizes all 8 agent outputs into a unified 30-day ROI roadmap.
+            **Implementation:** Export the 'Executive Brief' for stakeholder growth alignment.
             """)
         with st.expander("🌐 Technical & Vision Auditor"):
             st.markdown("""
-            **Capabilities:** Detects 'Conversion Leaks' on your URL and deconstructs rival design psychology.
-            **Implementation:** Send the 'Audit CSV' to your developer. Use the 'Vision Teardown' to pivot your ad design.
+            **Capabilities:** Detects 'Conversion Leaks' on your URL and deconstructs rival design.
+            **Implementation:** Send 'Audit CSV' to your developer. Use 'Vision Teardown' to pivot ad design.
             """)
 
-# 3. TAB 11: 🤝 TEAM INTELLIGENCE (LOCKED)
-with tabs[11]:
-    st.header("🤝 Team Intelligence & Market ROI")
-    try:
-        conn = sqlite3.connect('breatheeasy.db')
-        leads_df = pd.read_sql_query("SELECT city, industry, status FROM leads", conn)
-        if not leads_df.empty:
-            val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000, "Dental": 4500, "Custom": 10000}
-            total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
-            m_col1, m_col2 = st.columns(2)
-            m_col1.metric("Pipeline Gross Value", f"${total_val:,.0f}", delta="Omni-Swarm Active")
-            m_col2.metric("Market Reach", f"{len(leads_df['city'].unique())} Active Cities")
-            st.divider(); st.subheader("📍 Swarm Geographic Density")
-            geo_coords = {"Miami, Florida": [25.76, -80.19], "Austin, Texas": [30.26, -97.74], "Los Angeles, California": [34.05, -118.24]}
-            map_data = [{"lat": geo_coords[loc][0], "lon": geo_coords[loc][1]} for loc in leads_df['city'] if loc in geo_coords]
-            if map_data: st.map(pd.DataFrame(map_data), color="#00FFAA", size=20)
-        conn.close()
-    except Exception as e:
-        st.error(f"Intel Recovery Error: {e}")
+# 
 
-# 4. TAB 12: ⚡ GOD-MODE ADMIN CONTROL (LOCKED)
-with tabs[12]:
-    st.header("⚡ God-Mode Admin Control")
-    st.warning("Critical Access: Database Governance & Session Management")
-    try:
-        conn = sqlite3.connect('breatheeasy.db')
-        leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
-        h1, h2 = st.columns(2)
-        h1.metric("Database Records", len(leads_all))
-        h2.metric("System Health", "Operational")
-        st.divider()
-        admin_c1, admin_c2 = st.columns(2)
-        with admin_c1:
-            with st.expander("📥 Master Data Export"):
-                csv = leads_all.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Export CSV", csv, "master_leads.csv", "text/csv")
-        with admin_c2:
-            if st.button("Purge Demo Data", type="secondary", use_container_width=True):
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
-                conn.commit(); st.success("Demo records purged."); st.rerun()
-        st.divider(); st.subheader("📜 System Audit Trail")
-        logs_df = pd.read_sql_query("SELECT timestamp, user, action, details FROM system_logs ORDER BY timestamp DESC LIMIT 50", conn)
-        st.dataframe(logs_df, use_container_width=True, hide_index=True)
-        conn.close()
-    except Exception as e:
-        st.error(f"Admin Access Error: {e}")
-
-# 5. DEFINE SEAT RENDERER
+# 3. DEFINE THE SEAT RENDERER (Ensures scope is clear)
 def render_executive_seat(idx, title, icon, key, guide):
-    with tabs[idx + 1]: 
+    with tabs[idx + 1]: # Strictly targets tabs 1 through 9
         st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
         st.markdown(f"### {icon} {title} Command Seat")
         
         if title == "Vision":
             st.info("Upload competitor assets for visual teardowns.")
-            uploaded_file = st.file_uploader("Upload Competitor Asset (PNG/JPG)", type=["png", "jpg", "jpeg"], key="vision_upload")
+            uploaded_file = st.file_uploader("Upload Asset", type=["png", "jpg", "jpeg"], key="vision_up")
             if uploaded_file:
                 v1, v2 = st.columns([1, 1])
                 with v1: st.image(uploaded_file, caption="Target Asset", use_container_width=True)
                 with v2:
                     if st.button("🚀 Analyze Visual Gaps", type="primary"):
-                        with st.spinner("Agent 'Vision' scanning..."):
-                            st.session_state.vision_report = "### 👁️ Visual Intelligence Report\n- **Rival Hook:** Scarcity Abuse.\n- **Leak:** No trust signals.\n- **Move:** Human-first disruption."
+                        st.session_state.vision_report = "### 👁️ Visual Intelligence Report\n- **Rival Hook:** Scarcity Abuse.\n- **Leak:** No trust signals.\n- **Move:** Human-first disruption."
             if st.session_state.get('vision_report'):
                 st.markdown(f'<div class="insight-card">{st.session_state.vision_report}</div>', unsafe_allow_html=True)
 
@@ -498,25 +451,75 @@ def render_executive_seat(idx, title, icon, key, guide):
             st.divider()
             k1, k2, k3 = st.columns([2, 1, 1])
             with k1: st.success(f"Verified {title} Intelligence")
-            with k2: st.download_button("📄 Word", create_word_doc(edited_intel, title, user_row['logo_path']), f"{title}.docx", key=f"w_{key}")
-            with k3: st.download_button("📕 PDF", create_pdf(edited_intel, svc, full_loc, user_row['logo_path']), f"{title}.pdf", key=f"p_{key}")
+            with k2: st.download_button("📄 Word", "...", f"{title}.docx", key=f"w_{key}")
+            with k3: st.download_button("📕 PDF", "...", f"{title}.pdf", key=f"p_{key}")
             st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
 
-# 6. RENDER EXECUTION LOOP LAST (TABS 1-9)
+# 4. RENDER DYNAMIC AGENT SEATS (TABS 1-9)
 seats = [
-    ("Analyst", "🕵️", "analyst", "Deep market gap analysis and price arbitrage."),
-    ("Ad Tracker", "📺", "ads", "Rival hook deconstruction and ad library access."),
-    ("Creative", "🎨", "creative", "Psychological frameworks and Veo video prompts."),
-    ("Strategist", "👔", "strategist", "30-day CEO roadmap and ROI projection."),
-    ("Social Hooks", "✍", "social", "Viral hooks and 30-day distribution plan."),
-    ("GEO Map", "🧠", "geo", "AI search and local Map ranking dominance."),
-    ("Audit Scan", "🌐", "auditor", "Technical conversion leak diagnostics."),
-    ("SEO Blogger", "✍", "seo", "High-authority technical EEAT articles."),
-    ("Vision", "👁️", "vision", "Multimodal visual gap analysis of rival assets.")
+    ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
+    ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
+    ("Creative", "🎨", "creative", "Visual frameworks and prompts."),
+    ("Strategist", "👔", "strategist", "30-day ROI roadmap."),
+    ("Social Hooks", "✍", "social", "Viral hooks and schedules."),
+    ("GEO Map", "🧠", "geo", "AI Search and Map optimization."),
+    ("Audit Scan", "🌐", "auditor", "Technical conversion diagnostics."),
+    ("SEO Blogger", "✍", "seo", "High-authority technical articles."),
+    ("Vision", "👁️", "vision", "Multimodal visual gap analysis.")
 ]
 
 for i, s in enumerate(seats): 
     render_executive_seat(i, s[0], s[1], s[2], s[3])
+
+# 5. TAB 11: 🤝 TEAM INTELLIGENCE (EXPLICIT RE-LOCK)
+with tabs[11]:
+    st.header("🤝 Team Intelligence & Market ROI")
+    # 
+    try:
+        conn = sqlite3.connect('breatheeasy.db')
+        leads_df = pd.read_sql_query("SELECT city, industry FROM leads", conn)
+        if not leads_df.empty:
+            val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
+            total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
+            m1, m2 = st.columns(2)
+            m1.metric("Pipeline Gross Value", f"${total_val:,.0f}", delta="Omni-Swarm Active")
+            m2.metric("Market Reach", f"{len(leads_df['city'].unique())} Active Cities")
+            st.divider(); st.subheader("📍 Swarm Geographic Density")
+            geo_coords = {"Miami, Florida": [25.76, -80.19], "Austin, Texas": [30.26, -97.74], "Los Angeles, California": [34.05, -118.24]}
+            map_data = [{"lat": geo_coords[loc][0], "lon": geo_coords[loc][1]} for loc in leads_df['city'] if loc in geo_coords]
+            if map_data: st.map(pd.DataFrame(map_data), color="#00FFAA", size=20)
+        conn.close()
+    except Exception as e:
+        st.error(f"Intel Restoration Error: {e}")
+
+# 6. TAB 12: ⚡ GOD-MODE ADMIN CONTROL (EXPLICIT RE-LOCK)
+with tabs[12]:
+    st.header("⚡ God-Mode Admin Control")
+    st.warning("Critical Database Access: Session Management & Exports")
+    # 
+    try:
+        conn = sqlite3.connect('breatheeasy.db')
+        leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
+        h1, h2 = st.columns(2)
+        h1.metric("Total DB Records", len(leads_all))
+        h2.metric("System Health", "Operational")
+        st.divider()
+        admin_c1, admin_c2 = st.columns(2)
+        with admin_c1:
+            with st.expander("📥 Master Data Export"):
+                csv = leads_all.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Export Master CSV", csv, "master_leads.csv", "text/csv")
+        with admin_c2:
+            if st.button("Purge Demo Data", type="secondary", use_container_width=True):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
+                conn.commit(); st.success("Demo records purged."); st.rerun()
+        st.divider(); st.subheader("📜 System Audit Trail")
+        logs_df = pd.read_sql_query("SELECT timestamp, user, action, details FROM system_logs ORDER BY timestamp DESC LIMIT 50", conn)
+        st.dataframe(logs_df, use_container_width=True, hide_index=True)
+        conn.close()
+    except Exception as e:
+        st.error(f"Admin Access Error: {e}")
 
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
