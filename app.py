@@ -376,18 +376,17 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
                 
-# --- 6. MULTIMODAL COMMAND CENTER (FINAL STABILIZED ARCHITECTURE) ---
+# --- 6. MULTIMODAL COMMAND CENTER (STRICT ARCHITECTURAL LOCKDOWN) ---
 
-# 1. INITIALIZE ALL 13 TABS
+# 1. INITIALIZE TABS
 tabs = st.tabs([
     "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", 
     "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", 
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# 2. DEFINE THE SEAT RENDERER (WORD EXPORT RESTORED)
+# 2. SEAT RENDERER (WORD/PDF RESTORED)
 def render_executive_seat(idx, title, icon, key, guide):
-    """Renders agent seats with restored Word/PDF export and deployment hub."""
     with tabs[idx + 1]: 
         st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
         st.markdown(f"### {icon} {title} Command Seat")
@@ -396,58 +395,65 @@ def render_executive_seat(idx, title, icon, key, guide):
             raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
             edited_intel = st.text_area("Refine Output", value=format_output(raw_data), height=350, key=f"area_{key}")
             
-            # --- EXPORT HUB (WORD & PDF) ---
             k1, k2, k3 = st.columns([2, 1, 1])
             with k1: st.success(f"Verified {title} Intelligence")
             with k2: 
-                # Restored Word Export Logic
                 word_buf = create_word_doc(edited_intel, title, user_row['logo_path'])
-                st.download_button("📄 Word", word_buf, f"{title}_Report.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", key=f"w_{key}")
+                st.download_button("📄 Word", word_buf, f"{title}.docx", key=f"w_{key}")
             with k3: 
-                # PDF Export Logic
                 pdf_buf = create_pdf(edited_intel, svc, full_loc, user_row['logo_path'])
-                st.download_button("📕 PDF", pdf_buf, f"{title}_Report.pdf", "application/pdf", key=f"p_{key}")
+                st.download_button("📕 PDF", pdf_buf, f"{title}.pdf", key=f"p_{key}")
             
             st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
-            
-            # --- DEPLOYMENT HUB ---
-            st.divider(); d1, d2, d3, d4 = st.columns(4)
-            with d1: st.button("📧 Email", key=f"m_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "Email"))
-            with d2: st.button("📱 SMS", key=f"s_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "SMS"))
-            with d3: st.button("💾 Save", key=f"sv_{key}", on_click=manage_record, args=("save", None))
-            with d4: st.button("✅ Hub", key=f"c_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "Cloud"))
-        else:
-            st.info(f"Launch swarm to populate {title} seat.")
 
-# 3. TAB 11: 🤝 TEAM INTELLIGENCE & MARKET ROI (RESTORED FEATURES)
+# 3. RUN AGENT LOOP (TABS 1-9)
+seats = [
+    ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
+    ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
+    ("Creative", "🎨", "creative", "Visual frameworks and prompts."),
+    ("Strategist", "👔", "strategist", "30-day ROI roadmap."),
+    ("Social Hooks", "✍", "social", "Viral hooks and schedules."),
+    ("GEO Map", "🧠", "geo", "AI Search and Map optimization."),
+    ("Audit Scan", "🌐", "auditor", "Technical conversion diagnostics."),
+    ("SEO Blogger", "✍", "seo", "High-authority technical articles."),
+    ("Vision", "👁️", "vision", "Multimodal visual gap analysis.")
+]
+for i, s in enumerate(seats): 
+    render_executive_seat(i, s[0], s[1], s[2], s[3])
+
+# 4. TAB 11: 🤝 TEAM INTELLIGENCE (LOCKED & PURIFIED)
+# We force a new context here to kill any "God-Mode" bleed.
 with tabs[11]:
     st.header("🤝 Team Intelligence & Market ROI")
     
+    
+    # We open and close the connection IMMEDIATELY within this block
+    conn_intel = sqlite3.connect('breatheeasy.db')
     try:
-        conn = sqlite3.connect('breatheeasy.db')
-        leads_df = pd.read_sql_query("SELECT city, industry FROM leads", conn)
+        leads_df = pd.read_sql_query("SELECT city, industry FROM leads", conn_intel)
         if not leads_df.empty:
             val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
             total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
             m1, m2 = st.columns(2)
-            m1.metric("Pipeline Gross Value", f"${total_val:,.0f}", delta="Omni-Swarm Active")
-            m2.metric("Market Reach", f"{len(leads_df['city'].unique())} Active Cities")
-            st.divider(); st.subheader("📍 Swarm Geographic Density")
-            geo_coords = {"Miami, Florida": [25.76, -80.19], "Austin, Texas": [30.26, -97.74], "Los Angeles, California": [34.05, -118.24]}
-            map_data = [{"lat": geo_coords[loc][0], "lon": geo_coords[loc][1]} for loc in leads_df['city'] if loc in geo_coords]
-            if map_data: st.map(pd.DataFrame(map_data), color="#00FFAA", size=20)
-        conn.close()
-    except Exception as e:
-        st.error(f"Intel Restoration Error: {e}")
+            m1.metric("Pipeline Value", f"${total_val:,.0f}", delta="Omni-Swarm Active")
+            m2.metric("Market Reach", f"{len(leads_df['city'].unique())} Cities")
+            st.divider()
+            st.subheader("📍 Swarm Geographic Density")
+            st.map(pd.DataFrame({"lat": [25.76, 30.26], "lon": [-80.19, -97.74]}))
+        else:
+            st.info("Awaiting swarm launch data...")
+    finally:
+        conn_intel.close()
 
-# 4. TAB 12: ⚙️ ADMIN / GOD-MODE (LOCKED & FULLY FEATURED)
+# 5. TAB 12: ⚙️ ADMIN / GOD-MODE (ISOLATED AT END OF SCRIPT)
 with tabs[12]:
     st.header("⚙️ Admin System Control")
-    st.subheader("⚡ God-Mode Admin Control")
+    st.warning("Critical Database Access: God-Mode Active")
     
+
+    conn_admin = sqlite3.connect('breatheeasy.db')
     try:
-        conn = sqlite3.connect('breatheeasy.db')
-        user_data = pd.read_sql_query("SELECT username, email, credits, package FROM users", conn)
+        user_data = pd.read_sql_query("SELECT username, credits, package FROM users", conn_admin)
         st.dataframe(user_data, use_container_width=True, hide_index=True)
         
         st.divider()
@@ -455,43 +461,20 @@ with tabs[12]:
         
         with adm_col1:
             st.subheader("👤 User Termination")
-            user_to_purge = st.text_input("Username to Purge", placeholder="Enter exact username", key="purge_input")
-            if st.button("❌ Terminate User", type="primary", use_container_width=True):
-                if user_to_purge:
-                    conn.execute("DELETE FROM users WHERE username = ?", (user_to_purge,))
-                    conn.commit(); st.success(f"User '{user_to_purge}' terminated."); st.rerun()
+            u_purge = st.text_input("Username to Purge", key="purge_lock")
+            if st.button("❌ Terminate User", type="primary"):
+                conn_admin.execute("DELETE FROM users WHERE username = ?", (u_purge,))
+                conn_admin.commit(); st.success(f"{u_purge} Deleted."); st.rerun()
 
         with adm_col2:
             st.subheader("🚀 Credit Injection")
-            target_user = st.selectbox("Target User", user_data['username'], key="inject_select")
-            injection_vol = st.number_input("Injection Volume", min_value=1, value=50, key="inject_vol")
-            if st.button("💉 Finalize Injection", use_container_width=True):
-                conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (injection_vol, target_user))
-                conn.commit(); st.success(f"Injected credits into '{target_user}'."); st.rerun()
-
-        st.divider()
-        with st.expander("📥 Master Data Management"):
-            leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
-            st.download_button("Export Master CSV", leads_all.to_csv(index=False), "master.csv", use_container_width=True)
-        conn.close()
-    except Exception as e:
-        st.error(f"Admin Error: {e}")
-
-# 5. RENDER AGENT SEAT LOOP (TABS 1-9)
-seats = [
-    ("Analyst", "🕵️", "analyst", "Deep market gap analysis."),
-    ("Ad Tracker", "📺", "ads", "Rival hook deconstruction."),
-    ("Creative", "🎨", "creative", "Video prompts and copy."),
-    ("Strategist", "👔", "strategist", "30-day ROI roadmap."),
-    ("Social Hooks", "✍", "social", "Viral distribution plan."),
-    ("GEO Map", "🧠", "geo", "AI search ranking dominance."),
-    ("Audit Scan", "🌐", "auditor", "Technical leak diagnostics."),
-    ("SEO Blogger", "✍", "seo", "Technical EEAT articles."),
-    ("Vision", "👁️", "vision", "Visual gap analysis.")
-]
-
-for i, s in enumerate(seats): 
-    render_executive_seat(i, s[0], s[1], s[2], s[3])
+            u_inject = st.selectbox("Target User", user_data['username'], key="inject_lock")
+            vol = st.number_input("Volume", min_value=1, value=50)
+            if st.button("💉 Finalize Injection"):
+                conn_admin.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (vol, u_inject))
+                conn_admin.commit(); st.success("Credits Injected."); st.rerun()
+    finally:
+        conn_admin.close()
         
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
