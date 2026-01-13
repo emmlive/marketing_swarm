@@ -376,7 +376,7 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
                 
-# --- 6. MULTIMODAL COMMAND CENTER (STRICT POSITIONAL ARCHITECTURE) ---
+# --- 6. MULTIMODAL COMMAND CENTER (STRICT SLOT ARCHITECTURE) ---
 
 # 1. INITIALIZE ALL 13 TABS
 tabs = st.tabs([
@@ -385,132 +385,132 @@ tabs = st.tabs([
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# 2. POSITION 0: THE MANUAL (Restored and Locked)
+# 2. SLOT 0: THE COMPREHENSIVE INTELLIGENCE MANUAL
 with tabs[0]:
     st.header("📖 Agent Intelligence Manual")
-    st.info("Directives for the Omni-Swarm Decision Engine.")
+    st.info("Operational directives for the Omni-Swarm Decision Engine.")
     
     
-    guide_col1, guide_col2 = st.columns(2)
-    with guide_col1:
+    
+    g_col1, g_col2 = st.columns(2)
+    with g_col1:
         with st.expander("🕵️ Intelligence Protocols", expanded=True):
             st.markdown("""
-            - **Analyst:** Identify price gaps in local markets.
-            - **Ad Tracker:** Deconstruct competitor psychological hooks.
-            - **Vision:** Analyze rival visual assets for conversion leaks.
+            - **Analyst:** Identifies competitor price gaps and market entry leaks.
+            - **Ad Tracker:** Deconstructs rival psychological hooks and creative spend.
+            - **Creative:** Engineers cinematic prompts and high-converting ad copy.
+            - **Vision:** Multimodal visual teardowns of competitor landing pages.
             """)
-    with guide_col2:
+    with g_col2:
         with st.expander("👔 Strategic Alignment", expanded=True):
             st.markdown("""
-            - **Strategist:** 30-day ROI roadmaps.
-            - **SEO Blogger:** Technical authority content.
-            - **GEO Map:** AI Search and Map dominance.
+            - **Strategist:** Synthesizes all data into a unified 30-day ROI roadmap.
+            - **Social Hooks:** Generates 30 days of viral distribution schedules.
+            - **GEO Map:** Optimizes for local AI Search and Map dominance.
+            - **Auditor:** Scans URLs for technical conversion friction points.
             """)
 
-# 3. POSITION 1-9: AGENT SEATS (STRICTLY BOUNDED LOOP)
-seats = [
-    ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
-    ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
-    ("Creative", "🎨", "creative", "Visual frameworks and prompts."),
-    ("Strategist", "👔", "strategist", "30-day ROI roadmap."),
-    ("Social Hooks", "✍", "social", "Viral hooks and schedules."),
-    ("GEO Map", "🧠", "geo", "AI Search and Map optimization."),
-    ("Audit Scan", "🌐", "auditor", "Technical conversion diagnostics."),
-    ("SEO Blogger", "✍", "seo", "High-authority technical articles."),
-    ("Vision", "👁️", "vision", "Multimodal visual gap analysis.")
-]
-
-def render_agent_logic(idx, title, icon, key, guide_text):
-    """Encapsulated rendering to prevent context bleed."""
+# 3. SLOT 1-9: THE AGENT SEATS (STRICTLY ISOLATED)
+def render_isolated_seat(idx, title, icon, key, guide_text):
     with tabs[idx + 1]:
         st.markdown(f"### {icon} {title} Command Seat")
         st.caption(f"**Directive:** {guide_text}")
         
         if st.session_state.get('gen'):
             raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
-            edited_intel = st.text_area("Refine Output", value=format_output(raw_data), height=300, key=f"seat_area_{key}")
+            edited_intel = st.text_area("Refine Output", value=format_output(raw_data), height=300, key=f"seat_refine_{key}")
             
-            # Restored Export Hub
-            c1, c2, c3 = st.columns([2, 1, 1])
-            with c1: st.success(f"Verified {title} Intel")
-            with c2: 
+            # Export Hub
+            exp_c1, exp_c2, exp_c3 = st.columns([2, 1, 1])
+            with exp_c1: st.success(f"Verified {title} Intel")
+            with exp_c2: 
                 w_buf = create_word_doc(edited_intel, title, user_row['logo_path'])
-                st.download_button("📄 Word", w_buf, f"{title}.docx", key=f"word_dl_{key}")
-            with c3: 
+                st.download_button("📄 Word", w_buf, f"{title}.docx", key=f"dl_word_{key}")
+            with exp_c3: 
                 p_buf = create_pdf(edited_intel, svc, full_loc, user_row['logo_path'])
-                st.download_button("📕 PDF", p_buf, f"{title}.pdf", key=f"pdf_dl_{key}")
+                st.download_button("📕 PDF", p_buf, f"{title}.pdf", key=f"dl_pdf_{key}")
         else:
             st.info(f"Launch swarm to populate {title} seat.")
 
-# Execute seat loop (Strictly 1-9)
-for i, s in enumerate(seats):
-    render_agent_logic(i, s[0], s[1], s[2], s[3])
+seats_list = [
+    ("Analyst", "🕵️", "analyst", "Deep market gap analysis."),
+    ("Ad Tracker", "📺", "ads", "Rival hook deconstruction."),
+    ("Creative", "🎨", "creative", "Video prompts and copy."),
+    ("Strategist", "👔", "strategist", "30-day ROI roadmap."),
+    ("Social Hooks", "✍", "social", "Viral hooks and schedules."),
+    ("GEO Map", "🧠", "geo", "AI Search and Map optimization."),
+    ("Audit Scan", "🌐", "auditor", "Technical conversion diagnostics."),
+    ("SEO Blogger", "✍", "seo", "High-authority technical articles."),
+    ("Vision", "👁️", "vision", "Visual gap analysis.")
+]
 
-# 4. POSITION 11: TEAM INTEL (ISOLATED)
+for i, s in enumerate(seats_list):
+    render_isolated_seat(i, s[0], s[1], s[2], s[3])
+
+# 4. SLOT 11: TEAM INTELLIGENCE (HARD-CODED BOUNDARY)
 with tabs[11]:
     st.header("🤝 Team Intelligence & Market ROI")
     
     
+    
     conn_intel = sqlite3.connect('breatheeasy.db')
     try:
-        leads_df = pd.read_sql_query("SELECT city, industry FROM leads", conn_intel)
-        if not leads_df.empty:
-            val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
-            total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
+        intel_df = pd.read_sql_query("SELECT city, industry FROM leads", conn_intel)
+        if not intel_df.empty:
+            v_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
+            total_v = intel_df['industry'].map(v_map).fillna(10000).sum()
             
-            m1, m2 = st.columns(2)
-            m1.metric("Pipeline Gross Value", f"${total_val:,.0f}")
-            m2.metric("Market Reach", f"{len(leads_df['city'].unique())} Cities")
+            met_a, met_b = st.columns(2)
+            met_a.metric("Pipeline Value", f"${total_v:,.0f}", delta="Swarm Active")
+            met_b.metric("Active Cities", len(intel_df['city'].unique()))
             
             st.divider()
             st.subheader("📍 Swarm Geographic Density")
             st.map(pd.DataFrame({"lat": [25.76], "lon": [-80.19]}))
         else:
-            st.info("Awaiting swarm launch data.")
+            st.info("Launch swarms to generate market intelligence.")
     finally:
         conn_intel.close()
 
-# 5. POSITION 12: ADMIN HUB (GOD-MODE LOCKED)
+# 5. SLOT 12: THE ADMIN GOD-MODE (PHYSICALLY ISOLATED)
 with tabs[12]:
     st.header("⚙️ Admin System Control")
     st.warning("⚡ God-Mode: Critical System Access")
     
+    
 
     conn_admin = sqlite3.connect('breatheeasy.db')
     try:
-        # A. USER REGISTRY
-        st.subheader("👥 System User Registry")
-        user_reg = pd.read_sql_query("SELECT username, email, credits, package FROM users", conn_admin)
-        st.dataframe(user_reg, use_container_width=True, hide_index=True)
+        # User Table
+        st.subheader("👥 User Management")
+        u_table = pd.read_sql_query("SELECT username, email, credits FROM users", conn_admin)
+        st.dataframe(u_table, use_container_width=True, hide_index=True)
         
         st.divider()
-        adm_c1, adm_c2 = st.columns(2)
+        adm_1, adm_2 = st.columns(2)
         
-        # B. USER TERMINATION
-        with adm_c1:
-            st.subheader("👤 User Termination")
-            u_purge = st.text_input("Username to Purge", key="final_admin_purge")
-            if st.button("❌ Terminate User", type="primary", key="final_terminate_btn"):
-                if u_purge:
-                    conn_admin.execute("DELETE FROM users WHERE username = ?", (u_purge,))
+        with adm_1:
+            st.subheader("👤 Termination")
+            t_user = st.text_input("Username to Purge", key="GOD_MODE_PURGE_INPUT")
+            if st.button("❌ Terminate User", type="primary", key="GOD_MODE_TERMINATE_BTN"):
+                if t_user:
+                    conn_admin.execute("DELETE FROM users WHERE username = ?", (t_user,))
                     conn_admin.commit()
-                    st.success(f"User {u_purge} removed."); st.rerun()
+                    st.success(f"User {t_user} removed."); st.rerun()
 
-        # C. CREDIT INJECTION
-        with adm_c2:
-            st.subheader("🚀 Credit Injection")
-            u_target = st.selectbox("Target User", user_reg['username'], key="final_inject_select")
-            v_inject = st.number_input("Volume", min_value=1, value=50, key="final_inject_vol")
-            if st.button("💉 Finalize Injection", key="final_inject_btn"):
-                conn_admin.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (v_inject, u_target))
+        with adm_2:
+            st.subheader("🚀 Injection")
+            i_user = st.selectbox("Select User", u_table['username'], key="GOD_MODE_INJECT_SELECT")
+            i_vol = st.number_input("Credits", min_value=1, value=100, key="GOD_MODE_INJECT_VOL")
+            if st.button("💉 Finalize Injection", key="GOD_MODE_INJECT_BTN"):
+                conn_admin.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (i_vol, i_user))
                 conn_admin.commit()
-                st.success(f"Injected {v_inject} credits."); st.rerun()
+                st.success(f"Injected {i_vol} credits."); st.rerun()
                 
-        # D. MASTER DATA
         st.divider()
-        with st.expander("📥 Master Data Management"):
-            all_leads = pd.read_sql_query("SELECT * FROM leads", conn_admin)
-            st.download_button("Export Master CSV", all_leads.to_csv(index=False), "master.csv", key="final_master_dl")
+        with st.expander("📥 Data Export"):
+            m_leads = pd.read_sql_query("SELECT * FROM leads", conn_admin)
+            st.download_button("Export master.csv", m_leads.to_csv(index=False), "master.csv", key="GOD_MODE_CSV")
             
     finally:
         conn_admin.close()
