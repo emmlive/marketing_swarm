@@ -376,7 +376,7 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
     
-# --- 6. MULTIMODAL COMMAND CENTER (STRICT CONTEXT GATING) ---
+)# --- 6. MULTIMODAL COMMAND CENTER (STRICT CONTEXT GATING) ---
 
 # 1. INITIALIZE ALL 13 TABS
 # Index Mapping: 0:Guide, 1-9:Agents, 10:Veo, 11:Intel, 12:Admin
@@ -395,25 +395,25 @@ with tabs[0]:
     with col_a:
         with st.expander("🕵️ Analyst & Ad Tracker", expanded=True):
             st.markdown(f"""
-            **Capabilities:** Deep-scrapes local competitors in **{selected_city}** to find price gaps.
-            **Implementation:** Use 'Price Arbitrage' to undercut rivals by 5-10% in local Google Ads.
-            **Visual Audit:** Use the 'Ad Tracker' seat to compare AI mockups against live rival spend.
+            **Capabilities**: Deep-scrapes local competitors to find price gaps and service failures.
+            **Implementation**: Use the 'Price Arbitrage' section to undercut rivals by 5-10% in Google Ads.
+            **Visual Audit**: Use the 'Ad Tracker' seat to compare AI mockups against live rival spend.
             """)
         with st.expander("🎨 Creative & Social Architect"):
             st.markdown("""
-            **Capabilities:** Engineers psychological 'hooks' and cinematic prompts for Veo.
-            **Implementation:** Paste 'Video Prompts' into Veo Studio. Schedule 'Viral Hooks' for 8:00 AM.
+            **Capabilities**: Engineers psychological 'hooks' based on rival weaknesses and generates cinematic prompts for Veo.
+            **Implementation**: Paste 'Video Prompts' into Veo Studio and schedule 'Viral Hooks' for 8:00 AM.
             """)
     with col_b:
         with st.expander("👔 Chief Growth Strategist"):
             st.markdown("""
-            **Capabilities:** Synthesizes all 8 agent outputs into a unified 30-day ROI roadmap.
-            **Implementation:** Export the 'Executive Brief' for stakeholder growth alignment.
+            **Capabilities**: Synthesizes all 8 agent outputs into a unified 30-day ROI roadmap.
+            **Implementation**: Export the 'Executive Brief' and use it as your primary pitch deck for stakeholders.
             """)
         with st.expander("🌐 Technical & Vision Auditor"):
             st.markdown("""
-            **Capabilities:** Detects 'Conversion Leaks' on your URL and deconstructs rival design psychology.
-            **Implementation:** Send the 'Audit CSV' to your developer. Use 'Vision Teardown' to pivot your ad design.
+            **Capabilities**: Detects 'Conversion Leaks' on your URL and deconstructs rival design psychology.
+            **Implementation**: Send the 'Audit CSV' to your developer and use the 'Vision Teardown' to pivot your ad design.
             """)
 
 # 3. DEFINE THE SEAT RENDERER (Ensures scope is clear)
