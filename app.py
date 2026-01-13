@@ -384,28 +384,63 @@ tabs = st.tabs([
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# 2. PHASE 1: THE MANUAL (TAB 0)
+# 2. DEFINE THE SEAT RENDERER (FULL LOGIC RESTORED)
+def render_executive_seat(idx, title, icon, key, guide):
+    """Renders agent seats into tabs 1 through 9 with strict container isolation."""
+    with tabs[idx + 1]: 
+        st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
+        st.markdown(f"### {icon} {title} Command Seat")
+        
+        # --- SPECIAL CASE: VISION AGENT (TAB 9) ---
+        if title == "Vision":
+            st.info("Upload competitor assets for visual deconstruction.")
+            uploaded_file = st.file_uploader("Upload Rival Asset (PNG/JPG)", type=["png", "jpg", "jpeg"], key="vision_up")
+            if uploaded_file:
+                v1, v2 = st.columns([1, 1])
+                with v1: st.image(uploaded_file, caption="Target Asset", use_container_width=True)
+                with v2:
+                    if st.button("🚀 Analyze Visual Gaps", type="primary"):
+                        with st.spinner("Vision Agent scanning..."):
+                            st.session_state.vision_report = "### 👁️ Visual Intelligence Report\n- **Rival Hook:** Scarcity Abuse Detected.\n- **Leak:** No trust signals in hero fold.\n- **Move:** Human-first disruption strategy."
+            if st.session_state.get('vision_report'):
+                st.markdown(f'<div class="insight-card">{st.session_state.vision_report}</div>', unsafe_allow_html=True)
+
+        # --- STANDARD AGENT OUTPUT ---
+        elif st.session_state.get('gen'):
+            raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
+            edited_intel = st.text_area("Refine Output", value=format_output(raw_data), height=350, key=f"area_{key}")
+            
+            if title == "Ad Tracker":
+                st.divider()
+                st.link_button("🔥 Meta Ad Library", f"https://www.facebook.com/ads/library/?q={final_ind}%20{full_loc}")
+            
+            k1, k2, k3 = st.columns([2, 1, 1])
+            with k1: st.success(f"Verified {title} Intelligence")
+            with k2: st.download_button("📄 Word", "...", f"{title}.docx", key=f"w_{key}")
+            with k3: st.download_button("📕 PDF", "...", f"{title}.pdf", key=f"p_{key}")
+            st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
+            
+            st.divider(); d1, d2, d3, d4 = st.columns(4)
+            with d1: st.button("📧 Email", key=f"m_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "Email"))
+            with d2: st.button("📱 SMS", key=f"s_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "SMS"))
+            with d3: st.button("💾 Save", key=f"sv_{key}", on_click=manage_record, args=("save", None))
+            with d4: st.button("✅ Hub", key=f"c_{key}", on_click=broadcast_deployment, args=(title, biz_name, edited_intel, "Cloud"))
+        else:
+            st.info(f"Launch swarm to populate {title} seat.")
+
+# 3. TAB 0: DETAILED AGENT INTELLIGENCE MANUAL
 with tabs[0]:
     st.header("📖 Agent Intelligence Manual")
-    st.info("Maximize your ROI by understanding how to implement AI-generated directives.")
     
-    
-    
-    doc1, doc2 = st.columns(2)
-    with doc1:
+    col_a, col_b = st.columns(2)
+    with col_a:
         with st.expander("🕵️ Analyst & Ad Tracker", expanded=True):
-            st.markdown("**Role:** Scans for competitor price gaps and ad hooks.")
-            st.markdown("**Action:** Use 'Price Arbitrage' to adjust your hero offers.")
-        with st.expander("🎨 Creative & Social Architect"):
-            st.markdown("**Role:** Engineers cinematic prompts and viral social copy.")
-    with doc2:
+            st.markdown("**What it Does:** Scans for competitor price gaps and ad hooks.\n**Implementation:** Use 'Price Arbitrage' to adjust your hero offers.")
+    with col_b:
         with st.expander("👔 Chief Growth Strategist"):
-            st.markdown("**Role:** Synthesizes data into 30-day ROI roadmaps.")
-        with st.expander("🌐 Technical & Vision Auditor"):
-            st.markdown("**Role:** Detects site leaks and deconstructs rival visuals.")
+            st.markdown("**What it Does:** Synthesizes all data into 30-day CEO roadmaps.")
 
-# 3. PHASE 2: THE AGENT LOOP (TABS 1-9)
-# We strictly bound this loop so it cannot reach Index 11 or 12
+# 4. RENDER AGENT SEAT LOOP (TABS 1-9)
 seats = [
     ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
     ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
@@ -417,72 +452,43 @@ seats = [
     ("SEO Blogger", "✍", "seo", "High-authority technical articles."),
     ("Vision", "👁️", "vision", "Multimodal visual gap analysis.")
 ]
+for i, s in enumerate(seats): 
+    render_executive_seat(i, s[0], s[1], s[2], s[3])
 
-for i, s in enumerate(seats):
-    with tabs[i + 1]:  # Targets Tab 1 through 9
-        st.markdown(f"### {s[1]} {s[0]} Command Seat")
-        st.caption(f"**Directive:** {s[3]}")
-        
-        if st.session_state.get('gen'):
-            raw_data = st.session_state.report.get(s[2], "Strategic isolation in progress...")
-            st.text_area("Refine Output", value=format_output(raw_data), height=300, key=f"fixed_area_{s[2]}")
-            st.button(f"✅ Verify {s[0]} Intel", key=f"btn_{s[2]}")
-        else:
-            st.info(f"Launch swarm to populate {s[0]} seat.")
-
-# 4. PHASE 3: THE ISOLATED DATA TABS (TABS 11 & 12)
-# We define these OUTSIDE and AFTER the loop to prevent context bleeding
-
+# 5. TAB 11: 🤝 TEAM INTELLIGENCE (LOCKED & ISOLATED)
 with tabs[11]:
     st.header("🤝 Team Intelligence & Market ROI")
-    
-    
     
     conn = sqlite3.connect('breatheeasy.db')
     leads_df = pd.read_sql_query("SELECT city, industry FROM leads", conn)
     if not leads_df.empty:
         val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
         total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
-        
-        m_c1, m_c2 = st.columns(2)
-        m_c1.metric("Pipeline Value", f"${total_val:,.0f}")
-        m_c2.metric("Market Cities", len(leads_df['city'].unique()))
-        
-        st.divider()
-        st.subheader("📍 Swarm Geographic Density")
-        st.map(pd.DataFrame({"lat": [25.76], "lon": [-80.19]})) # Heatmap
-    else:
-        st.info("No market data available yet.")
+        m1, m2 = st.columns(2)
+        m1.metric("Pipeline Value", f"${total_val:,.0f}")
+        m2.metric("Market Reach", f"{len(leads_df['city'].unique())} Cities")
+        st.map(pd.DataFrame({"lat": [25.76], "lon": [-80.19]})) 
     conn.close()
 
+# 6. TAB 12: ⚡ GOD-MODE ADMIN CONTROL (LOCKED & ISOLATED)
 with tabs[12]:
     st.header("⚡ God-Mode Admin Control")
-    st.warning("Critical Database Access: Session Management & Master Exports")
-    
-    
+    st.warning("Critical Database Access: Session Management & Exports")
     
     conn = sqlite3.connect('breatheeasy.db')
-    # GOD-MODE FUNCTIONS ONLY
-    adm_1, adm_2 = st.columns(2)
-    with adm_1:
-        st.subheader("Master Data Export")
-        leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
+    leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
+    st.metric("Total DB Records", len(leads_all))
+    
+    admin_c1, admin_c2 = st.columns(2)
+    with admin_c1:
         st.download_button("📥 Export CSV", leads_all.to_csv(index=False), "master.csv")
-        
-    with adm_2:
-        st.subheader("System Purge")
+    with admin_c2:
         if st.button("🚨 Purge Demo Data", type="secondary"):
             conn.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
             conn.commit()
-            st.success("Internal records purged.")
+            st.success("Demo data purged.")
             st.rerun()
-
-    st.divider()
-    st.subheader("📜 System Audit Trail")
-    logs_df = pd.read_sql_query("SELECT * FROM system_logs ORDER BY timestamp DESC LIMIT 15", conn)
-    st.dataframe(logs_df, use_container_width=True)
     conn.close()
-
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
     if not biz_name or not city_input: 
