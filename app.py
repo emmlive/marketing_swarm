@@ -375,120 +375,37 @@ if st.session_state.get('show_cleanup_confirm'):
             if st.button("🛑 No, Logout Only", type="secondary"):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
-
 # --- 6. MULTIMODAL COMMAND CENTER (STRICT ARCHITECTURAL ISOLATION) ---
 
-# 1. INITIALIZE THE TAB ARRAY
-# Index 0: Guide | 1-9: Agent Seats | 10: Veo | 11: Team Intel | 12: Admin
+# 1. INITIALIZE ALL 13 TABS
 tabs = st.tabs([
     "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", 
     "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", 
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# 2. TAB 0: DETAILED AGENT INTELLIGENCE MANUAL
+# 2. PHASE 1: THE MANUAL (TAB 0)
 with tabs[0]:
     st.header("📖 Agent Intelligence Manual")
-    st.info("Operational directives for the Omni-Swarm Decision Engine.")
+    st.info("Maximize your ROI by understanding how to implement AI-generated directives.")
     
     
     
-    col_a, col_b = st.columns(2)
-    with col_a:
+    doc1, doc2 = st.columns(2)
+    with doc1:
         with st.expander("🕵️ Analyst & Ad Tracker", expanded=True):
-            st.markdown("**Capabilities:** Scans for competitor price gaps and ad hooks.")
+            st.markdown("**Role:** Scans for competitor price gaps and ad hooks.")
             st.markdown("**Action:** Use 'Price Arbitrage' to adjust your hero offers.")
-        with st.expander("🎨 Creative Director"):
-            st.markdown("**Capabilities:** Generates cinematic prompts for Veo and viral social copy.")
-    with col_b:
+        with st.expander("🎨 Creative & Social Architect"):
+            st.markdown("**Role:** Engineers cinematic prompts and viral social copy.")
+    with doc2:
         with st.expander("👔 Chief Growth Strategist"):
-            st.markdown("**Capabilities:** Synthesizes all data into 30-day ROI roadmaps.")
+            st.markdown("**Role:** Synthesizes data into 30-day ROI roadmaps.")
         with st.expander("🌐 Technical & Vision Auditor"):
-            st.markdown("**Capabilities:** Detects site leaks and deconstructs rival visuals.")
+            st.markdown("**Role:** Detects site leaks and deconstructs rival visuals.")
 
-# 3. DEFINE THE SEAT RENDERER (FUNCTION DEFINITION ONLY)
-def render_executive_seat(idx, title, icon, key, guide):
-    """Renders agent seats into tabs 1 through 9 with strict container isolation."""
-    with tabs[idx + 1]: 
-        st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
-        st.markdown(f"### {icon} {title} Command Seat")
-        
-        if st.session_state.get('gen'):
-            raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
-            edited_intel = st.text_area("Refine Output", value=format_output(raw_data), height=350, key=f"area_{key}")
-            
-            # Action Buttons
-            k1, k2 = st.columns([2, 1])
-            with k1: st.success(f"Verified {title} Intelligence")
-            with k2: st.download_button("📕 PDF", "Data", f"{title}.pdf", key=f"p_{key}")
-            st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
-        else:
-            st.info(f"Launch swarm to populate {title} seat.")
-
-# 4. TAB 11: 🤝 TEAM INTELLIGENCE (HARD-CODED ISOLATION)
-with tabs[11]:
-    st.header("🤝 Team Intelligence & Market ROI")
-    st.subheader("📊 Strategic Market Performance")
-    
-    
-    
-    try:
-        conn = sqlite3.connect('breatheeasy.db')
-        leads_df = pd.read_sql_query("SELECT city, industry FROM leads", conn)
-        if not leads_df.empty:
-            val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
-            total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
-            
-            m1, m2 = st.columns(2)
-            m1.metric("Pipeline Gross Value", f"${total_val:,.0f}", delta="Omni-Swarm Active")
-            m2.metric("Market Reach", f"{len(leads_df['city'].unique())} Active Cities")
-            
-            st.divider()
-            st.subheader("📍 Swarm Geographic Density")
-            st.map(pd.DataFrame({"lat": [25.76], "lon": [-80.19]})) # Static example
-        else:
-            st.info("No market data available yet.")
-        conn.close()
-    except Exception as e:
-        st.error(f"Intel Restoration Error: {e}")
-
-# 5. TAB 12: ⚡ GOD-MODE ADMIN CONTROL (HARD-CODED ISOLATION)
-with tabs[12]:
-    st.header("⚡ God-Mode Admin Control")
-    st.warning("Critical Database Access: Session Management & Exports")
-    
-    
-    
-    try:
-        conn = sqlite3.connect('breatheeasy.db')
-        leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
-        
-        h1, h2 = st.columns(2)
-        h1.metric("Total DB Records", len(leads_all))
-        h2.metric("System Health", "Operational")
-        
-        st.divider()
-        st.subheader("🧹 Maintenance Hub")
-        adm_c1, adm_c2 = st.columns(2)
-        with adm_c1:
-            if st.button("🚨 Purge Demo Data", type="secondary", use_container_width=True):
-                conn.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
-                conn.commit()
-                st.success("Demo records purged.")
-                st.rerun()
-        with adm_c2:
-            csv = leads_all.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Master Data Export", csv, "master_leads.csv", use_container_width=True)
-            
-        st.subheader("📜 System Audit Trail")
-        logs_df = pd.read_sql_query("SELECT * FROM system_logs ORDER BY timestamp DESC LIMIT 20", conn)
-        st.dataframe(logs_df, use_container_width=True, hide_index=True)
-        conn.close()
-    except Exception as e:
-        st.error(f"Admin Error: {e}")
-
-# 6. RENDER AGENT SEAT LOOP LAST (TABS 1-9 ONLY)
-# Placing this loop at the absolute end ensures it cannot bleed into Tabs 11 or 12.
+# 3. PHASE 2: THE AGENT LOOP (TABS 1-9)
+# We strictly bound this loop so it cannot reach Index 11 or 12
 seats = [
     ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
     ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
@@ -501,8 +418,70 @@ seats = [
     ("Vision", "👁️", "vision", "Multimodal visual gap analysis.")
 ]
 
-for i, s in enumerate(seats): 
-    render_executive_seat(i, s[0], s[1], s[2], s[3])
+for i, s in enumerate(seats):
+    with tabs[i + 1]:  # Targets Tab 1 through 9
+        st.markdown(f"### {s[1]} {s[0]} Command Seat")
+        st.caption(f"**Directive:** {s[3]}")
+        
+        if st.session_state.get('gen'):
+            raw_data = st.session_state.report.get(s[2], "Strategic isolation in progress...")
+            st.text_area("Refine Output", value=format_output(raw_data), height=300, key=f"fixed_area_{s[2]}")
+            st.button(f"✅ Verify {s[0]} Intel", key=f"btn_{s[2]}")
+        else:
+            st.info(f"Launch swarm to populate {s[0]} seat.")
+
+# 4. PHASE 3: THE ISOLATED DATA TABS (TABS 11 & 12)
+# We define these OUTSIDE and AFTER the loop to prevent context bleeding
+
+with tabs[11]:
+    st.header("🤝 Team Intelligence & Market ROI")
+    
+    
+    
+    conn = sqlite3.connect('breatheeasy.db')
+    leads_df = pd.read_sql_query("SELECT city, industry FROM leads", conn)
+    if not leads_df.empty:
+        val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
+        total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
+        
+        m_c1, m_c2 = st.columns(2)
+        m_c1.metric("Pipeline Value", f"${total_val:,.0f}")
+        m_c2.metric("Market Cities", len(leads_df['city'].unique()))
+        
+        st.divider()
+        st.subheader("📍 Swarm Geographic Density")
+        st.map(pd.DataFrame({"lat": [25.76], "lon": [-80.19]})) # Heatmap
+    else:
+        st.info("No market data available yet.")
+    conn.close()
+
+with tabs[12]:
+    st.header("⚡ God-Mode Admin Control")
+    st.warning("Critical Database Access: Session Management & Master Exports")
+    
+    
+    
+    conn = sqlite3.connect('breatheeasy.db')
+    # GOD-MODE FUNCTIONS ONLY
+    adm_1, adm_2 = st.columns(2)
+    with adm_1:
+        st.subheader("Master Data Export")
+        leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
+        st.download_button("📥 Export CSV", leads_all.to_csv(index=False), "master.csv")
+        
+    with adm_2:
+        st.subheader("System Purge")
+        if st.button("🚨 Purge Demo Data", type="secondary"):
+            conn.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
+            conn.commit()
+            st.success("Internal records purged.")
+            st.rerun()
+
+    st.divider()
+    st.subheader("📜 System Audit Trail")
+    logs_df = pd.read_sql_query("SELECT * FROM system_logs ORDER BY timestamp DESC LIMIT 15", conn)
+    st.dataframe(logs_df, use_container_width=True)
+    conn.close()
 
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
