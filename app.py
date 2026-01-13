@@ -376,7 +376,9 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
     
-)# --- 6. MULTIMODAL COMMAND CENTER (STRICT CONTEXT GATING) ---
+)
+
+# --- 6. MULTIMODAL COMMAND CENTER (STRICT CONTEXT GATING) ---
 
 # 1. INITIALIZE ALL 13 TABS
 # Index Mapping: 0:Guide, 1-9:Agents, 10:Veo, 11:Intel, 12:Admin
