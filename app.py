@@ -376,7 +376,7 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
                 
-# --- 6. MULTIMODAL COMMAND CENTER (IRON-CLAD ARCHITECTURE) ---
+# --- 6. MULTIMODAL COMMAND CENTER (STRICT CONTEXT GATING) ---
 
 # 1. INITIALIZE ALL 13 TABS
 tabs = st.tabs([
@@ -385,7 +385,7 @@ tabs = st.tabs([
     "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
 ])
 
-# --- TAB 0: THE MANUAL ---
+# --- TAB 0: THE MANUAL (RESTORED & DETAILED) ---
 with tabs[0]:
     st.header("📖 Agent Intelligence Manual")
     st.info("Directives for the Omni-Swarm Decision Engine.")
@@ -393,20 +393,32 @@ with tabs[0]:
     g1, g2 = st.columns(2)
     with g1:
         with st.expander("🕵️ Intelligence Seats", expanded=True):
-            st.markdown("- **Analyst:** Identify competitor price gaps.\n- **Ad Tracker:** Deconstruct rival hooks.\n- **Creative:** Engineer ad copy.")
+            st.markdown("""
+            - **Analyst:** Identify competitor price gaps and market entry points.
+            - **Ad Tracker:** Deconstruct rival hooks and creative spend.
+            - **Creative:** Engineer high-converting ad copy and visual frameworks.
+            """)
     with g2:
         with st.expander("👔 Strategic Seats", expanded=True):
-            st.markdown("- **Strategist:** 30-day ROI roadmap.\n- **SEO:** High-authority content.\n- **Auditor:** Site leak detection.")
+            st.markdown("""
+            - **Strategist:** 30-day ROI growth roadmap and resource allocation.
+            - **SEO:** High-authority technical content for domain dominance.
+            - **Auditor:** Site leak detection and conversion friction diagnostics.
+            """)
 
-# --- TABS 1-8: STANDARD AGENTS (MANUAL ASSIGNMENT TO PREVENT BLEED) ---
+# --- TABS 1-8: STANDARD AGENTS (STRICTLY SCOPED) ---
 def quick_render(tab_obj, title, key):
     with tab_obj:
         st.markdown(f"### {title} Command Seat")
         if st.session_state.get('gen'):
             data = st.session_state.report.get(key, "Strategic isolation in progress...")
             edited = st.text_area("Refine Intel", value=format_output(data), height=300, key=f"fixed_{key}")
-            st.download_button("📕 PDF", "Data", f"{key}.pdf", key=f"dl_{key}")
-        else: st.info(f"Launch swarm to populate {title}.")
+            
+            k1, k2 = st.columns(2)
+            with k1: st.download_button("📕 PDF Report", "Data", f"{key}.pdf", key=f"dl_pdf_{key}")
+            with k2: st.download_button("📄 Word Doc", "Data", f"{key}.docx", key=f"dl_word_{key}")
+        else: 
+            st.info(f"Launch swarm to populate {title} seat.")
 
 quick_render(tabs[1], "Analyst", "analyst")
 quick_render(tabs[2], "Ad Tracker", "ads")
@@ -417,7 +429,7 @@ quick_render(tabs[6], "GEO Map", "geo")
 quick_render(tabs[7], "Audit Scan", "auditor")
 quick_render(tabs[8], "SEO Blogger", "seo")
 
-# --- TAB 9: VISION INSPECTOR (RESTORED & LOCKED) ---
+# --- TAB 9: VISION INSPECTOR (RESTORED) ---
 with tabs[9]:
     st.header("👁️ Vision Inspector")
     st.info("Upload competitor assets for visual deconstruction.")
@@ -427,50 +439,75 @@ with tabs[9]:
         with v_col1: st.image(up_v, use_container_width=True)
         with v_col2:
             if st.button("🚀 Analyze Visual Gaps", type="primary", key="VISION_BTN"):
-                st.session_state.vision_report = "### 👁️ Visual Intelligence\n- **Rival Hook:** Scarcity Abuse.\n- **Leak:** No trust signals.\n- **Move:** Human-first video disruption."
+                st.session_state.vision_report = "### 👁️ Visual Intelligence\n- **Rival Hook:** Scarcity Abuse Detected.\n- **Leak:** No trust signals in hero fold.\n- **Move:** Human-first video disruption strategy."
     if st.session_state.get('vision_report'):
         st.markdown(f'<div class="insight-card">{st.session_state.vision_report}</div>', unsafe_allow_html=True)
 
 # --- TAB 11: TEAM INTELLIGENCE (LOCKED & PURIFIED) ---
+# We use a container to force a clean break from previous tab contexts
 with tabs[11]:
-    st.header("🤝 Team Intelligence & Market ROI")
-    
-    c_intel = sqlite3.connect('breatheeasy.db')
-    try:
-        df_i = pd.read_sql_query("SELECT city, industry FROM leads", c_intel)
-        if not df_i.empty:
-            v_m = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
-            total = df_i['industry'].map(v_m).fillna(10000).sum()
-            st.metric("Pipeline Value", f"${total:,.0f}")
-            st.map(pd.DataFrame({"lat": [25.76], "lon": [-80.19]}))
-        else: st.info("Launch swarms to generate market intelligence.")
-    finally: c_intel.close()
+    intel_container = st.container()
+    with intel_container:
+        st.header("🤝 Team Intelligence & Market ROI")
+        
+        
+        c_intel = sqlite3.connect('breatheeasy.db')
+        try:
+            # UNIQUE VARIABLE SCOPE: df_intel, total_val_intel
+            df_intel = pd.read_sql_query("SELECT city, industry FROM leads", c_intel)
+            if not df_intel.empty:
+                v_m = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
+                total_val_intel = df_intel['industry'].map(v_m).fillna(10000).sum()
+                
+                # Metrics strictly for Market Intel
+                col_i1, col_i2 = st.columns(2)
+                col_i1.metric("Pipeline Gross Value", f"${total_val_intel:,.0f}", delta="Omni-Swarm Active")
+                col_i2.metric("Market Reach", f"{len(df_intel['city'].unique())} Active Cities")
+                
+                st.divider()
+                st.subheader("📍 Swarm Geographic Density")
+                st.map(pd.DataFrame({"lat": [25.76, 30.26, 34.05], "lon": [-80.19, -97.74, -118.24]}))
+            else: 
+                st.info("Launch swarms to generate market intelligence.")
+        finally: 
+            c_intel.close()
 
 # --- TAB 12: ADMIN GOD-MODE (PHYSICALLY ISOLATED) ---
 with tabs[12]:
-    st.header("⚙️ Admin System Control")
-    st.warning("⚡ God-Mode: Critical System Access")
-    
-    c_admin = sqlite3.connect('breatheeasy.db')
-    try:
-        u_df = pd.read_sql_query("SELECT username, email, credits FROM users", c_admin)
-        st.dataframe(u_df, use_container_width=True, hide_index=True)
-        st.divider()
-        a1, a2 = st.columns(2)
-        with a1:
-            st.subheader("👤 Termination")
-            t_u = st.text_input("Username", key="ADMIN_PURGE_IN")
-            if st.button("❌ Terminate", type="primary", key="ADMIN_TERM_BT"):
-                c_admin.execute("DELETE FROM users WHERE username = ?", (t_u,))
-                c_admin.commit(); st.success(f"User {t_u} removed."); st.rerun()
-        with a2:
-            st.subheader("🚀 Injection")
-            i_u = st.selectbox("Select User", u_df['username'], key="ADMIN_INJ_SEL")
-            i_v = st.number_input("Credits", min_value=1, value=100, key="ADMIN_INJ_VOL")
-            if st.button("💉 Inject", key="ADMIN_INJ_BT"):
-                c_admin.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (i_v, i_u))
-                c_admin.commit(); st.success(f"Injected {i_v} credits."); st.rerun()
-    finally: c_admin.close()
+    admin_container = st.container()
+    with admin_container:
+        st.header("⚙️ Admin System Control")
+        st.warning("⚡ God-Mode: Critical System Access - Restricted to Root Admins")
+        
+        
+        c_admin = sqlite3.connect('breatheeasy.db')
+        try:
+            u_df = pd.read_sql_query("SELECT username, email, credits FROM users", c_admin)
+            st.write("**System User Registry**")
+            st.dataframe(u_df, use_container_width=True, hide_index=True)
+            
+            st.divider()
+            a1, a2 = st.columns(2)
+            with a1:
+                st.subheader("👤 User Termination")
+                t_u = st.text_input("Username to Purge", key="ADMIN_PURGE_INPUT", placeholder="Enter exact username")
+                if st.button("❌ Terminate User", type="primary", key="ADMIN_TERM_EXECUTE"):
+                    if t_u:
+                        c_admin.execute("DELETE FROM users WHERE username = ?", (t_u,))
+                        c_admin.commit()
+                        st.success(f"User {t_u} has been permanently removed.")
+                        st.rerun()
+            with a2:
+                st.subheader("🚀 Credit Injection")
+                i_u = st.selectbox("Select Target User", u_df['username'], key="ADMIN_INJECT_SELECT")
+                i_v = st.number_input("Injection Volume", min_value=1, value=100, key="ADMIN_INJECT_VALUE")
+                if st.button("💉 Finalize Injection", key="ADMIN_INJECT_EXECUTE"):
+                    c_admin.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (i_v, i_u))
+                    c_admin.commit()
+                    st.success(f"Injected {i_v} credits into {i_u}.")
+                    st.rerun()
+        finally: 
+            c_admin.close()
         
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
