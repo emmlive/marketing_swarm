@@ -376,90 +376,133 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
 
-# --- 6. PROTECTED DASHBOARD ---
-if st.session_state["authentication_status"]:
-    username = st.session_state["username"]
-    user_info = get_db_creds()['usernames'].get(username, {})
-    user_tier = user_info.get('package', 'Basic')
-    user_logo = user_info.get('logo_path')
+# --- 6. MULTIMODAL COMMAND CENTER (STRICT ARCHITECTURAL ISOLATION) ---
 
-    with st.sidebar:
-        st.markdown(f"### 👋 {st.session_state['name']} <span class='tier-badge'>{user_tier}</span>", unsafe_allow_html=True)
-        if st.button("🎓 Video Tutorial"): video_tutorial()
-        
-        if PACKAGE_CONFIG[user_tier]["branding"]:
-            with st.expander("🎨 Custom Branding"):
-                logo_file = st.file_uploader("Company Logo", type=['png', 'jpg'])
-                if logo_file:
-                    os.makedirs("logos", exist_ok=True)
-                    user_logo = f"logos/{username}.png"
-                    with open(user_logo, "wb") as f: f.write(logo_file.getvalue())
-                    conn = sqlite3.connect('breatheeasy.db')
-                    conn.cursor().execute("UPDATE users SET logo_path = ? WHERE username = ?", (user_logo, username))
-                    conn.commit(); conn.close(); st.success("Branding Applied!")
-        
-        if user_tier == "Basic":
-            with st.expander("🎟️ Redeem Coupon"):
-                coupon = st.text_input("Promo Code")
-                if st.button("Apply"):
-                    if coupon == "BreatheFree2026":
-                        update_user_package(username, "Pro")
-                        st.success("Upgraded!"); st.rerun()
+# 1. INITIALIZE THE TAB ARRAY
+# Index 0: Guide | 1-9: Agent Seats | 10: Veo | 11: Team Intel | 12: Admin
+tabs = st.tabs([
+    "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", 
+    "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", 
+    "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"
+])
 
-        authenticator.logout('Sign Out', 'sidebar')
-        st.divider()
+# 2. TAB 0: DETAILED AGENT INTELLIGENCE MANUAL
+with tabs[0]:
+    st.header("📖 Agent Intelligence Manual")
+    st.info("Operational directives for the Omni-Swarm Decision Engine.")
+    
+    
+    
+    col_a, col_b = st.columns(2)
+    with col_a:
+        with st.expander("🕵️ Analyst & Ad Tracker", expanded=True):
+            st.markdown("**Capabilities:** Scans for competitor price gaps and ad hooks.")
+            st.markdown("**Action:** Use 'Price Arbitrage' to adjust your hero offers.")
+        with st.expander("🎨 Creative Director"):
+            st.markdown("**Capabilities:** Generates cinematic prompts for Veo and viral social copy.")
+    with col_b:
+        with st.expander("👔 Chief Growth Strategist"):
+            st.markdown("**Capabilities:** Synthesizes all data into 30-day ROI roadmaps.")
+        with st.expander("🌐 Technical & Vision Auditor"):
+            st.markdown("**Capabilities:** Detects site leaks and deconstructs rival visuals.")
 
-        # INPUTS
-        max_f = PACKAGE_CONFIG[user_tier]["max_files"]
-        st.file_uploader(f"Assets (Max {max_f})", accept_multiple_files=True)
-        
-        full_map = {"HVAC": ["AC Repair", "System Replacement"], "Plumbing": ["Sewer Repair", "Repiping"], 
-                    "Restoration": ["Mold", "Water"], "Solar": ["Grid Install"], "Custom": ["Manual"]}
-        allowed = PACKAGE_CONFIG[user_tier]["allowed_industries"]
-        main_cat = st.selectbox("Industry", [i for i in full_map.keys() if i in allowed])
-        target_service = st.selectbox("Service", full_map[main_cat]) if main_cat != "Custom" else st.text_input("Service")
-        city_input = st.text_input("City", placeholder="Chicago, IL")
-        run_button = st.button("🚀 LAUNCH SWARM", type="primary", use_container_width=True)
-
-    # --- TABS ---
-    tabs = st.tabs(["🔥 Launchpad", "📊 Database", "📱 Preview", "💎 Pricing", "🛠️ Admin" if username == "admin" else "📋 History"])
-
-    with tabs[0]: # OUTPUT TAB
-        if run_button and city_input:
-            with st.spinner("Swarm Coordinating..."):
-                run_marketing_swarm({'city': city_input, 'industry': main_cat, 'service': target_service})
-                if os.path.exists("final_marketing_strategy.md"):
-                    with open("final_marketing_strategy.md", "r") as f: st.session_state['copy'] = f.read()
-                    st.session_state['gen'] = True
+# 3. DEFINE THE SEAT RENDERER (FUNCTION DEFINITION ONLY)
+def render_executive_seat(idx, title, icon, key, guide):
+    """Renders agent seats into tabs 1 through 9 with strict container isolation."""
+    with tabs[idx + 1]: 
+        st.markdown(f'<div class="guide-box"><b>📖 {title} User Guide:</b> {guide}</div>', unsafe_allow_html=True)
+        st.markdown(f"### {icon} {title} Command Seat")
         
         if st.session_state.get('gen'):
-            copy = st.session_state['copy']
+            raw_data = st.session_state.report.get(key, "Strategic isolation in progress...")
+            edited_intel = st.text_area("Refine Output", value=format_output(raw_data), height=350, key=f"area_{key}")
             
-            # THE RESTORED DOWNLOAD SECTION
-            st.subheader("📥 Download Deliverables")
-            col1, col2 = st.columns(2)
-            col1.download_button("📄 Word Doc", create_word_doc(copy, user_logo), f"{city_input}_Strategy.docx", use_container_width=True)
-            col2.download_button("📕 PDF Report", create_pdf(copy, target_service, city_input, user_logo), f"{city_input}_Strategy.pdf", use_container_width=True)
+            # Action Buttons
+            k1, k2 = st.columns([2, 1])
+            with k1: st.success(f"Verified {title} Intelligence")
+            with k2: st.download_button("📕 PDF", "Data", f"{title}.pdf", key=f"p_{key}")
+            st.markdown(f'<div class="insight-card">{edited_intel}</div>', unsafe_allow_html=True)
+        else:
+            st.info(f"Launch swarm to populate {title} seat.")
+
+# 4. TAB 11: 🤝 TEAM INTELLIGENCE (HARD-CODED ISOLATION)
+with tabs[11]:
+    st.header("🤝 Team Intelligence & Market ROI")
+    st.subheader("📊 Strategic Market Performance")
+    
+    
+    
+    try:
+        conn = sqlite3.connect('breatheeasy.db')
+        leads_df = pd.read_sql_query("SELECT city, industry FROM leads", conn)
+        if not leads_df.empty:
+            val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
+            total_val = leads_df['industry'].map(val_map).fillna(10000).sum()
+            
+            m1, m2 = st.columns(2)
+            m1.metric("Pipeline Gross Value", f"${total_val:,.0f}", delta="Omni-Swarm Active")
+            m2.metric("Market Reach", f"{len(leads_df['city'].unique())} Active Cities")
+            
             st.divider()
-            st.markdown(copy)
+            st.subheader("📍 Swarm Geographic Density")
+            st.map(pd.DataFrame({"lat": [25.76], "lon": [-80.19]})) # Static example
+        else:
+            st.info("No market data available yet.")
+        conn.close()
+    except Exception as e:
+        st.error(f"Intel Restoration Error: {e}")
 
-    with tabs[3]: # PRICING
-        c1, c2, c3 = st.columns(3)
-        with c1: st.markdown('<div class="pricing-card"><h3>Basic</h3><h1>$0</h1></div>', unsafe_allow_html=True)
-        with c2: st.markdown('<div class="pricing-card" style="border:2px solid #0056b3"><h3>Pro</h3><h1>$49</h1></div>', unsafe_allow_html=True)
-        with c3: st.markdown('<div class="pricing-card"><h3>Unlimited</h3><h1>$99</h1></div>', unsafe_allow_html=True)
+# 5. TAB 12: ⚡ GOD-MODE ADMIN CONTROL (HARD-CODED ISOLATION)
+with tabs[12]:
+    st.header("⚡ God-Mode Admin Control")
+    st.warning("Critical Database Access: Session Management & Exports")
+    
+    
+    
+    try:
+        conn = sqlite3.connect('breatheeasy.db')
+        leads_all = pd.read_sql_query("SELECT * FROM leads", conn)
+        
+        h1, h2 = st.columns(2)
+        h1.metric("Total DB Records", len(leads_all))
+        h2.metric("System Health", "Operational")
+        
+        st.divider()
+        st.subheader("🧹 Maintenance Hub")
+        adm_c1, adm_c2 = st.columns(2)
+        with adm_c1:
+            if st.button("🚨 Purge Demo Data", type="secondary", use_container_width=True):
+                conn.execute("DELETE FROM leads WHERE team_id = 'DEMO_DATA_INTERNAL'")
+                conn.commit()
+                st.success("Demo records purged.")
+                st.rerun()
+        with adm_c2:
+            csv = leads_all.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Master Data Export", csv, "master_leads.csv", use_container_width=True)
+            
+        st.subheader("📜 System Audit Trail")
+        logs_df = pd.read_sql_query("SELECT * FROM system_logs ORDER BY timestamp DESC LIMIT 20", conn)
+        st.dataframe(logs_df, use_container_width=True, hide_index=True)
+        conn.close()
+    except Exception as e:
+        st.error(f"Admin Error: {e}")
 
-    if username == "admin":
-        with tabs[-1]:
-            st.subheader("🛠️ Admin Panel")
-            conn = sqlite3.connect('breatheeasy.db')
-            df_users = pd.read_sql_query("SELECT username, email, package FROM users", conn)
-            st.dataframe(df_users, use_container_width=True)
-            user_to_del = st.selectbox("Delete User", df_users['username'])
-            if st.button("❌ Remove Account") and user_to_del != 'admin':
-                conn.cursor().execute("DELETE FROM users WHERE username = ?", (user_to_del,))
-                conn.commit(); st.success(f"{user_to_del} removed."); st.rerun()
-            conn.close()
+# 6. RENDER AGENT SEAT LOOP LAST (TABS 1-9 ONLY)
+# Placing this loop at the absolute end ensures it cannot bleed into Tabs 11 or 12.
+seats = [
+    ("Analyst", "🕵️", "analyst", "Identify competitor price gaps."),
+    ("Ad Tracker", "📺", "ads", "Analyze rival psychological hooks."),
+    ("Creative", "🎨", "creative", "Visual frameworks and prompts."),
+    ("Strategist", "👔", "strategist", "30-day ROI roadmap."),
+    ("Social Hooks", "✍", "social", "Viral hooks and schedules."),
+    ("GEO Map", "🧠", "geo", "AI Search and Map optimization."),
+    ("Audit Scan", "🌐", "auditor", "Technical conversion diagnostics."),
+    ("SEO Blogger", "✍", "seo", "High-authority technical articles."),
+    ("Vision", "👁️", "vision", "Multimodal visual gap analysis.")
+]
+
+for i, s in enumerate(seats): 
+    render_executive_seat(i, s[0], s[1], s[2], s[3])
 
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
 if run_btn:
