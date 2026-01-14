@@ -376,8 +376,6 @@ if st.session_state.get('show_cleanup_confirm'):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
                 
-# --- 6. MULTIMODAL COMMAND CENTER (SECURE RBAC ARCHITECTURE) ---
-
 import streamlit as st
 import sqlite3
 import pandas as pd
@@ -397,7 +395,7 @@ for fn in REQUIRED_FUNCS:
         st.stop()
 
 # ==================================================
-# DATABASE CONNECTION (CACHED + THREAD SAFE)
+# DATABASE CONNECTION (SAFE + CACHED)
 # ==================================================
 @st.cache_resource
 def get_db():
@@ -433,6 +431,11 @@ if is_root_admin:
 tabs = st.tabs(tab_titles)
 
 # ==================================================
+# TAB INDEX MAP (CRITICAL SECURITY FIX)
+# ==================================================
+TAB_INDEX = {title: i for i, title in enumerate(tab_titles)}
+
+# ==================================================
 # SESSION STATE SAFETY
 # ==================================================
 st.session_state.setdefault("gen", False)
@@ -442,33 +445,29 @@ st.session_state.setdefault("vision_report", None)
 # ==================================================
 # TAB 0 — MANUAL
 # ==================================================
-with tabs[0]:
+with tabs[TAB_INDEX["📖 Guide"]]:
     st.header("📖 Agent Intelligence Manual")
     st.info("Operational directives for the Omni-Swarm Decision Engine.")
 
     c1, c2 = st.columns(2)
     with c1:
-        st.expander("🕵️ Intelligence Seats", expanded=True).markdown(
-            """
-            - **Analyst:** Competitive pricing gaps  
-            - **Ad Tracker:** Psychological hooks  
-            - **Vision:** Visual teardown intelligence
-            """
-        )
+        st.expander("🕵️ Intelligence Seats", expanded=True).markdown("""
+        - **Analyst:** Competitive pricing gaps  
+        - **Ad Tracker:** Psychological hooks  
+        - **Vision:** Visual teardown intelligence
+        """)
     with c2:
-        st.expander("👔 Strategic Alignment", expanded=True).markdown(
-            """
-            - **Strategist:** 30-day ROI roadmap  
-            - **SEO Blogger:** EEAT authority  
-            - **Auditor:** Conversion friction scan
-            """
-        )
+        st.expander("👔 Strategic Alignment", expanded=True).markdown("""
+        - **Strategist:** 30-day ROI roadmap  
+        - **SEO Blogger:** EEAT authority  
+        - **Auditor:** Conversion friction scan
+        """)
 
 # ==================================================
 # AGENT SEAT RENDERER
 # ==================================================
-def render_seat(tab_index, title, key):
-    with tabs[tab_index]:
+def render_seat(tab_name, title, key):
+    with tabs[TAB_INDEX[tab_name]]:
         st.subheader(f"{title} Command Seat")
 
         if not st.session_state.gen:
@@ -506,35 +505,19 @@ def render_seat(tab_index, title, key):
 # ==================================================
 # AGENT TABS
 # ==================================================
-agent_titles = [
-    "Analyst",
-    "Ad Tracker",
-    "Creative",
-    "Strategist",
-    "Social Hooks",
-    "GEO Map",
-    "Audit Scan",
-    "SEO Blogger",
-]
-
-agent_keys = [
-    "analyst",
-    "ads",
-    "creative",
-    "strategist",
-    "social",
-    "geo",
-    "auditor",
-    "seo",
-]
-
-for i, (title, key) in enumerate(zip(agent_titles, agent_keys), start=1):
-    render_seat(i, title, key)
+render_seat("🕵️ Analyst", "Analyst", "analyst")
+render_seat("📺 Ads", "Ad Tracker", "ads")
+render_seat("🎨 Creative", "Creative", "creative")
+render_seat("👔 Strategist", "Strategist", "strategist")
+render_seat("✍ Social", "Social Hooks", "social")
+render_seat("🧠 GEO", "GEO Map", "geo")
+render_seat("🌐 Auditor", "Audit Scan", "auditor")
+render_seat("✍ SEO", "SEO Blogger", "seo")
 
 # ==================================================
 # VISION INSPECTOR
 # ==================================================
-with tabs[9]:
+with tabs[TAB_INDEX["👁️ Vision"]]:
     st.header("👁️ Vision Inspector")
 
     img = st.file_uploader("Upload Screenshot", ["png", "jpg", "jpeg"])
@@ -555,7 +538,7 @@ with tabs[9]:
 # ==================================================
 # VEO STUDIO
 # ==================================================
-with tabs[10]:
+with tabs[TAB_INDEX["🎬 Veo Studio"]]:
     st.header("🎬 Veo Cinematic Studio")
 
     if not st.session_state.gen:
@@ -576,9 +559,9 @@ with tabs[10]:
                     st.error(f"Generation failed: {e}")
 
 # ==================================================
-# TEAM INTEL (KANBAN)
+# TEAM INTEL (STRICTLY ISOLATED)
 # ==================================================
-with tabs[11]:
+with tabs[TAB_INDEX["🤝 Team Intel"]]:
     st.header("🤝 Global Pipeline Kanban")
 
     conn = get_db()
@@ -629,13 +612,18 @@ with tabs[11]:
                         st.rerun()
 
 # ==================================================
-# ADMIN HUB (SCHEMA-SAFE)
+# ADMIN HUB (HARD-LOCKED GOD MODE)
 # ==================================================
 if is_root_admin:
-    admin_tab = tab_titles.index("⚙ Admin")
-    with tabs[admin_tab]:
+    with tabs[TAB_INDEX["⚙ Admin"]]:
+
+        # HARD SECURITY GUARD
+        if not is_root_admin:
+            st.error("Unauthorized access.")
+            st.stop()
+
         st.header("⚙️ God-Mode Admin Control")
-        st.warning("Restricted Access")
+        st.warning("Restricted to Root Admins")
 
         conn = get_db()
 
@@ -645,22 +633,23 @@ if is_root_admin:
                 conn,
             )["name"].tolist()
 
-            base_cols = ["username", "email", "credits"]
+            base = ["username", "email", "credits"]
 
             if "plan" in cols:
-                base_cols.append("plan")
+                base.append("plan")
             elif "subscription" in cols:
-                base_cols.append("subscription AS plan")
+                base.append("subscription AS plan")
 
-            query = f"SELECT {', '.join(base_cols)} FROM users"
-            return pd.read_sql(query, conn)
+            return pd.read_sql(
+                f"SELECT {', '.join(base)} FROM users",
+                conn,
+            )
 
         users = safe_read_users(conn)
         st.dataframe(users, use_container_width=True)
 
         c1, c2 = st.columns(2)
 
-        # ---- USER TERMINATION ----
         with c1:
             u = st.text_input("User to Delete")
             if st.button("❌ Terminate"):
@@ -685,9 +674,8 @@ if is_root_admin:
                         st.success(f"{u} removed")
                         st.rerun()
 
-        # ---- CREDIT INJECTION ----
         with c2:
-            tgt = st.selectbox("User", users["username"])
+            tgt = st.selectbox("Target User", users["username"])
             amt = st.number_input(
                 "Credits",
                 min_value=10,
