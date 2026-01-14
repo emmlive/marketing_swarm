@@ -382,13 +382,13 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-# ------------------------------
-# SAFETY GUARDS / REQUIRED DEPS
-# ------------------------------
+# ==================================================
+# SAFETY GUARDS — REQUIRED DEPENDENCIES
+# ==================================================
 REQUIRED_FUNCS = [
-    'create_word_doc',
-    'create_pdf',
-    'generate_cinematic_ad'
+    "create_word_doc",
+    "create_pdf",
+    "generate_cinematic_ad",
 ]
 
 for fn in REQUIRED_FUNCS:
@@ -396,26 +396,35 @@ for fn in REQUIRED_FUNCS:
         st.error(f"Critical dependency missing: {fn}")
         st.stop()
 
-# ------------------------------
-# DATABASE CONNECTION (SAFE)
-# ------------------------------
+# ==================================================
+# DATABASE CONNECTION (CACHED + THREAD SAFE)
+# ==================================================
 @st.cache_resource
 def get_db():
     return sqlite3.connect("breatheeasy.db", check_same_thread=False)
 
-# ------------------------------
+# ==================================================
 # USER / RBAC
-# ------------------------------
+# ==================================================
 user_role = user_row.get("role", "user")
 is_root_admin = user_role == "admin"
 
-# ------------------------------
+# ==================================================
 # TAB DEFINITIONS (NO BLEEDING)
-# ------------------------------
+# ==================================================
 tab_titles = [
-    "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist",
-    "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision",
-    "🎬 Veo Studio", "🤝 Team Intel"
+    "📖 Guide",
+    "🕵️ Analyst",
+    "📺 Ads",
+    "🎨 Creative",
+    "👔 Strategist",
+    "✍ Social",
+    "🧠 GEO",
+    "🌐 Auditor",
+    "✍ SEO",
+    "👁️ Vision",
+    "🎬 Veo Studio",
+    "🤝 Team Intel",
 ]
 
 if is_root_admin:
@@ -423,37 +432,41 @@ if is_root_admin:
 
 tabs = st.tabs(tab_titles)
 
-# ------------------------------
+# ==================================================
 # SESSION STATE SAFETY
-# ------------------------------
+# ==================================================
 st.session_state.setdefault("gen", False)
 st.session_state.setdefault("report", {})
 st.session_state.setdefault("vision_report", None)
 
-# ------------------------------
+# ==================================================
 # TAB 0 — MANUAL
-# ------------------------------
+# ==================================================
 with tabs[0]:
     st.header("📖 Agent Intelligence Manual")
     st.info("Operational directives for the Omni-Swarm Decision Engine.")
 
     c1, c2 = st.columns(2)
     with c1:
-        st.expander("🕵️ Intelligence Seats", expanded=True).markdown("""
-        - **Analyst:** Competitive price gaps  
-        - **Ad Tracker:** Psychological hooks  
-        - **Vision:** Visual teardown intelligence
-        """)
+        st.expander("🕵️ Intelligence Seats", expanded=True).markdown(
+            """
+            - **Analyst:** Competitive pricing gaps  
+            - **Ad Tracker:** Psychological hooks  
+            - **Vision:** Visual teardown intelligence
+            """
+        )
     with c2:
-        st.expander("👔 Strategic Alignment", expanded=True).markdown("""
-        - **Strategist:** 30-day ROI roadmap  
-        - **SEO Blogger:** EEAT authority  
-        - **Auditor:** Conversion friction scan
-        """)
+        st.expander("👔 Strategic Alignment", expanded=True).markdown(
+            """
+            - **Strategist:** 30-day ROI roadmap  
+            - **SEO Blogger:** EEAT authority  
+            - **Auditor:** Conversion friction scan
+            """
+        )
 
-# ------------------------------
+# ==================================================
 # AGENT SEAT RENDERER
-# ------------------------------
+# ==================================================
 def render_seat(tab_index, title, key):
     with tabs[tab_index]:
         st.subheader(f"{title} Command Seat")
@@ -462,12 +475,12 @@ def render_seat(tab_index, title, key):
             st.info(f"Launch swarm to populate {title}.")
             return
 
-        data = st.session_state.report.get(key, "Processing...")
+        data = st.session_state.report.get(key, "Processing…")
         edited = st.text_area(
             "Refine Output",
             value=str(data),
             height=300,
-            key=f"area_{key}"
+            key=f"area_{key}",
         )
 
         c1, c2 = st.columns(2)
@@ -484,30 +497,43 @@ def render_seat(tab_index, title, key):
                     edited,
                     svc,
                     full_loc,
-                    user_row.get("logo_path")
+                    user_row.get("logo_path"),
                 )
                 st.download_button("📕 PDF", p_buf, f"{title}.pdf")
             except Exception as e:
                 st.error(f"PDF export failed: {e}")
 
-# ------------------------------
+# ==================================================
 # AGENT TABS
-# ------------------------------
+# ==================================================
 agent_titles = [
-    "Analyst", "Ad Tracker", "Creative", "Strategist",
-    "Social Hooks", "GEO Map", "Audit Scan", "SEO Blogger"
+    "Analyst",
+    "Ad Tracker",
+    "Creative",
+    "Strategist",
+    "Social Hooks",
+    "GEO Map",
+    "Audit Scan",
+    "SEO Blogger",
 ]
+
 agent_keys = [
-    "analyst", "ads", "creative", "strategist",
-    "social", "geo", "auditor", "seo"
+    "analyst",
+    "ads",
+    "creative",
+    "strategist",
+    "social",
+    "geo",
+    "auditor",
+    "seo",
 ]
 
 for i, (title, key) in enumerate(zip(agent_titles, agent_keys), start=1):
     render_seat(i, title, key)
 
-# ------------------------------
+# ==================================================
 # VISION INSPECTOR
-# ------------------------------
+# ==================================================
 with tabs[9]:
     st.header("👁️ Vision Inspector")
 
@@ -526,9 +552,9 @@ with tabs[9]:
     if st.session_state.vision_report:
         st.markdown(st.session_state.vision_report)
 
-# ------------------------------
+# ==================================================
 # VEO STUDIO
-# ------------------------------
+# ==================================================
 with tabs[10]:
     st.header("🎬 Veo Cinematic Studio")
 
@@ -537,11 +563,11 @@ with tabs[10]:
     else:
         prompt = st.text_area(
             "Video Scene Description",
-            str(st.session_state.report.get("creative", ""))[:300]
+            str(st.session_state.report.get("creative", ""))[:300],
         )
 
         if st.button("📽️ Generate Ad"):
-            with st.spinner("Rendering cinematic output..."):
+            with st.spinner("Rendering cinematic output…"):
                 try:
                     vid = generate_cinematic_ad(prompt)
                     if vid:
@@ -549,9 +575,9 @@ with tabs[10]:
                 except Exception as e:
                     st.error(f"Generation failed: {e}")
 
-# ------------------------------
+# ==================================================
 # TEAM INTEL (KANBAN)
-# ------------------------------
+# ==================================================
 with tabs[11]:
     st.header("🤝 Global Pipeline Kanban")
 
@@ -559,13 +585,19 @@ with tabs[11]:
     df = pd.read_sql(
         "SELECT * FROM leads WHERE team_id=?",
         conn,
-        params=(user_row["team_id"],)
+        params=(user_row["team_id"],),
     )
 
     if df.empty:
         st.info("No pipeline intelligence available.")
     else:
-        val_map = {"Solar": 22000, "HVAC": 8500, "Medical": 12000, "Legal": 15000}
+        val_map = {
+            "Solar": 22000,
+            "HVAC": 8500,
+            "Medical": 12000,
+            "Legal": 15000,
+        }
+
         total = df["industry"].map(val_map).fillna(10000).sum()
 
         m1, m2 = st.columns(2)
@@ -586,19 +618,19 @@ with tabs[11]:
                         "Move",
                         stages,
                         index=stages.index(stage),
-                        key=f"lead_{row['id']}"
+                        key=f"lead_{row['id']}",
                     )
                     if new != stage:
                         conn.execute(
                             "UPDATE leads SET status=? WHERE id=?",
-                            (new, row["id"])
+                            (new, row["id"]),
                         )
                         conn.commit()
                         st.rerun()
 
-# ------------------------------
-# ADMIN HUB (SAFE INDEX)
-# ------------------------------
+# ==================================================
+# ADMIN HUB (SCHEMA-SAFE)
+# ==================================================
 if is_root_admin:
     admin_tab = tab_titles.index("⚙ Admin")
     with tabs[admin_tab]:
@@ -606,30 +638,71 @@ if is_root_admin:
         st.warning("Restricted Access")
 
         conn = get_db()
-        users = pd.read_sql("SELECT username, email, credits, plan FROM users", conn)
+
+        def safe_read_users(conn):
+            cols = pd.read_sql(
+                "PRAGMA table_info(users)",
+                conn,
+            )["name"].tolist()
+
+            base_cols = ["username", "email", "credits"]
+
+            if "plan" in cols:
+                base_cols.append("plan")
+            elif "subscription" in cols:
+                base_cols.append("subscription AS plan")
+
+            query = f"SELECT {', '.join(base_cols)} FROM users"
+            return pd.read_sql(query, conn)
+
+        users = safe_read_users(conn)
         st.dataframe(users, use_container_width=True)
 
         c1, c2 = st.columns(2)
 
+        # ---- USER TERMINATION ----
         with c1:
             u = st.text_input("User to Delete")
             if st.button("❌ Terminate"):
-                if u and u != "admin":
-                    conn.execute("DELETE FROM users WHERE username=?", (u,))
-                    conn.commit()
-                    st.success(f"{u} removed")
-                    st.rerun()
+                if not u:
+                    st.warning("Enter a username.")
+                elif u == "admin":
+                    st.error("Root admin cannot be deleted.")
+                else:
+                    exists = conn.execute(
+                        "SELECT 1 FROM users WHERE username=?",
+                        (u,),
+                    ).fetchone()
 
+                    if not exists:
+                        st.error("User not found.")
+                    else:
+                        conn.execute(
+                            "DELETE FROM users WHERE username=?",
+                            (u,),
+                        )
+                        conn.commit()
+                        st.success(f"{u} removed")
+                        st.rerun()
+
+        # ---- CREDIT INJECTION ----
         with c2:
             tgt = st.selectbox("User", users["username"])
-            amt = st.number_input("Credits", 10, 1000, 50, 10)
+            amt = st.number_input(
+                "Credits",
+                min_value=10,
+                max_value=1000,
+                value=50,
+                step=10,
+            )
+
             if st.button("💉 Inject"):
                 conn.execute(
-                    "UPDATE users SET credits=credits+? WHERE username=?",
-                    (amt, tgt)
+                    "UPDATE users SET credits = credits + ? WHERE username = ?",
+                    (amt, tgt),
                 )
                 conn.commit()
-                st.success("Credits injected")
+                st.success(f"{amt} credits injected into {tgt}")
                 st.rerun()
         
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
