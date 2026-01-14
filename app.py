@@ -131,7 +131,7 @@ with st.sidebar:
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 7. SWARM EXECUTION ENGINE (RESTORED) ---
+# --- 7. SWARM EXECUTION ENGINE (STABILIZED) ---
 if run_btn:
     if not biz_name or not full_loc:
         st.error("❌ Identification required: Please provide Brand Name and Location.")
@@ -139,18 +139,44 @@ if run_btn:
         st.error("❌ Out of credits: Contact your administrator.")
     else:
         with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
-            report = run_marketing_swarm({'city': full_loc, 'industry': final_ind, 'service': svc, 'biz_name': biz_name, 'url': audit_url, 'toggles': toggles})
-            st.session_state.report, st.session_state.gen = report, True
-            conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
-            conn.execute("INSERT INTO leads (date, user, industry, service, city, content, team_id, status) VALUES (?,?,?,?,?,?,?,?)",
-                         (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, full_loc, str(report), user_row['team_id'], 'Discovery'))
-            conn.commit(); conn.close()
-            status.update(label="✅ Strategy Engine Synced!", state="complete")
-            st.toast(f"Swarm for {biz_name} initialized.")
-            st.rerun()
+            try:
+                # Execute Strategic Logic
+                # We wrap this in a try-except to catch the vision_intel AttributeError
+                report = run_marketing_swarm({
+                    'city': full_loc, 
+                    'industry': final_ind, 
+                    'service': svc, 
+                    'biz_name': biz_name, 
+                    'url': audit_url, 
+                    'toggles': toggles
+                })
+                
+                # Update Session State
+                st.session_state.report, st.session_state.gen = report, True
+                
+                # Database Transaction
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
+                conn.execute("""
+                    INSERT INTO leads (date, user, industry, service, city, content, team_id, status) 
+                    VALUES (?,?,?,?,?,?,?,?)
+                """, (datetime.now().strftime("%Y-%m-%d"), user_row['username'], final_ind, svc, full_loc, str(report), user_row['team_id'], 'Discovery'))
+                conn.commit()
+                conn.close()
+                
+                status.update(label="✅ Strategy Engine Synced!", state="complete")
+                st.toast(f"Swarm for {biz_name} initialized.")
+                st.rerun()
+            
+            except AttributeError as e:
+                status.update(label="❌ Backend State Mismatch", state="error")
+                st.error(f"The Swarm Engine encountered an attribute error: {e}")
+                st.warning("Ensure 'vision_intel' is properly initialized in your main.py State class.")
+            except Exception as e:
+                status.update(label="❌ Swarm Failed", state="error")
+                st.error(f"Critical System Error: {e}")
 
-# --- 6. MULTIMODAL COMMAND CENTER ---
+# --- 6. MULTIMODAL COMMAND CENTER (DEFENSIVE RENDERING) ---
 tab_titles = ["📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 is_admin = user_row['role'] == 'admin'
 if is_admin: tab_titles.append("⚙ Admin")
@@ -164,39 +190,51 @@ with TAB["📖 Guide"]:
     col1, col2 = st.columns(2)
     with col1:
         with st.expander("🕵️ Intelligence Seats", expanded=True):
-            st.markdown("- **Analyst**: Price gaps.\n- **Ad Tracker**: Hook deconstruction.")
+            st.markdown("- **Analyst**: Market gaps and pricing.\n- **Ad Tracker**: Hook deconstruction and competitor spend.")
     with col2:
         with st.expander("👔 Strategic Seats", expanded=True):
-            st.markdown("- **Strategist**: 30-day roadmap.\n- **SEO**: Authority articles.")
+            st.markdown("- **Strategist**: 30-day ROI roadmap.\n- **SEO**: Authority articles and domain dominance.")
 
 def render_agent(tab_key, title, report_key):
     with TAB[tab_key]:
         st.subheader(f"{title} Command Seat")
         if st.session_state.gen:
-            content = st.session_state.report.get(report_key, "Strategic isolation in progress...")
+            # DEFENSIVE FETCH: Prevents AttributeError if backend fails to return a key
+            content = st.session_state.report.get(report_key, "Intelligence generation for this agent is pending or unavailable.")
             edited = st.text_area(f"Refine {title}", value=str(content), height=350, key=f"edit_{report_key}")
+            
             c1, c2 = st.columns(2)
             with c1: st.download_button("📄 Word", create_word_doc(edited, title), f"{title}.docx", key=f"w_{report_key}")
             with c2: st.download_button("📕 PDF", create_pdf(edited, svc, full_loc), f"{title}.pdf", key=f"p_{report_key}")
-        else: st.info("Launch swarm to view results.")
+        else: 
+            st.info(f"Launch swarm to populate the {title} seat.")
 
+# Render Standard Agents
 for t, k in [("🕵️ Analyst","analyst"), ("📺 Ads","ads"), ("🎨 Creative","creative"), ("👔 Strategist","strategist"), ("✍ Social","social"), ("🧠 GEO","geo"), ("🌐 Auditor","audit"), ("✍ SEO","seo")]:
     render_agent(t, t.split()[-1], k)
 
+# Render Specialty Tabs
 with TAB["👁️ Vision"]:
     st.subheader("👁️ Vision Inspector")
-    v_file = st.file_uploader("Upload Evidence", type=['png','jpg','jpeg'], key="vis_up")
-    if v_file: st.image(v_file, use_container_width=True)
+    if st.session_state.gen:
+        # Specifically targeting the missing vision_intel field safely
+        v_intel = st.session_state.report.get('vision_intel', "Vision analysis data not found in state.")
+        st.markdown(f'<div class="executive-brief">{v_intel}</div>', unsafe_allow_html=True)
+    
+    v_file = st.file_uploader("Upload Evidence for Analysis", type=['png','jpg','jpeg'], key="vis_up_main")
+    if v_file: st.image(v_file, use_container_width=True, caption="Target Asset")
 
 with TAB["🎬 Veo Studio"]:
     st.subheader("🎬 Veo Cinematic Studio")
     if st.session_state.gen:
-        v_prompt = st.text_area("Video Scene Description", value=str(st.session_state.report.get('creative', ''))[:300])
-        if st.button("📽️ GENERATE AD"):
-            with st.spinner("Rendering..."):
+        creative_context = st.session_state.report.get('creative', '')
+        v_prompt = st.text_area("Video Scene Description", value=str(creative_context)[:300], height=150, key="veo_prompt_area")
+        if st.button("📽️ GENERATE AD", key="veo_gen_btn_main"):
+            with st.spinner("Rendering cinematic asset..."):
                 v_vid = generate_cinematic_ad(v_prompt)
                 if v_vid: st.video(v_vid)
-    else: st.warning("Launch swarm first.")
+    else: 
+        st.warning("Launch swarm first to generate creative context for video.")
 
 # --- 9. TEAM INTEL (KANBAN PIPELINE) ---
 with TAB["🤝 Team Intel"]:
