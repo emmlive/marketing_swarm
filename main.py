@@ -15,7 +15,7 @@ load_dotenv(override=True)
 class SwarmState(BaseModel):
     market_data: str = "Analysis pending..."
     competitor_ads: str = "Ad tracking pending..."
-    vision_intel: str = "Visual audit pending..."  # FIXED: Added missing attribute
+    vision_intel: str = "Visual audit pending..."  # FIXED: Ensures UI can always access this attribute
     ad_drafts: str = "Creative build pending..."
     website_audit: str = "Audit pending..."
     social_plan: str = "Social strategy pending..."
@@ -92,6 +92,8 @@ def get_swarm_agents(inputs):
     }
 
 # --- 4. THE STATEFUL WORKFLOW ---
+
+
 class MarketingSwarmFlow(Flow[SwarmState]):
     def __init__(self, inputs):
         super().__init__()
@@ -129,7 +131,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         
         self.state.market_data = str(analyst_task.output.raw)
         self.state.competitor_ads = "Analyzed within Market Data"
-        self.state.vision_intel = str(vision_task.output.raw) # FIXED: Populating the missing field
+        self.state.vision_intel = str(vision_task.output.raw) 
         
         if auditor_task:
             self.state.website_audit = str(auditor_task.output.raw)
@@ -172,7 +174,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         
         self.state.ad_drafts = str(creative_task.output.raw)
         
-        # Mapping results to state based on content search
         for task in production_tasks:
             out = str(task.output.raw)
             if "SEO" in task.description: self.state.seo_article = out
@@ -199,7 +200,6 @@ def run_marketing_swarm(inputs):
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
-    # Building the master source for report downloads
     formatted_string_report = f"""
 # 🚀 {inputs['biz_name']} | EXECUTIVE INTELLIGENCE SUMMARY
 
