@@ -375,42 +375,56 @@ if st.session_state.get('show_cleanup_confirm'):
             if st.button("🛑 No, Logout Only", type="secondary"):
                 st.session_state.show_cleanup_confirm = False
                 st.rerun()
-                
+
+# --- 6. MULTIMODAL COMMAND CENTER (THE FINAL ARCHITECTURAL LOCK) ---
+
 import streamlit as st
 import sqlite3
 import pandas as pd
 
-# ==================================================
-# SAFETY GUARDS — REQUIRED DEPENDENCIES
-# ==================================================
-REQUIRED_FUNCS = [
-    "create_word_doc",
-    "create_pdf",
-    "generate_cinematic_ad",
-]
+# ===============================
+# CONFIG
+# ===============================
+st.set_page_config(page_title="Marketing Swarm", layout="wide")
 
+DB_NAME = "breatheeasy.db"
+
+# ===============================
+# REQUIRED DEPENDENCIES CHECK
+# ===============================
+REQUIRED_FUNCS = ["create_word_doc", "create_pdf", "generate_cinematic_ad"]
 for fn in REQUIRED_FUNCS:
     if fn not in globals():
         st.error(f"Critical dependency missing: {fn}")
         st.stop()
 
-# ==================================================
-# DATABASE CONNECTION (SAFE + CACHED)
-# ==================================================
+# ===============================
+# DATABASE
+# ===============================
 @st.cache_resource
 def get_db():
-    return sqlite3.connect("breatheeasy.db", check_same_thread=False)
+    return sqlite3.connect(DB_NAME, check_same_thread=False)
 
-# ==================================================
-# USER / RBAC
-# ==================================================
-user_role = user_row.get("role", "user")
-is_root_admin = user_role == "admin"
+conn = get_db()
 
-# ==================================================
-# TAB DEFINITIONS (NO BLEEDING)
-# ==================================================
-tab_titles = [
+# ===============================
+# MOCK AUTH (REPLACE WITH REAL AUTH)
+# ===============================
+# ⚠️ Replace this block with your real login system
+user_row = {
+    "username": "admin",
+    "role": "admin",          # change to "user" to test RBAC
+    "team_id": 1,
+    "logo_path": None,
+}
+# ===============================
+
+is_root_admin = user_row.get("role") == "admin"
+
+# ===============================
+# TAB DEFINITIONS (FIXED INDEX)
+# ===============================
+TAB_NAMES = [
     "📖 Guide",
     "🕵️ Analyst",
     "📺 Ads",
@@ -426,85 +440,60 @@ tab_titles = [
 ]
 
 if is_root_admin:
-    tab_titles.append("⚙ Admin")
+    TAB_NAMES.append("⚙ Admin")
 
-tabs = st.tabs(tab_titles)
+TAB_INDEX = {name: i for i, name in enumerate(TAB_NAMES)}
 
-# ==================================================
-# TAB INDEX MAP (CRITICAL SECURITY FIX)
-# ==================================================
-TAB_INDEX = {title: i for i, title in enumerate(tab_titles)}
+tabs = st.tabs(TAB_NAMES)
 
-# ==================================================
-# SESSION STATE SAFETY
-# ==================================================
-st.session_state.setdefault("gen", False)
+# ===============================
+# SESSION STATE
+# ===============================
+st.session_state.setdefault("gen", True)
 st.session_state.setdefault("report", {})
 st.session_state.setdefault("vision_report", None)
 
-# ==================================================
-# TAB 0 — MANUAL
-# ==================================================
+# ===============================
+# GUIDE TAB
+# ===============================
 with tabs[TAB_INDEX["📖 Guide"]]:
     st.header("📖 Agent Intelligence Manual")
     st.info("Operational directives for the Omni-Swarm Decision Engine.")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.expander("🕵️ Intelligence Seats", expanded=True).markdown("""
-        - **Analyst:** Competitive pricing gaps  
-        - **Ad Tracker:** Psychological hooks  
-        - **Vision:** Visual teardown intelligence
-        """)
-    with c2:
-        st.expander("👔 Strategic Alignment", expanded=True).markdown("""
-        - **Strategist:** 30-day ROI roadmap  
-        - **SEO Blogger:** EEAT authority  
-        - **Auditor:** Conversion friction scan
-        """)
-
-# ==================================================
-# AGENT SEAT RENDERER
-# ==================================================
+# ===============================
+# GENERIC AGENT RENDERER
+# ===============================
 def render_seat(tab_name, title, key):
     with tabs[TAB_INDEX[tab_name]]:
         st.subheader(f"{title} Command Seat")
 
         if not st.session_state.gen:
-            st.info(f"Launch swarm to populate {title}.")
-            return
+            st.info("Launch swarm to generate intelligence.")
+            st.stop()
 
-        data = st.session_state.report.get(key, "Processing…")
+        data = st.session_state.report.get(key, "Processing...")
         edited = st.text_area(
             "Refine Output",
             value=str(data),
             height=300,
-            key=f"area_{key}",
+            key=f"edit_{key}",
         )
 
         c1, c2 = st.columns(2)
+
         with c1:
-            try:
-                w_buf = create_word_doc(edited, user_row.get("logo_path"))
-                st.download_button("📄 Word", w_buf, f"{title}.docx")
-            except Exception as e:
-                st.error(f"Word export failed: {e}")
+            if st.button("📄 Export Word", key=f"word_{key}"):
+                buf = create_word_doc(edited, user_row.get("logo_path"))
+                st.download_button("Download", buf, f"{key}.docx")
 
         with c2:
-            try:
-                p_buf = create_pdf(
-                    edited,
-                    svc,
-                    full_loc,
-                    user_row.get("logo_path"),
-                )
-                st.download_button("📕 PDF", p_buf, f"{title}.pdf")
-            except Exception as e:
-                st.error(f"PDF export failed: {e}")
+            if st.button("📕 Export PDF", key=f"pdf_{key}"):
+                buf = create_pdf(edited, "", "", user_row.get("logo_path"))
+                st.download_button("Download", buf, f"{key}.pdf")
 
-# ==================================================
+# ===============================
 # AGENT TABS
-# ==================================================
+# ===============================
 render_seat("🕵️ Analyst", "Analyst", "analyst")
 render_seat("📺 Ads", "Ad Tracker", "ads")
 render_seat("🎨 Creative", "Creative", "creative")
@@ -514,57 +503,48 @@ render_seat("🧠 GEO", "GEO Map", "geo")
 render_seat("🌐 Auditor", "Audit Scan", "auditor")
 render_seat("✍ SEO", "SEO Blogger", "seo")
 
-# ==================================================
-# VISION INSPECTOR
-# ==================================================
+# ===============================
+# VISION TAB
+# ===============================
 with tabs[TAB_INDEX["👁️ Vision"]]:
     st.header("👁️ Vision Inspector")
 
-    img = st.file_uploader("Upload Screenshot", ["png", "jpg", "jpeg"])
+    img = st.file_uploader("Upload Screenshot", ["png", "jpg", "jpeg"], key="vision_upload")
     if img:
-        l, r = st.columns(2)
-        l.image(img, use_container_width=True)
+        st.image(img, use_container_width=True)
 
-        if r.button("🚀 Analyze Visual Gaps"):
+        if st.button("🚀 Analyze", key="vision_btn"):
             st.session_state.vision_report = (
-                "### 👁️ Visual Intelligence\n"
-                "- Rival uses false urgency\n"
+                "### Visual Intelligence\n"
+                "- False urgency detected\n"
                 "- Opportunity: trust-first disruption"
             )
 
     if st.session_state.vision_report:
         st.markdown(st.session_state.vision_report)
 
-# ==================================================
+# ===============================
 # VEO STUDIO
-# ==================================================
+# ===============================
 with tabs[TAB_INDEX["🎬 Veo Studio"]]:
     st.header("🎬 Veo Cinematic Studio")
 
-    if not st.session_state.gen:
-        st.warning("Launch swarm first.")
-    else:
-        prompt = st.text_area(
-            "Video Scene Description",
-            str(st.session_state.report.get("creative", ""))[:300],
-        )
+    prompt = st.text_area(
+        "Scene Prompt",
+        key="veo_prompt",
+    )
 
-        if st.button("📽️ Generate Ad"):
-            with st.spinner("Rendering cinematic output…"):
-                try:
-                    vid = generate_cinematic_ad(prompt)
-                    if vid:
-                        st.video(vid)
-                except Exception as e:
-                    st.error(f"Generation failed: {e}")
+    if st.button("🎥 Generate Video", key="veo_btn"):
+        vid = generate_cinematic_ad(prompt)
+        if vid:
+            st.video(vid)
 
-# ==================================================
+# ===============================
 # TEAM INTEL (STRICTLY ISOLATED)
-# ==================================================
+# ===============================
 with tabs[TAB_INDEX["🤝 Team Intel"]]:
     st.header("🤝 Global Pipeline Kanban")
 
-    conn = get_db()
     df = pd.read_sql(
         "SELECT * FROM leads WHERE team_id=?",
         conn,
@@ -573,124 +553,89 @@ with tabs[TAB_INDEX["🤝 Team Intel"]]:
 
     if df.empty:
         st.info("No pipeline intelligence available.")
-    else:
-        val_map = {
-            "Solar": 22000,
-            "HVAC": 8500,
-            "Medical": 12000,
-            "Legal": 15000,
-        }
+        st.stop()
 
-        total = df["industry"].map(val_map).fillna(10000).sum()
+    stages = ["Discovery", "Execution", "ROI Verified"]
+    cols = st.columns(3)
 
-        m1, m2 = st.columns(2)
-        m1.metric("Pipeline Value", f"${total:,.0f}")
-        m2.metric("Active Cities", df["city"].nunique())
+    for i, stage in enumerate(stages):
+        with cols[i]:
+            st.subheader(stage)
+            subset = df[df["status"] == stage]
 
-        stages = ["Discovery", "Execution", "ROI Verified"]
-        cols = st.columns(3)
+            for _, row in subset.iterrows():
+                st.markdown(f"**{row['city']}** — {row['service']}")
+                new_stage = st.selectbox(
+                    "Move",
+                    stages,
+                    index=stages.index(stage),
+                    key=f"team_move_{row['id']}",
+                )
 
-        for i, stage in enumerate(stages):
-            with cols[i]:
-                st.subheader(stage)
-                subset = df[df["status"] == stage]
-
-                for _, row in subset.iterrows():
-                    st.markdown(f"**{row['city']}** — {row['service']}")
-                    new = st.selectbox(
-                        "Move",
-                        stages,
-                        index=stages.index(stage),
-                        key=f"lead_{row['id']}",
+                if new_stage != stage:
+                    conn.execute(
+                        "UPDATE leads SET status=? WHERE id=?",
+                        (new_stage, row["id"]),
                     )
-                    if new != stage:
-                        conn.execute(
-                            "UPDATE leads SET status=? WHERE id=?",
-                            (new, row["id"]),
-                        )
-                        conn.commit()
-                        st.rerun()
+                    conn.commit()
+                    st.rerun()
 
-# ==================================================
-# ADMIN HUB (HARD-LOCKED GOD MODE)
-# ==================================================
+# ===============================
+# ADMIN TAB (HARD-LOCKED)
+# ===============================
 if is_root_admin:
     with tabs[TAB_INDEX["⚙ Admin"]]:
 
-        # HARD SECURITY GUARD
         if not is_root_admin:
-            st.error("Unauthorized access.")
+            st.error("Unauthorized")
             st.stop()
 
         st.header("⚙️ God-Mode Admin Control")
-        st.warning("Restricted to Root Admins")
+        st.warning("Restricted Access")
 
-        conn = get_db()
-
-        def safe_read_users(conn):
-            cols = pd.read_sql(
-                "PRAGMA table_info(users)",
-                conn,
-            )["name"].tolist()
-
-            base = ["username", "email", "credits"]
-
-            if "plan" in cols:
-                base.append("plan")
-            elif "subscription" in cols:
-                base.append("subscription AS plan")
-
-            return pd.read_sql(
-                f"SELECT {', '.join(base)} FROM users",
-                conn,
-            )
-
-        users = safe_read_users(conn)
+        users = pd.read_sql(
+            "SELECT username, email, credits, plan FROM users",
+            conn,
+        )
         st.dataframe(users, use_container_width=True)
 
         c1, c2 = st.columns(2)
 
+        # DELETE USER
         with c1:
-            u = st.text_input("User to Delete")
-            if st.button("❌ Terminate"):
-                if not u:
-                    st.warning("Enter a username.")
-                elif u == "admin":
-                    st.error("Root admin cannot be deleted.")
-                else:
-                    exists = conn.execute(
-                        "SELECT 1 FROM users WHERE username=?",
-                        (u,),
-                    ).fetchone()
+            del_user = st.text_input("User to Delete", key="admin_del_user")
+            if st.button("❌ Terminate", key="admin_del_btn"):
+                if del_user != "admin":
+                    conn.execute(
+                        "DELETE FROM users WHERE username=?",
+                        (del_user,),
+                    )
+                    conn.commit()
+                    st.success("User deleted")
+                    st.rerun()
 
-                    if not exists:
-                        st.error("User not found.")
-                    else:
-                        conn.execute(
-                            "DELETE FROM users WHERE username=?",
-                            (u,),
-                        )
-                        conn.commit()
-                        st.success(f"{u} removed")
-                        st.rerun()
-
+        # CREDIT INJECTION
         with c2:
-            tgt = st.selectbox("Target User", users["username"])
+            target = st.selectbox(
+                "Target User",
+                users["username"],
+                key="admin_target_user",
+            )
             amt = st.number_input(
                 "Credits",
-                min_value=10,
-                max_value=1000,
-                value=50,
-                step=10,
+                10,
+                1000,
+                50,
+                10,
+                key="admin_credit_amt",
             )
-
-            if st.button("💉 Inject"):
+            if st.button("💉 Inject", key="admin_inject_btn"):
                 conn.execute(
-                    "UPDATE users SET credits = credits + ? WHERE username = ?",
-                    (amt, tgt),
+                    "UPDATE users SET credits=credits+? WHERE username=?",
+                    (amt, target),
                 )
                 conn.commit()
-                st.success(f"{amt} credits injected into {tgt}")
+                st.success("Credits injected")
                 st.rerun()
         
 # --- 7. SWARM EXECUTION (SYNCED WITH KANBAN PIPELINE) ---
