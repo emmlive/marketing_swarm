@@ -129,18 +129,28 @@ def get_db_creds():
         st.error(f"Failed to load credentials: {e}")
         return {'usernames': {}}
 
-# --- 4. AUTHENTICATION & ENROLLMENT (UPDATED VERSION) ---
+# --- 4. AUTHENTICATION INITIALIZATION (STABILIZED) ---
 
-# Now the call will work because the function is defined above
-db_credentials = get_db_creds()
+# Define a function to cache the authenticator object
+@st.cache_resource
+def get_authenticator():
+    # Fetch credentials from DB
+    db_credentials = get_db_creds()
+    
+    # Initialize the Authenticator
+    return stauth.Authenticate(
+        db_credentials, 
+        st.secrets['cookie']['name'], 
+        st.secrets['cookie']['key'], 
+        30
+    )
 
-authenticator = stauth.Authenticate(
-    db_credentials, 
-    st.secrets['cookie']['name'], 
-    st.secrets['cookie']['key'], 
-    30
-)
+# Call the cached function
+authenticator = get_authenticator()
 
+# Now proceed with your login gate
+if not st.session_state.get("authentication_status"):
+    # ... rest of your login code
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment", "❓ Recovery"])
