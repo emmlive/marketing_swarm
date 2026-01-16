@@ -118,32 +118,80 @@ user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, par
 conn.close()
 is_admin = (user_row['role'] == 'admin')
 
-# --- 4. SPRINT 5: SIDEBAR CONTROL & DIRECTIVES ---
+# --- 4. SPRINT 5: DYNAMIC COMMAND CONSOLE (SIDEBAR) ---
 with st.sidebar:
+    # 1. SYSTEM MONITOR & THEME
     health = check_system_health()
-    st.caption(f"{'🟢' if all(health.values()) else '🔴'} **SYSTEM HEARTBEAT**")
+    col_h, col_t = st.columns([2, 1])
+    with col_h:
+        st.caption(f"{'🟢' if all(health.values()) else '🔴'} **SYSTEM HEARTBEAT**")
+    with col_t:
+        if st.button("🌓", help="Toggle Light/Dark Mode"):
+            toggle_theme()
+
+    # 2. BRANDING & METRICS
     st.image(user_row['logo_path'], width=120)
     st.metric("Credits Available", user_row['credits'])
-    
     st.divider()
-    biz_name = st.text_input("Brand Name", placeholder="e.g. Acme Solar")
-    geo = get_geo_data()
-    state = st.selectbox("🎯 Target State", sorted(geo.keys()))
-    city = st.selectbox("🏙️ Select City", sorted(geo[state]))
-    full_loc = f"{city}, {state}"
-    svc = st.text_input("Service Type")
+
+    # 3. DYNAMIC INDUSTRY & SERVICE LOGIC
+    # Define your business hierarchy here
+    industry_map = {
+        "Residential Services": ["HVAC", "Roofing", "Solar", "Plumbing", "Electrical"],
+        "Medical & Health": ["Dental", "Plastic Surgery", "Chiropractic", "Veterinary"],
+        "Legal & Professional": ["Family Law", "Personal Injury", "Estate Planning", "CPA"],
+        "Real Estate": ["Brokerage", "Property Management", "Commercial"],
+        "Custom": ["Type Manual Service..."]
+    }
+
+    biz_name = st.text_input("🏢 Brand Name", placeholder="e.g. Acme Solar")
     
-    # Directive box for Agents (Sprint 5)
-    agent_info = st.text_area("✍️ Additional Agent Directives", placeholder="e.g. Focus on high-ticket luxury clients only.")
+    ind_cat = st.selectbox("📂 Industry Cluster", sorted(list(industry_map.keys())))
     
+    # Dynamic Service Dropdown based on Industry
+    service_list = industry_map[ind_cat]
+    selected_service = st.selectbox("🛠️ Specific Service", service_list)
+    
+    if selected_service == "Type Manual Service...":
+        final_service = st.text_input("Enter Service Name")
+    else:
+        final_service = selected_service
+
+    # 4. DYNAMIC LOCATION LOGIC
+    geo_dict = get_geo_data()
+    selected_state = st.selectbox("🎯 Target State", sorted(geo_dict.keys()))
+    selected_city = st.selectbox("🏙️ Target City", sorted(geo_dict[selected_state]))
+    full_loc = f"{selected_city}, {selected_state}"
+
+    # 5. AGENT DIRECTIVES (User Additional Info)
+    st.divider()
+    agent_info = st.text_area("✍️ Strategic Directives", 
+                             placeholder="e.g. Focus on high-ticket commercial clients, emphasize our 25-year warranty.",
+                             help="Give your swarm specific instructions to refine the intelligence.")
+
+    # 6. SWARM PERSONNEL TOGGLES
+    with st.expander("🤖 Swarm Personnel", expanded=False):
+        toggles = {k: st.toggle(v, value=True) for k, v in {
+            "analyst": "🕵️ Analyst", "ads": "📺 Ad Tracker", "creative": "🎨 Creative", 
+            "strategist": "👔 Strategist", "social": "📱 Social", "geo": "📍 GEO", 
+            "audit": "🌐 Auditor", "seo": "✍ SEO"}.items()}
+
+    # 7. DEMO & VERIFICATION GATE
+    st.divider()
     if user_row['verified'] == 1:
         run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
     else:
-        st.warning("Verification Required")
-        if st.button("Demo: Simulate Verification"):
-            conn = sqlite3.connect('breatheeasy.db'); conn.execute("UPDATE users SET verified=1 WHERE username=?", (user_row['username'],)); conn.commit(); conn.close(); st.rerun()
+        st.error("🛡️ Verification Locked")
+        if st.button("🔓 DEMO: Simulate Verify", use_container_width=True):
+            conn = sqlite3.connect('breatheeasy.db')
+            conn.execute("UPDATE users SET verified=1 WHERE username=?", (user_row['username'],))
+            conn.commit()
+            conn.close()
+            st.success("Account Verified for Demo!")
+            st.rerun()
         run_btn = False
-    st.session_state.auth.logout('Sign Out', 'sidebar')
+
+    st.session_state.auth.logout('🔒 Sign Out', 'sidebar')
 
 # --- 5. SPRINT 3: EXPORT & EXECUTION ENGINES ---
 def export_word(content, title):
