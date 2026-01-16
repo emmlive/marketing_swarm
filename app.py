@@ -118,67 +118,77 @@ user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, par
 conn.close()
 is_admin = (user_row['role'] == 'admin')
 
-# --- 4. SPRINT 5: DYNAMIC COMMAND CONSOLE (RESTORED VIEW) ---
+# --- 4. SPRINT 5: DYNAMIC COMMAND CONSOLE (BUG-FREE VERSION) ---
 with st.sidebar:
-    # 1. SYSTEM MONITOR & THEME
+    # 1. THEME & HEALTH
     health = check_system_health()
     col_h, col_t = st.columns([2, 1])
-    with col_h:
-        st.caption(f"{'🟢' if all(health.values()) else '🔴'} **SYSTEM OPERATIONAL**")
-    with col_t:
-        if st.button("🌓", help="Toggle Light/Dark Mode"):
-            toggle_theme()
+    with col_h: st.caption(f"{'🟢' if all(health.values()) else '🔴'} **SYSTEM HEARTBEAT**")
+    with col_t: 
+        if st.button("🌓"): toggle_theme()
 
     st.image(user_row['logo_path'], width=120)
     st.metric("Credits Available", user_row['credits'])
     st.divider()
 
-    # 2. DYNAMIC DROPDOWNS
+    # 2. BRAND & INDUSTRY (DYNAMIC)
+    biz_name = st.text_input("🏢 Brand Name", placeholder="Acme Solar")
+    
     industry_map = {
-        "Residential Services": ["HVAC", "Roofing", "Solar", "Plumbing", "Electrical"],
-        "Medical & Health": ["Dental", "Plastic Surgery", "Chiropractic", "Veterinary"],
-        "Legal & Professional": ["Family Law", "Personal Injury", "Estate Planning", "CPA"],
-        "Custom": ["Type Manual Service..."]
+        "Residential Services": ["HVAC", "Roofing", "Solar", "Plumbing"],
+        "Medical & Health": ["Dental", "Plastic Surgery", "Veterinary"],
+        "Legal & Professional": ["Family Law", "Personal Injury", "CPA"],
+        "Other (Manual Entry)": []
     }
 
-    biz_name = st.text_input("🏢 Brand Name", placeholder="e.g. Acme Solar")
-    ind_cat = st.selectbox("📂 Industry Cluster", sorted(list(industry_map.keys())))
+    selected_ind_cluster = st.selectbox("📂 Industry Cluster", sorted(list(industry_map.keys())))
     
-    # Dynamic Service logic
-    service_list = industry_map[ind_cat]
-    selected_service = st.selectbox("🛠️ Specific Service", service_list)
-    final_service = st.text_input("Enter Service Name") if selected_service == "Type Manual Service..." else selected_service
+    # Logic for Custom Industry/Service
+    if selected_ind_cluster == "Other (Manual Entry)":
+        final_ind = st.text_input("Type Industry Name", key="custom_ind")
+        final_service = st.text_input("Type Specific Service", key="custom_svc")
+    else:
+        final_ind = selected_ind_cluster
+        service_list = industry_map[selected_ind_cluster]
+        final_service = st.selectbox("🛠️ Specific Service", service_list)
 
-    # 3. LOCATION SELECTORS
+    # 3. GEOGRAPHIC ENGINE (DYNAMIC)
+    st.divider()
     geo_dict = get_geo_data()
-    selected_state = st.selectbox("🎯 Target State", sorted(geo_dict.keys()))
-    selected_city = st.selectbox("🏙️ Target City", sorted(geo_dict[selected_state]))
-    full_loc = f"{selected_city}, {selected_state}"
+    state_list = sorted(list(geo_dict.keys())) + ["Other (Manual State)"]
+    selected_state = st.selectbox("🎯 Target State", state_list)
 
-    # 4. STRATEGIC DIRECTIVES (User Prompting Box)
+    if selected_state == "Other (Manual State)":
+        m_city = st.text_input("Type City Name", key="manual_city")
+        m_state = st.text_input("Type State Name", key="manual_state")
+        full_loc = f"{m_city}, {m_state}"
+    else:
+        city_list = sorted(geo_dict[selected_state]) + ["Other (Manual City)"]
+        selected_city = st.selectbox(f"🏙️ Select City ({selected_state})", city_list)
+        
+        if selected_city == "Other (Manual City)":
+            custom_city = st.text_input(f"Type City in {selected_state}", key="manual_city_in_state")
+            full_loc = f"{custom_city}, {selected_state}"
+        else:
+            full_loc = f"{selected_city}, {selected_state}"
+
+    st.caption(f"📍 Target: **{full_loc}**")
+
+    # 4. AGENT DIRECTIVES
     st.divider()
     agent_info = st.text_area("✍️ Strategic Directives", 
-                             placeholder="e.g. Focus on high-ticket luxury clients...",
-                             help="Provide additional context to the swarm.")
+                             placeholder="e.g. Focus on luxury clients...",
+                             key="agent_directives_box")
 
-    # 5. RESTORED AGENT TOGGLES (Moved OUT of Expander for visibility)
+    # 5. AGENT PERSONNEL
     st.subheader("🤖 Swarm Personnel")
-    
-    # This dictionary matches your 686-line backend keys exactly
     agent_config = {
-        "analyst": "🕵️ Analyst", 
-        "ads": "📺 Ad Tracker", 
-        "creative": "🎨 Creative", 
-        "strategist": "👔 Strategist", 
-        "social": "📱 Social", 
-        "geo": "📍 GEO", 
-        "audit": "🌐 Auditor", 
-        "seo": "✍ SEO"
+        "analyst": "🕵️ Analyst", "ads": "📺 Ad Tracker", 
+        "creative": "🎨 Creative", "strategist": "👔 Strategist", 
+        "social": "📱 Social", "geo": "📍 GEO", 
+        "audit": "🌐 Auditor", "seo": "✍ SEO"
     }
-    
-    toggles = {}
-    for key, label in agent_config.items():
-        toggles[key] = st.toggle(label, value=True, key=f"sidebar_{key}")
+    toggles = {k: st.toggle(v, value=True, key=f"tg_{k}") for k, v in agent_config.items()}
 
     # 6. LAUNCH & DEMO GATE
     st.divider()
@@ -186,13 +196,13 @@ with st.sidebar:
         run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
     else:
         st.error("🛡️ Verification Locked")
-        if st.button("🔓 DEMO: Simulate Verify", use_container_width=True):
+        if st.button("🔓 DEMO: Verify Now", use_container_width=True):
             conn = sqlite3.connect('breatheeasy.db')
             conn.execute("UPDATE users SET verified=1 WHERE username=?", (user_row['username'],))
             conn.commit(); conn.close(); st.success("Verified!"); st.rerun()
         run_btn = False
 
-    st.session_state.auth.logout('🔒 Sign Out', 'sidebar')
+    authenticator.logout('🔒 Sign Out', 'sidebar')
 
 # --- 5. SPRINT 3: EXPORT & EXECUTION ENGINES ---
 def export_word(content, title):
