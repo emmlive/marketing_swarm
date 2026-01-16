@@ -12,23 +12,47 @@ from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
 
-# --- HELPER FUNCTIONS: VERIFICATION ---
+# --- HELPER FUNCTIONS: VERIFICATION & SYSTEM HEALTH ---
+
+def check_system_health():
+    """Sprint 5: Verifies critical infrastructure status"""
+    health = {
+        "Gemini 2.0": os.getenv("GOOGLE_API_KEY") is not None,
+        "Serper API": os.getenv("SERPER_API_KEY") is not None,
+        "Database": os.path.exists("breatheeasy.db"),
+    }
+    return health
+
 def is_verified(username):
+    """Checks if the user has completed the email verification gate"""
     conn = sqlite3.connect('breatheeasy.db')
     res = conn.execute("SELECT verified FROM users WHERE username = ?", (username,)).fetchone()
     conn.close()
     return res[0] == 1 if res else False
 
 def trigger_verification(email):
+    """UI Trigger for unverified accounts"""
     st.warning("⚠️ Account Not Verified")
     st.info(f"Verification link sent to: {email}")
-    if st.button("Simulate Email Link Click (Demo Mode)"):
+    if st.button("Simulate Email Link Click (Demo Mode)", use_container_width=True):
         conn = sqlite3.connect('breatheeasy.db')
         conn.execute("UPDATE users SET verified = 1 WHERE username = ?", (st.session_state["username"],))
         conn.commit()
         conn.close()
         st.success("Email Verified! Reloading...")
         st.rerun()
+
+@st.cache_data(ttl=3600)
+def get_geo_data():
+    """Sprint 5: Performance optimization for geographic selectors"""
+    return {
+        "Alabama": ["Birmingham", "Huntsville", "Mobile"],
+        "Arizona": ["Phoenix", "Scottsdale", "Tucson"],
+        "California": ["Los Angeles", "San Francisco", "San Diego"],
+        "Florida": ["Miami", "Orlando", "Tampa"],
+        "Illinois": ["Chicago", "Naperville", "Plainfield"],
+        "Texas": ["Austin", "Dallas", "Houston"],
+    }
 
 # --- 1. SYSTEM INITIALIZATION ---
 try:
@@ -177,8 +201,25 @@ def generate_cinematic_ad(prompt):
     try: return st.video_generation(prompt=f"Elite cinematic marketing ad: {prompt}. 4k.", aspect_ratio="16:9")
     except Exception as e: st.error(f"Veo Error: {e}"); return None
 
-# --- 5D. SIDEBAR COMMAND CONSOLE (RESTORED & SECURED) ---
+# --- 5D. SIDEBAR COMMAND CONSOLE (S5 PERFORMANCE EDITION) ---
 with st.sidebar:
+    # 1. SPRINT 5: SYSTEM HEARTBEAT MONITOR
+    health = check_system_health()
+    is_healthy = all(health.values())
+    
+    status_emoji = "🟢" if is_healthy else "🔴"
+    status_label = "SYSTEM OPERATIONAL" if is_healthy else "SYSTEM MAINTENANCE"
+    
+    st.caption(f"{status_emoji} **{status_label}**")
+    
+    if not is_healthy:
+        with st.expander("⚠️ Infrastructure Alerts"):
+            for svc, state in health.items():
+                st.write(f"{svc}: {'✅' if state else '❌'}")
+    
+    st.divider()
+
+    # 2. BRANDING & METRICS
     st.image(user_row['logo_path'], width=120)
     st.button("🌓 Toggle Theme", on_click=toggle_theme)
     st.metric("Credits Available", user_row['credits'])
@@ -186,15 +227,9 @@ with st.sidebar:
     
     biz_name = st.text_input("Brand Name", placeholder="e.g. Acme Solar")
 
-    # RESTORED: EXPANDED GEOGRAPHIC DICTIONARY
-    location_data = {
-        "Alabama": ["Birmingham", "Huntsville", "Mobile"],
-        "Arizona": ["Phoenix", "Scottsdale", "Tucson"],
-        "California": ["Los Angeles", "San Francisco", "San Diego"],
-        "Florida": ["Miami", "Orlando", "Tampa"],
-        "Illinois": ["Chicago", "Naperville", "Plainfield"],
-        "Texas": ["Austin", "Dallas", "Houston"],
-    }
+    # 3. SPRINT 5: CACHED GEOGRAPHIC DATA
+    # Call the cached function defined in your Helpers section
+    location_data = get_geo_data()
 
     # RESTORED: DYNAMIC LOCATION LOGIC
     state_list = sorted(list(location_data.keys())) + ["Other (Manual Entry)"]
@@ -206,6 +241,7 @@ with st.sidebar:
         with s_col: m_state = st.text_input("State")
         full_loc = f"{m_city}, {m_state}"
     else:
+        # Pulls cities instantly from memory
         city_list = sorted(location_data[selected_state]) + ["City not listed..."]
         selected_city = st.selectbox(f"🏙️ Select City ({selected_state})", city_list)
         
@@ -215,7 +251,9 @@ with st.sidebar:
         else:
             full_loc = f"{selected_city}, {selected_state}"
 
-    st.caption(f"📍 Intelligence focused on: **{full_loc}**")
+    st.caption(f"📍 Focus: **{full_loc}**")
+    
+    # ... (Rest of sidebar: Requirements, Toggles, and Launch Button) ...
 
     # RESTORED: AGENT CUSTOM REQUIREMENTS BOX
     st.divider()
@@ -240,23 +278,20 @@ with st.sidebar:
         "manager": "👔 Strategist", "social": "✍ Social", "geo": "🧠 GEO", 
         "audit": "🌐 Auditor", "seo": "✍ SEO"}.items()}
     
-    # --- SPRINT 2: VERIFICATION GATE INTEGRATION ---
-    # This checks the helper function we defined at the top of the script
+    # SPRINT 2: VERIFICATION GATE
     if is_verified(st.session_state["username"]):
         run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
     else:
-        # If not verified, we block the run_btn and show the verification trigger
         trigger_verification(user_row['email'])
         run_btn = False 
     
-    # RESTORED: DEMO TERMINATION BUTTON
     st.divider()
     if st.button("🔒 End Demo Session", use_container_width=True):
         st.session_state.show_cleanup_confirm = True
 
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 7. SWARM EXECUTION ENGINE (ENTERPRISE LOGGING) ---
+# --- 7. SWARM EXECUTION ENGINE (ENTERPRISE LOGGING & PROGRESS) ---
 if run_btn:
     # Validation
     if not biz_name or not full_loc:
@@ -265,8 +300,13 @@ if run_btn:
         st.error("❌ Out of credits: Please contact your administrator for a credit injection.")
     else:
         with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
+            # 7A. SPRINT 5: INITIALIZE PROGRESS VISUALIZER
+            progress_bar = st.progress(0, text="Initializing Swarm Neural Network...")
+            
             try:
-                # 7A. Execute Strategic Logic via main.py
+                # PHASE 1: DISCOVERY & FORENSICS
+                progress_bar.progress(15, text="🕵️ Phase 1: Analyst & Vision Agents scouring market...")
+                
                 report = run_marketing_swarm({
                     'city': full_loc, 
                     'industry': final_ind, 
@@ -276,6 +316,12 @@ if run_btn:
                     'toggles': toggles,
                     'custom_reqs': user_requirements 
                 })
+                
+                # PHASE 2: CONTENT ENGINEERING
+                progress_bar.progress(65, text="✍️ Phase 2: Creative, SEO & Social Agents generating assets...")
+                
+                # PHASE 3: CEO STRATEGY SYNTHESIS
+                progress_bar.progress(90, text="👔 Phase 3: Strategist synthesizing 30-Day ROI Roadmap...")
                 
                 # 7B. Update Session State for UI Rendering
                 st.session_state.report, st.session_state.gen = report, True
@@ -302,7 +348,7 @@ if run_btn:
                         'Discovery'
                     ))
 
-                    # 3. RECORD MASTER AUDIT LOG (Sprint 4 Infrastructure)
+                    # 3. RECORD MASTER AUDIT LOG
                     cursor.execute("""
                         INSERT INTO master_audit_logs 
                         (timestamp, user, action_type, target_biz, location, credit_cost, status)
@@ -324,16 +370,16 @@ if run_btn:
                 finally:
                     conn.close()
                 
-                # 7D. Finalize UI State
-                status.update(label="✅ Strategy Engine Synced!", state="complete")
+                # 7D. SPRINT 5: FINAL COMPLETION
+                progress_bar.progress(100, text="✅ Intelligence Synchronized Successfully.")
+                status.update(label="🚀 Swarm Complete!", state="complete")
                 st.toast(f"Swarm for {biz_name} successfully logged and initialized.")
                 st.rerun()
 
             except Exception as e:
                 status.update(label="❌ Swarm Interrupted", state="error")
                 st.error(f"The Swarm encountered a backend issue: {e}")
-                # Rest of UI continues to render defensively
-
+                
 # --- 6. MULTIMODAL COMMAND CENTER (DEFENSIVE RENDERING) ---
 
 # 1. INITIALIZE TITLES
