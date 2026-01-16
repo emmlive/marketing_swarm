@@ -447,27 +447,112 @@ def render_agent(tab_key, title, report_key):
             </div>
         """, unsafe_allow_html=True)
 
-        # 3. AGENT INTELLIGENCE RENDERING
-        if st.session_state.gen:
-            # DEFENSIVE FETCH: Prevents AttributeError if backend fails to return a key
-            content = st.session_state.report.get(report_key, "Intelligence generation for this agent is pending or unavailable.")
+       if st.session_state.gen:
+    # 1. Define the Tab Labels (Mapping keys must match main.py return dict)
+    agent_map = [
+        ("🕵️ Analyst", "analyst"), 
+        ("🎨 Creative", "creative"), 
+        ("👔 Strategist", "strategist"), 
+        ("📱 Social", "social"), 
+        ("📍 GEO", "geo"), 
+        ("🌐 Auditor", "auditor"), 
+        ("✍ SEO", "seo")
+    ]
+    
+    # 2. Initialize the Tabs Infrastructure
+    all_tab_labels = [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "⚙ Admin"]
+    TAB = st.tabs(all_tab_labels)
+
+    # 3. LOOP THROUGH STANDARD AGENTS (Dynamic Rendering & Export Engine)
+    for i, (title, report_key) in enumerate(agent_map):
+        with TAB[i]:
+            st.subheader(f"{title} Intelligence")
+            
+            # Fetch content from the session state anchoring
+            content = st.session_state.report.get(report_key, "Intelligence for this agent is not available in this swarm run.")
             
             # Interactive Refinement Area
-            edited = st.text_area(f"Refine {title} Output", value=str(content), height=350, key=f"edit_{report_key}")
+            edited = st.text_area(
+                f"Refine {title} Output", 
+                value=str(content), 
+                height=350, 
+                key=f"edit_{report_key}"
+            )
+            
+            st.divider()
             
             # Multimodal Export Engine
+            st.write("📤 **Export Strategic Brief**")
             c1, c2 = st.columns(2)
             with c1: 
-                st.download_button("📄 Word Brief", create_word_doc(edited, title), f"{title}_Brief.docx", key=f"w_{report_key}")
+                st.download_button(
+                    label="📄 Download Word Brief", 
+                    data=create_word_doc(edited, title), 
+                    file_name=f"{title}_Brief.docx", 
+                    key=f"w_{report_key}",
+                    use_container_width=True
+                )
             with c2: 
-                st.download_button("📕 PDF Intelligence", create_pdf(edited, svc, full_loc), f"{title}_Report.pdf", key=f"p_{report_key}")
-        else: 
-            st.info(f"Launch the Omni-Swarm to populate the {title} Command Seat.")
+                st.download_button(
+                    label="📕 Download PDF Report", 
+                    data=create_pdf(edited, svc, full_loc), 
+                    file_name=f"{title}_Report.pdf", 
+                    key=f"p_{report_key}",
+                    use_container_width=True
+                )
 
-# Render Standard Agents
-for t, k in [("🕵️ Analyst","analyst"), ("📺 Ads","ads"), ("🎨 Creative","creative"), ("👔 Strategist","strategist"), ("✍ Social","social"), ("🧠 GEO","geo"), ("🌐 Auditor","audit"), ("✍ SEO","seo")]:
-    render_agent(t, t.split()[-1], k)
+    # 4. MANUALLY RENDER SPECIALTY TABS
+    
+    # --- TAB: VISION INSPECTOR ---
+    with TAB[7]:
+        st.subheader("👁️ Vision Inspector")
+        if not is_verified(st.session_state["username"]):
+            st.error("🛡️ Verification Required to access Vision Intelligence.")
+        else:
+            v_intel = st.session_state.report.get('vision', "Vision analysis data not found.")
+            st.markdown(f'<div class="executive-brief">{v_intel}</div>', unsafe_allow_html=True)
+            v_file = st.file_uploader("Upload Evidence for Analysis", type=['png','jpg','jpeg'], key="vis_up_main")
+            if v_file: st.image(v_file, use_container_width=True, caption="Target Asset")
 
+    # --- TAB: VEO STUDIO ---
+    with TAB[8]:
+        st.subheader("🎬 Veo Cinematic Studio")
+        if not is_verified(st.session_state["username"]):
+            st.error("🛡️ Verification Required to access Cinematic Production.")
+        else:
+            creative_context = st.session_state.report.get('creative', '')
+            v_prompt = st.text_area("Video Scene Description", value=str(creative_context)[:500], height=150, key="veo_prompt_area")
+            if st.button("📽️ GENERATE AD", key="veo_gen_btn_main", use_container_width=True):
+                with st.spinner("Rendering cinematic asset..."):
+                    v_vid = generate_cinematic_ad(v_prompt)
+                    if v_vid: st.video(v_vid)
+
+    # --- TAB: ADMIN MANAGEMENT (GOD-MODE) ---
+    with TAB[9]:
+        if st.session_state.get('user_role') == 'admin':
+            st.header("⚙️ God-Mode Management")
+            conn = sqlite3.connect('breatheeasy.db')
+            
+            # Admin Metrics
+            total_swarms = pd.read_sql_query("SELECT COUNT(*) as count FROM master_audit_logs", conn).iloc[0]['count']
+            st.metric("Global Swarm Count", total_swarms)
+            
+            # Audit Table with Stable Column Config
+            audit_df = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC", conn)
+            st.dataframe(
+                audit_df, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "status": st.column_config.SelectboxColumn("Status", options=["SUCCESS", "FAILED"])
+                }
+            )
+            conn.close()
+        else:
+            st.error("🚫 Administrative Access Denied.")
+
+else:
+    st.info("👋 Welcome! Configure your Swarm Personnel in the sidebar and click 'Launch' to generate intelligence.")
 # Render Specialty Tabs
 with TAB["👁️ Vision"]:
     st.subheader("👁️ Vision Inspector")
