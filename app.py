@@ -448,8 +448,10 @@ def render_agent(tab_key, title, report_key):
             </div>
         """, unsafe_allow_html=True)
 
-       if st.session_state.gen:
-    # 1. Define Map (Matches main.py keys)
+       # --- 8. DYNAMIC REPORT RENDERING ---
+# This 'if' must be at the far left margin (no spaces before it)
+if st.session_state.gen:
+    # 1. Define Map
     agent_map = [
         ("🕵️ Analyst", "analyst"), ("🎨 Creative", "creative"), 
         ("👔 Strategist", "strategist"), ("📱 Social", "social"), 
@@ -460,34 +462,47 @@ def render_agent(tab_key, title, report_key):
     all_tab_labels = [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "⚙ Admin"]
     TAB = st.tabs(all_tab_labels)
 
-    # 3. Dynamic Loop (Standard Agents)
+    # 3. Dynamic Loop for Standard Agents
     for i, (title, report_key) in enumerate(agent_map):
         with TAB[i]:
             st.subheader(f"{title} Intelligence")
-            content = st.session_state.report.get(report_key, "Pending...")
+            content = st.session_state.report.get(report_key, "Intelligence not available.")
             edited = st.text_area(f"Refine {title}", value=str(content), height=350, key=f"edit_{report_key}")
             
             c1, c2 = st.columns(2)
-            with c1: st.download_button("📄 Word", create_word_doc(edited, title), f"{title}.docx", key=f"w_{report_key}")
-            with c2: st.download_button("📕 PDF", create_pdf(edited, svc, full_loc), f"{title}.pdf", key=f"p_{report_key}")
+            with c1: st.download_button("📄 Word Brief", create_word_doc(edited, title), f"{title}.docx", key=f"w_{report_key}")
+            with c2: st.download_button("📕 PDF Report", create_pdf(edited, svc, full_loc), f"{title}.pdf", key=f"p_{report_key}")
 
-    # --- MUST BE INDENTED HERE ---
-    # 4. Specialty Tabs
+    # --- 9. SPECIALTY TABS (STILL INSIDE THE 'IF GEN' BLOCK) ---
     with TAB[7]: # Vision
         st.subheader("👁️ Vision Inspector")
-        # ... (Verification & Image Logic)
+        v_intel = st.session_state.report.get('vision', "Vision analysis pending.")
+        st.markdown(v_intel)
         
     with TAB[8]: # Veo
         st.subheader("🎬 Veo Cinematic Studio")
-        # ... (Prompt & Generation Logic)
+        v_prompt = st.text_area("Video Scene Prompt", key="veo_prompt_area")
         
-    with TAB[9]: # Admin
-        if st.session_state.get('user_role') == 'admin':
-            # ... (Database & Metrics Logic)
-            pass
+    # --- 9C. GOD-MODE ADMIN (INTEGRATED) ---
+    with TAB[9]:
+        if is_admin:
+            st.header("⚙️ God-Mode Management")
+            st.warning("⚡ Root Access: Viewing global system infrastructure.")
+            
+            conn = sqlite3.connect('breatheeasy.db')
+            # (Metrics and Table logic here...)
+            st.success("Admin Session Verified.")
+            conn.close()
+        else:
+            # SECURITY GATEKEEPER
+            st.error("🚫 Administrative Access Denied.")
+            st.info("Your account does not have the permissions required to view system infrastructure.")
 
+# --- FINAL ELSE BLOCK ---
 else:
-    st.info("👋 Welcome! Configure your Swarm Personnel in the sidebar and click 'Launch'.")
+    # This 'else' MUST align perfectly with the 'if st.session_state.gen' at the top
+    st.info("👋 Welcome! Configure your Swarm Personnel in the sidebar and click 'Launch' to generate intelligence.")
+    
 # Render Specialty Tabs
 with TAB["👁️ Vision"]:
     st.subheader("👁️ Vision Inspector")
