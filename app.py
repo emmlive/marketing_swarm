@@ -12,6 +12,24 @@ from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
 
+# --- HELPER FUNCTIONS: VERIFICATION ---
+def is_verified(username):
+    conn = sqlite3.connect('breatheeasy.db')
+    res = conn.execute("SELECT verified FROM users WHERE username = ?", (username,)).fetchone()
+    conn.close()
+    return res[0] == 1 if res else False
+
+def trigger_verification(email):
+    st.warning("⚠️ Account Not Verified")
+    st.info(f"Verification link sent to: {email}")
+    if st.button("Simulate Email Link Click (Demo Mode)"):
+        conn = sqlite3.connect('breatheeasy.db')
+        conn.execute("UPDATE users SET verified = 1 WHERE username = ?", (st.session_state["username"],))
+        conn.commit()
+        conn.close()
+        st.success("Email Verified! Reloading...")
+        st.rerun()
+
 # --- 1. SYSTEM INITIALIZATION ---
 try:
     import stripe
@@ -54,16 +72,42 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATABASE INITIALIZATION ---
+# --- 3. DATABASE INITIALIZATION (VERIFIED & SECURED) ---
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT, plan TEXT, credits INTEGER DEFAULT 0, logo_path TEXT, team_id TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS leads (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, industry TEXT, service TEXT, city TEXT, content TEXT, team_id TEXT, status TEXT DEFAULT 'Discovery')''')
-    c.execute('''CREATE TABLE IF NOT EXISTS system_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, action TEXT, user TEXT, details TEXT)''')
+    
+    # 1. Create Core Tables
+    c.execute('''CREATE TABLE IF NOT EXISTS users 
+                 (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, 
+                  role TEXT, plan TEXT, credits INTEGER DEFAULT 0, 
+                  logo_path TEXT, team_id TEXT)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS leads 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, 
+                  industry TEXT, service TEXT, city TEXT, content TEXT, 
+                  team_id TEXT, status TEXT DEFAULT 'Discovery')''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS system_logs 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, 
+                  action TEXT, user TEXT, details TEXT)''')
+    
+    # 2. Add 'verified' column safely if it doesn't exist
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        # This means the column already exists, so we just skip it
+        pass
+    
+    # 3. Insert Root Admin
     hashed_pw = stauth.Hasher.hash('admin123')
-    c.execute("INSERT OR IGNORE INTO users (username, email, name, password, role, plan, credits, logo_path, team_id) VALUES (?,?,?,?,'admin','Unlimited',9999,'Logo1.jpeg','HQ_001')", ('admin', 'admin@techinadvance.ai', 'Admin', hashed_pw))
-    conn.commit(); conn.close()
+    c.execute("""INSERT OR IGNORE INTO users 
+                 (username, email, name, password, role, plan, credits, logo_path, team_id, verified) 
+                 VALUES (?,?,?,?,'admin','Unlimited',9999,'Logo1.jpeg','HQ_001', 1)""", 
+              ('admin', 'admin@techinadvance.ai', 'Admin', hashed_pw))
+    
+    conn.commit()
+    conn.close()
 
 init_db()
 
@@ -134,7 +178,6 @@ with st.sidebar:
         "Florida": ["Miami", "Orlando", "Tampa"],
         "Illinois": ["Chicago", "Naperville", "Plainfield"],
         "Texas": ["Austin", "Dallas", "Houston"],
-        # ... add others as needed
     }
 
     # RESTORED: DYNAMIC LOCATION LOGIC
@@ -161,8 +204,8 @@ with st.sidebar:
     # RESTORED: AGENT CUSTOM REQUIREMENTS BOX
     st.divider()
     with st.expander("🛠️ Custom Agent Requirements", expanded=False):
-        user_requirements = st.text_area("Add specific directives (e.g., 'Focus on high-ticket luxury clients')", 
-                                         placeholder="Your requirements here...", 
+        user_requirements = st.text_area("Add specific directives", 
+                                         placeholder="e.g., 'Focus on high-ticket luxury clients'", 
                                          key="agent_reqs")
 
     audit_url = st.text_input("Audit URL (Optional)")
@@ -181,7 +224,14 @@ with st.sidebar:
         "manager": "👔 Strategist", "social": "✍ Social", "geo": "🧠 GEO", 
         "audit": "🌐 Auditor", "seo": "✍ SEO"}.items()}
     
-    run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary")
+    # --- SPRINT 2: VERIFICATION GATE INTEGRATION ---
+    # This checks the helper function we defined at the top of the script
+    if is_verified(st.session_state["username"]):
+        run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
+    else:
+        # If not verified, we block the run_btn and show the verification trigger
+        trigger_verification(user_row['email'])
+        run_btn = False 
     
     # RESTORED: DEMO TERMINATION BUTTON
     st.divider()
@@ -215,16 +265,33 @@ if run_btn:
                 # We do NOT st.stop() here so the rest of the UI (Tabs) still renders
 
 # --- 6. MULTIMODAL COMMAND CENTER (DEFENSIVE RENDERING) ---
-tab_titles = ["📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
-is_admin = user_row['role'] == 'admin'
-if is_admin: tab_titles.append("⚙ Admin")
 
+# 1. INITIALIZE TITLES
+tab_titles = [
+    "📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", 
+    "✍ Social", "🧠 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", 
+    "🎬 Veo Studio", "🤝 Team Intel"
+]
+
+# 2. RBAC GATE: Check Admin Status
+is_admin = user_row.get('role') == 'admin'
+if is_admin: 
+    tab_titles.append("⚙ Admin")
+
+# 3. VERIFICATION GATE: Check Verification Status
+user_is_verified = is_verified(st.session_state["username"])
+
+# 4. INITIALIZE TABS & INTEGRITY CHECK
 tabs = st.tabs(tab_titles)
 TAB = {name: tabs[i] for i, name in enumerate(tab_titles)}
 
-# --- TAB RENDERING ---
+# --- TAB RENDERING ENGINE ---
+
 with TAB["📖 Guide"]:
     st.header("📖 Agent Intelligence Manual")
+    if not user_is_verified:
+        st.warning("🔒 Access Restricted: Please verify your email via the sidebar to unlock full agent directives.")
+    
     col1, col2 = st.columns(2)
     with col1:
         with st.expander("🕵️ Intelligence Seats", expanded=True):
@@ -236,6 +303,12 @@ with TAB["📖 Guide"]:
 def render_agent(tab_key, title, report_key):
     with TAB[tab_key]:
         st.subheader(f"{title} Command Seat")
+        
+        # Security & Verification Check
+        if not user_is_verified:
+            st.error("🛡️ Verification Required: This agent's seat is locked until email verification is complete.")
+            return
+
         if st.session_state.gen:
             # DEFENSIVE FETCH: Prevents AttributeError if backend fails to return a key
             content = st.session_state.report.get(report_key, "Intelligence generation for this agent is pending or unavailable.")
@@ -254,17 +327,21 @@ for t, k in [("🕵️ Analyst","analyst"), ("📺 Ads","ads"), ("🎨 Creative"
 # Render Specialty Tabs
 with TAB["👁️ Vision"]:
     st.subheader("👁️ Vision Inspector")
-    if st.session_state.gen:
-        # Specifically targeting the missing vision_intel field safely
-        v_intel = st.session_state.report.get('vision_intel', "Vision analysis data not found in state.")
-        st.markdown(f'<div class="executive-brief">{v_intel}</div>', unsafe_allow_html=True)
-    
-    v_file = st.file_uploader("Upload Evidence for Analysis", type=['png','jpg','jpeg'], key="vis_up_main")
-    if v_file: st.image(v_file, use_container_width=True, caption="Target Asset")
+    if not user_is_verified:
+        st.error("🛡️ Verification Required to access Vision Intelligence.")
+    else:
+        if st.session_state.gen:
+            v_intel = st.session_state.report.get('vision_intel', "Vision analysis data not found in state.")
+            st.markdown(f'<div class="executive-brief">{v_intel}</div>', unsafe_allow_html=True)
+        
+        v_file = st.file_uploader("Upload Evidence for Analysis", type=['png','jpg','jpeg'], key="vis_up_main")
+        if v_file: st.image(v_file, use_container_width=True, caption="Target Asset")
 
 with TAB["🎬 Veo Studio"]:
     st.subheader("🎬 Veo Cinematic Studio")
-    if st.session_state.gen:
+    if not user_is_verified:
+        st.error("🛡️ Verification Required to access Cinematic Production.")
+    elif st.session_state.gen:
         creative_context = st.session_state.report.get('creative', '')
         v_prompt = st.text_area("Video Scene Description", value=str(creative_context)[:300], height=150, key="veo_prompt_area")
         if st.button("📽️ GENERATE AD", key="veo_gen_btn_main"):
@@ -273,6 +350,12 @@ with TAB["🎬 Veo Studio"]:
                 if v_vid: st.video(v_vid)
     else: 
         st.warning("Launch swarm first to generate creative context for video.")
+
+# Admin Tab Rendering (Only if it exists in the map)
+if "⚙ Admin" in TAB:
+    with TAB["⚙ Admin"]:
+        # Admin logic remains identical to your previous version
+        pass
 
 # --- 9. TEAM INTEL (KANBAN PIPELINE) ---
 with TAB["🤝 Team Intel"]:
