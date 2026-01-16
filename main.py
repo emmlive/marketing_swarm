@@ -13,14 +13,14 @@ load_dotenv(override=True)
 
 # --- 1. SHARED STATE (EXECUTIVE DATA SLOTS) ---
 class SwarmState(BaseModel):
-    market_data: str = "Analysis pending..."
+    market_data: str = "Agent not selected for this run."
     competitor_ads: str = "Ad tracking pending..."
-    vision_intel: str = "Visual audit pending..." 
+    vision_intel: str = "Agent not selected for this run." 
     ad_drafts: str = "Creative build pending..."
-    website_audit: str = "Audit pending..."
-    social_plan: str = "Social strategy pending..."
-    geo_intel: str = "GEO mapping pending..."
-    seo_article: str = "SEO Content pending..." 
+    website_audit: str = "Audit not selected for this run."
+    social_plan: str = "Social strategy not selected."
+    geo_intel: str = "GEO mapping not selected."
+    seo_article: str = "SEO Content not selected." 
     strategist_brief: str = "Final brief pending..."
     production_schedule: str = "Roadmap pending..."
 
@@ -34,7 +34,7 @@ gemini_llm = LLM(
 search_tool = SerperDevTool(api_key=os.getenv("SERPER_API_KEY"))
 scrape_tool = ScrapeWebsiteTool()
 
-# --- 3. AGENT DEFINITIONS (OPTIMIZED FOR STRATEGIC DEPTH & FORENSICS) ---
+# --- 3. AGENT DEFINITIONS ---
 def get_swarm_agents(inputs):
     biz = inputs.get('biz_name', 'The Business')
     city = inputs.get('city', 'the local area')
@@ -45,56 +45,29 @@ def get_swarm_agents(inputs):
         "analyst": Agent(
             role="Chief Market Strategist (McKinsey Level)",
             goal=f"Identify high-value market entry gaps and price arbitrage opportunities for {biz} in {city}.",
-            backstory=f"""You are an expert market scientist. You quantify 'Market Entry Gaps' and 
-            'Competitor Fatigue' to find local vulnerabilities. Priority directives: {reqs}""",
+            backstory=f"You quantify 'Market Entry Gaps' and 'Competitor Fatigue'. Priority: {reqs}",
             tools=[search_tool, scrape_tool], llm=gemini_llm, verbose=True
         ),
         "vision_agent": Agent(
             role="Technical Visual Auditor & Forensic Analyst",
-            goal=f"Analyze field photos (Roofing, HVAC, Construction) to identify damage or defects for {biz}.",
-            backstory="""You act as a technical forensics expert. You inspect photos (e.g. air ducts, roofing, 
-            damage) and provide an objective 'Evidence of Need' report to help close sales.""",
+            goal=f"Analyze field photos to identify damage or defects for {biz}.",
+            backstory="Technical forensics expert. You provide 'Evidence of Need' reports.",
             llm=gemini_llm, verbose=True
         ),
         "creative": Agent(
             role="Multichannel Direct-Response Ad Architect",
-            goal="Engineer deployable ad copy for Google Search, Facebook, and Instagram + Veo concepts.",
-            backstory="""Expert copywriter who understands platform constraints (character limits). 
-            You move users from 'Interest' to 'Action' with ready-to-paste ad sets.""",
+            goal="Engineer deployable ad copy for Google Search, Facebook, and Instagram.",
+            backstory="Direct-response expert. You produce ready-to-paste ad sets.",
             llm=gemini_llm, verbose=True
         ),
-        "seo_blogger": Agent(
-            role="SEO Content Architect (E-E-A-T Specialist)",
-            goal="Compose high-authority technical articles for SGE dominance.",
-            backstory=f"Establishes {biz} as the definitive local leader with technical authority content.",
-            llm=gemini_llm, verbose=True
-        ),
-        "web_auditor": Agent(
-            role="Conversion UX Auditor",
-            goal=f"Diagnose technical conversion leaks on {url}.",
-            backstory="Identifies digital funnel leaks and provides developer-ready action items.",
-            tools=[scrape_tool], llm=gemini_llm, verbose=True
-        ),
-        "social_agent": Agent(
-            role="Social Distribution Architect",
-            goal="Repurpose strategy into a viral Omni-channel broadcast plan.",
-            backstory="Expert in viral distribution mechanics and deployment schedules.",
-            llm=gemini_llm, verbose=True
-        ),
-        "geo_specialist": Agent(
-            role="GEO Specialist (Local AI Search Optimization)",
-            goal=f"Optimize citation velocity and Map visibility in {city}.",
-            backstory="Expert in Local Ranking Factors and AI-driven local discovery.",
-            llm=gemini_llm, verbose=True
-        ),
-        "strategist": Agent(
-            role="Chief Growth Officer (The Swarm Commander)",
-            goal="Synthesize all agent intelligence into a 30-day ROI growth roadmap.",
-            backstory=f"Ultimate decision maker. Validates work against CEO vision and: {reqs}.",
-            llm=gemini_llm, verbose=True
-        )
+        "seo_blogger": Agent(role="SEO Content Architect", goal="Compose high-authority technical articles.", backstory="E-E-A-T Specialist.", llm=gemini_llm, verbose=True),
+        "web_auditor": Agent(role="Conversion UX Auditor", goal=f"Diagnose technical conversion leaks on {url}.", tools=[scrape_tool], llm=gemini_llm, verbose=True),
+        "social_agent": Agent(role="Social Distribution Architect", goal="Repurpose strategy into a viral broadcast plan.", llm=gemini_llm, verbose=True),
+        "geo_specialist": Agent(role="GEO Specialist", goal=f"Optimize citation velocity in {city}.", llm=gemini_llm, verbose=True),
+        "strategist": Agent(role="Chief Growth Officer", goal="Synthesize all agent intelligence.", llm=gemini_llm, verbose=True)
     }
 
+# --- 4. THE STATEFUL WORKFLOW ---
 class MarketingSwarmFlow(Flow[SwarmState]):
     def __init__(self, inputs):
         super().__init__()
@@ -104,111 +77,107 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
     @start()
     def phase_1_discovery(self):
-        """Step 1: Stakeholder Discovery, Ad Tracking & Visual Forensics"""
-        analyst_task = Task(
-            description=f"Identify 'Market Entry Gaps' and analyze competitor ad hooks in {self.inputs['city']}.",
-            agent=self.agents["analyst"],
-            expected_output="Markdown Report with Competitor Fatigue analysis and Psychological Ad Hook deconstruction."
-        )
+        """Step 1: Filtered Discovery & Visual Forensics"""
+        active_tasks = []
         
-        vision_task = Task(
-            description=f"Analyze provided field photos (Roofing/HVAC/etc) for technical defects or rival brand weaknesses.",
-            agent=self.agents["vision_agent"],
-            expected_output="Detailed Forensic Report identifying damage, severity scores, and design gaps."
-        )
+        # ONLY run if explicitly toggled in Sidebar
+        if self.toggles.get('analyst'):
+            analyst_task = Task(
+                description=f"Identify 'Market Entry Gaps' and analyze competitor ad hooks in {self.inputs['city']}.",
+                agent=self.agents["analyst"],
+                expected_output="Markdown Report with Competitor Fatigue analysis."
+            )
+            active_tasks.append(analyst_task)
 
-        active_tasks = [analyst_task, vision_task]
-        
-        auditor_task = None
+        if self.toggles.get('vision'):
+            vision_task = Task(
+                description=f"Analyze provided field photos for technical defects or rival brand weaknesses.",
+                agent=self.agents["vision_agent"],
+                expected_output="Detailed Forensic Report identifying damage and design gaps."
+            )
+            active_tasks.append(vision_task)
+            
         if self.toggles.get('audit') and self.inputs.get('url'):
             auditor_task = Task(
                 description=f"Scan {self.inputs.get('url')} for conversion friction.",
                 agent=self.agents["web_auditor"],
-                expected_output="Executive Technical Audit with developer action items."
+                expected_output="Executive Technical Audit."
             )
             active_tasks.append(auditor_task)
+
+        if active_tasks:
+            # Use only relevant agents to save memory/time
+            active_agents = [task.agent for task in active_tasks]
+            Crew(agents=active_agents, tasks=active_tasks, process=Process.sequential).kickoff()
             
-        Crew(agents=list(self.agents.values()), tasks=active_tasks, process=Process.sequential).kickoff()
-        
-        self.state.market_data = str(analyst_task.output.raw)
-        self.state.vision_intel = str(vision_task.output.raw) 
-        
-        if auditor_task:
-            self.state.website_audit = str(auditor_task.output.raw)
+            # Save results to state if tasks were performed
+            for task in active_tasks:
+                if "Market" in task.description: self.state.market_data = str(task.output.raw)
+                if "Forensic" in task.description or "visual" in task.description: self.state.vision_intel = str(task.output.raw)
+                if "conversion" in task.description: self.state.website_audit = str(task.output.raw)
             
         return "discovery_complete"
 
     @listen("discovery_complete")
     def phase_2_execution(self):
-        """Step 2: Content Engineering & Ready-to-Push Ad Production"""
+        """Step 2: Filtered Production & Ad Engineering"""
+        production_tasks = []
         
-        
-        creative_task = Task(
-            description="""Engineer a Multichannel Ad Suite for the business:
-            1. GOOGLE SEARCH: 3 Headlines (30 char), 2 Descriptions (90 char).
-            2. META (FB/IG): 1 Emotional Headline, 1 Long-form Primary Text.
-            3. VEO: 1 High-fidelity Cinematic Video Scene Description.""",
-            agent=self.agents["creative"],
-            expected_output="""Markdown table formatted as:
-            | Platform | Component | Copy/Prompt |
-            | :--- | :--- | :--- |"""
-        )
-        
-        production_tasks = [creative_task]
-        
+        # 1. ALWAYS Run Creative if it's not explicitly disabled, or handle via toggle
+        if self.toggles.get('builder'): # Mapping 'builder' toggle to Creative Agent
+            creative_task = Task(
+                description="""Engineer a Multichannel Ad Suite: 
+                1. Google (3 Headlines, 2 Desc), 2. Meta (Headline/Text), 3. Veo Prompt.""",
+                agent=self.agents["creative"],
+                expected_output="Markdown table with platform-specific copy."
+            )
+            production_tasks.append(creative_task)
+
+        # 2. Add Optional production agents
         if self.toggles.get('seo'):
-            production_tasks.append(Task(
-                description="Compose a technical SEO authority article.",
-                agent=self.agents["seo_blogger"],
-                expected_output="Technical article content."
-            ))
-
+            production_tasks.append(Task(description="Compose a technical SEO authority article.", agent=self.agents["seo_blogger"], expected_output="Technical article."))
         if self.toggles.get('social'):
-            production_tasks.append(Task(
-                description="Create a 30-day viral distribution schedule.",
-                agent=self.agents["social_agent"],
-                expected_output="Viral Hooks and Schedule."
-            ))
-
+            production_tasks.append(Task(description="Create a 30-day viral schedule.", agent=self.agents["social_agent"], expected_output="Viral Hooks."))
         if self.toggles.get('geo'):
-            production_tasks.append(Task(
-                description="Develop a local GEO dominance plan.",
-                agent=self.agents["geo_specialist"],
-                expected_output="Technical GEO Intelligence Report."
-            ))
+            production_tasks.append(Task(description="Develop local GEO plan.", agent=self.agents["geo_specialist"], expected_output="GEO Intelligence."))
 
-        Crew(agents=list(self.agents.values()), tasks=production_tasks, process=Process.sequential).kickoff()
-        
-        self.state.ad_drafts = str(creative_task.output.raw)
-        
-        for task in production_tasks:
-            out = str(task.output.raw)
-            if "SEO" in task.description: self.state.seo_article = out
-            if "viral" in task.description: self.state.social_plan = out
-            if "GEO" in task.description: self.state.geo_intel = out
+        if production_tasks:
+            active_agents = [task.agent for task in production_tasks]
+            Crew(agents=active_agents, tasks=production_tasks, process=Process.sequential).kickoff()
+            
+            # HARD MAPPING to ensure Creative Build is never "Pending" if run
+            for task in production_tasks:
+                out = str(task.output.raw)
+                if "Multichannel" in task.description: self.state.ad_drafts = out
+                if "SEO" in task.description: self.state.seo_article = out
+                if "viral" in task.description: self.state.social_plan = out
+                if "GEO" in task.description: self.state.geo_intel = out
             
         return "execution_complete"
 
     @listen("execution_complete")
     def phase_3_validation(self):
-        """Step 3: CEO Level Synthesis & Phased ROI Roadmap"""
-        val_task = Task(
-            description="Synthesize all data into a 30-day ROI Growth Roadmap.",
-            agent=self.agents["strategist"],
-            expected_output="Master Growth Brief: Milestones and ROI Projections."
-        )
-        result = Crew(agents=[self.agents["strategist"]], tasks=[val_task]).kickoff()
-        
-        self.state.strategist_brief = str(result)
-        self.state.production_schedule = str(result)
+        """Step 3: ROI Roadmap Synthesis"""
+        # Only run Strategist if toggled
+        if self.toggles.get('manager'):
+            val_task = Task(
+                description="Synthesize all data into a 30-day ROI Growth Roadmap.",
+                agent=self.agents["strategist"],
+                expected_output="Master Growth Brief: Milestones and ROI Projections."
+            )
+            result = Crew(agents=[self.agents["strategist"]], tasks=[val_task]).kickoff()
+            self.state.strategist_brief = str(result)
+            self.state.production_schedule = str(result)
         
         return "swarm_finished"
 
 # --- 5. EXECUTION WRAPPER ---
 def run_marketing_swarm(inputs):
+    # Initialize and execute the stateful flow
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
+    # Generate the high-level summary for the "Full Report" view
     formatted_string_report = f"""
 # 🚀 {inputs['biz_name']} | EXECUTIVE INTELLIGENCE SUMMARY
 
@@ -239,6 +208,7 @@ def run_marketing_swarm(inputs):
 {flow.state.production_schedule}
 """
 
+    # Return the data dictionary to app.py session state
     return {
         "analyst": flow.state.market_data,
         "ads": flow.state.competitor_ads,
