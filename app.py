@@ -597,96 +597,73 @@ with TAB["🤝 Team Intel"]:
                         conn.commit(); st.rerun()
     conn.close()
 
-# --- 9C. GOD-MODE ADMIN (ISOLATED & STABILIZED) ---
-# Ensure this is placed at the end of your 'if st.session_state.gen:' block
-# and correctly indented within the Specialty Tabs section.
-
-if is_admin:
-    with TAB[9]: # Assuming Admin is the 10th tab (Index 9)
-        st.header("⚙️ God-Mode Management")
-        st.warning("⚡ Root Access: You are viewing global system infrastructure and audit trails.")
-        
-        # --- 1. GLOBAL INFRASTRUCTURE METRICS ---
-        conn = sqlite3.connect('breatheeasy.db')
-        
-        try:
-            # Fetch real-time data for high-level metrics
-            total_swarms = pd.read_sql_query("SELECT COUNT(*) as count FROM master_audit_logs", conn).iloc[0]['count']
-            total_users = pd.read_sql_query("SELECT COUNT(*) as count FROM users", conn).iloc[0]['count']
+# --- 9C. GOD-MODE ADMIN (TAB 10 / INDEX 9) ---
+    with TAB[9]: 
+        # THE SECURITY GATE: This 'if' is indented inside 'with TAB[9]'
+        if is_admin:
+            st.header("⚙️ God-Mode Management")
+            st.warning("⚡ Root Access: You are viewing global system infrastructure and audit trails.")
             
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Global Swarm Count", total_swarms)
-            m2.metric("Total Registered Users", total_users)
-            m3.metric("System Integrity", "Verified", delta="SSL/DB Active")
-
-            st.divider()
-
-            # --- 2. MASTER AUDIT LOG TABLE (STABILIZED) ---
-            st.subheader("📊 Global Activity Audit Trail")
+            # --- 1. GLOBAL INFRASTRUCTURE METRICS ---
+            conn = sqlite3.connect('breatheeasy.db')
             
-            # Query the Sprint 4 Master Audit Table for the last 500 entries
-            audit_df = pd.read_sql_query("""
-                SELECT timestamp, user, action_type, target_biz, location, credit_cost, status 
-                FROM master_audit_logs 
-                ORDER BY id DESC LIMIT 500
-            """, conn)
-
-            if not audit_df.empty:
-                # Render with Stable Column Config (Avoids experimental StatusColumn errors)
-                st.dataframe(
-                    audit_df, 
-                    use_container_width=True, 
-                    hide_index=True,
-                    column_config={
-                        "timestamp": "Execution Time",
-                        "user": "Account",
-                        "action_type": "Operation",
-                        "target_biz": "Target Brand",
-                        "location": "Market",
-                        "credit_cost": "Cost (Cr)",
-                        "status": st.column_config.SelectboxColumn(
-                            "Status",
-                            options=["SUCCESS", "FAILED", "PENDING"],
-                            width="small"
-                        )
-                    }
-                )
+            try:
+                # Fetch real-time data for high-level metrics
+                total_swarms = pd.read_sql_query("SELECT COUNT(*) as count FROM master_audit_logs", conn).iloc[0]['count']
+                total_users = pd.read_sql_query("SELECT COUNT(*) as count FROM users", conn).iloc[0]['count']
                 
-                # --- 3. CSV EXPORT ENGINE ---
-                csv_data = audit_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Export Full Audit Log (CSV)",
-                    data=csv_data,
-                    file_name=f"audit_log_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-            else:
-                st.info("No system activity recorded in master_audit_logs yet.")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Global Swarm Count", total_swarms)
+                m2.metric("Total Registered Users", total_users)
+                m3.metric("System Integrity", "Verified", delta="SSL/DB Active")
 
-            st.divider()
-            
-            # --- 4. USER MANAGEMENT & CREDIT INJECTION (RESTORED) ---
-            st.subheader("👤 User Registry & Credit Management")
-            users_df = pd.read_sql_query("SELECT username, email, credits, verified FROM users", conn)
-            st.dataframe(users_df, use_container_width=True, hide_index=True)
-            
-            st.write("**Rapid Credit Injection**")
-            target_u = st.selectbox("Target Account", users_df['username'], key="admin_credit_target")
-            amt = st.number_input("Credits to Inject", value=10, step=5)
-            
-            if st.button("EXECUTE INJECTION", type="primary", use_container_width=True):
-                conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amt, target_u))
-                conn.commit()
-                st.success(f"Successfully injected {amt} credits into {target_u}")
-                st.rerun()
+                st.divider()
 
-        except Exception as e:
-            st.error(f"Admin Dashboard Error: {e}")
-        finally:
-            conn.close()
-            else:
-            # ACCESS DENIED: Logic for non-admin users
+                # --- 2. MASTER AUDIT LOG TABLE ---
+                st.subheader("📊 Global Activity Audit Trail")
+                audit_df = pd.read_sql_query("""
+                    SELECT timestamp, user, action_type, target_biz, location, credit_cost, status 
+                    FROM master_audit_logs 
+                    ORDER BY id DESC LIMIT 500
+                """, conn)
+
+                if not audit_df.empty:
+                    st.dataframe(
+                        audit_df, 
+                        use_container_width=True, 
+                        hide_index=True,
+                        column_config={
+                            "status": st.column_config.SelectboxColumn(
+                                "Status", options=["SUCCESS", "FAILED", "PENDING"], width="small"
+                            )
+                        }
+                    )
+                    
+                    # --- 3. CSV EXPORT ---
+                    csv_data = audit_df.to_csv(index=False).encode('utf-8')
+                    st.download_button("📥 Export Audit Log (CSV)", csv_data, "audit_log.csv", "text/csv")
+                
+                st.divider()
+
+                # --- 4. RAPID CREDIT INJECTION ---
+                st.subheader("👤 User Management")
+                u_df = pd.read_sql_query("SELECT username, credits FROM users", conn)
+                target_u = st.selectbox("Select User", u_df['username'], key="god_target")
+                amt = st.number_input("Credits to Add", value=10, key="god_amt")
+                
+                if st.button("Inject Credits", type="primary"):
+                    conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amt, target_u))
+                    conn.commit()
+                    st.success(f"Added {amt} credits to {target_u}")
+                    st.rerun()
+
+            except Exception as e:
+                st.error(f"Admin DB Error: {e}")
+            finally:
+                conn.close()
+
+        else:
+            # THIS 'else' MUST ALIGN VERTICALLY WITH 'if is_admin' ABOVE
             st.error("🚫 Administrative Access Denied.")
             st.info("Your account does not have the permissions required to view system infrastructure.")
 
