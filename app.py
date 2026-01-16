@@ -64,7 +64,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATABASE INITIALIZATION (FIXED FOR AUTHENTICATOR V0.3+) ---
+# --- 3. DATABASE INITIALIZATION (AUTHENTICATOR V0.3.0+ COMPLIANT) ---
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
@@ -92,11 +92,9 @@ def init_db():
                     credit_cost INTEGER, 
                     status TEXT)''')
     
-    # --- UPDATED HASHER LOGIC ---
-    # In v0.3.0+, we pass the list of passwords to the .hash() method directly
-    passwords_to_hash = ['admin123']
-    hashed_passwords = stauth.Hasher(passwords_to_hash).generate()
-    admin_hashed_pw = hashed_passwords[0]
+    # --- NEW HASHER SYNTAX ---
+    # In v0.3.0+, we use stauth.Hasher.hash() as a static method
+    admin_hashed_pw = stauth.Hasher.hash('admin123')
     
     # Initialize Root Admin
     c.execute("""INSERT OR IGNORE INTO users 
@@ -108,34 +106,30 @@ def init_db():
     conn.close()
 
 init_db()
+# --- 4. AUTHENTICATION ---
+db_credentials = get_db_creds()
+authenticator = stauth.Authenticate(
+    db_credentials, 
+    st.secrets['cookie']['name'], 
+    st.secrets['cookie']['key'], 
+    30
+)
 
-# --- 4. AUTHENTICATION (THE FIX) ---
-def get_db_creds():
-    conn = sqlite3.connect('breatheeasy.db')
-    df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
-    conn.close()
-    return {'usernames': {row['username']: {'email':row['email'], 'name':row['name'], 'password':row['password']} for _, row in df.iterrows()}}
-
-authenticator = stauth.Authenticate(get_db_creds(), st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
-
-# FIX: authenticator.login handles session state internally now.
+# New syntax: .login() no longer returns a tuple you can unpack
 if not st.session_state.get("authentication_status"):
     auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment", "❓ Recovery"])
     with auth_tabs[0]:
-        authenticator.login(location='main') # No unpacking variables here
+        # Just call it; it updates st.session_state internally
+        authenticator.login(location='main') 
+        
     with auth_tabs[1]:
-        st.subheader("Select Plan")
-        col1, col2 = st.columns(2)
-        col1.markdown('<div class="price-card">Basic $99</div>', unsafe_allow_html=True)
-        col2.markdown('<div class="price-card">Pro $249</div>', unsafe_allow_html=True)
-        if authenticator.register_user(location='main'):
-            st.success('Registered! Log in now.')
-    with auth_tabs[2]:
-        authenticator.forgot_password(location='main')
-    
-    # Block rest of app if not logged in
+        # Update your registration hashing if you have custom logic:
+        # new_hash = stauth.Hasher.hash(user_input_password)
+        pass
+
     if st.session_state["authentication_status"] is False:
         st.error('Username/password is incorrect')
+    
     st.stop()
 
 # --- 5. LOGGED-IN SESSION ---
