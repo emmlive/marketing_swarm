@@ -34,7 +34,7 @@ gemini_llm = LLM(
 search_tool = SerperDevTool(api_key=os.getenv("SERPER_API_KEY"))
 scrape_tool = ScrapeWebsiteTool()
 
-# --- 3. AGENT DEFINITIONS ---
+# --- 3. AGENT DEFINITIONS (VALIDATED WITH BACKSTORIES) ---
 def get_swarm_agents(inputs):
     biz = inputs.get('biz_name', 'The Business')
     city = inputs.get('city', 'the local area')
@@ -44,27 +44,52 @@ def get_swarm_agents(inputs):
     return {
         "analyst": Agent(
             role="Chief Market Strategist (McKinsey Level)",
-            goal=f"Identify high-value market entry gaps and price arbitrage opportunities for {biz} in {city}.",
-            backstory=f"You quantify 'Market Entry Gaps' and 'Competitor Fatigue'. Priority: {reqs}",
+            goal=f"Identify high-value market entry gaps for {biz} in {city}.",
+            backstory=f"You are a market scientist. You quantify 'Market Entry Gaps' and 'Competitor Fatigue'. Priority: {reqs}",
             tools=[search_tool, scrape_tool], llm=gemini_llm, verbose=True
         ),
         "vision_agent": Agent(
             role="Technical Visual Auditor & Forensic Analyst",
             goal=f"Analyze field photos to identify damage or defects for {biz}.",
-            backstory="Technical forensics expert. You provide 'Evidence of Need' reports.",
+            backstory="You are a technical forensics expert. You inspect photos and provide evidence-based reports.",
             llm=gemini_llm, verbose=True
         ),
         "creative": Agent(
             role="Multichannel Direct-Response Ad Architect",
             goal="Engineer deployable ad copy for Google Search, Facebook, and Instagram.",
-            backstory="Direct-response expert. You produce ready-to-paste ad sets.",
+            backstory="You are an expert copywriter specializing in character-limited ad formats and high-conversion hooks.",
             llm=gemini_llm, verbose=True
         ),
-        "seo_blogger": Agent(role="SEO Content Architect", goal="Compose high-authority technical articles.", backstory="E-E-A-T Specialist.", llm=gemini_llm, verbose=True),
-        "web_auditor": Agent(role="Conversion UX Auditor", goal=f"Diagnose technical conversion leaks on {url}.", tools=[scrape_tool], llm=gemini_llm, verbose=True),
-        "social_agent": Agent(role="Social Distribution Architect", goal="Repurpose strategy into a viral broadcast plan.", llm=gemini_llm, verbose=True),
-        "geo_specialist": Agent(role="GEO Specialist", goal=f"Optimize citation velocity in {city}.", llm=gemini_llm, verbose=True),
-        "strategist": Agent(role="Chief Growth Officer", goal="Synthesize all agent intelligence.", llm=gemini_llm, verbose=True)
+        "seo_blogger": Agent(
+            role="SEO Content Architect", 
+            goal="Compose high-authority technical articles.", 
+            backstory="Expert in E-E-A-T and Google Search Generative Experience optimization.", 
+            llm=gemini_llm, verbose=True
+        ),
+        "web_auditor": Agent(
+            role="Conversion UX Auditor", 
+            goal=f"Diagnose technical conversion leaks on {url}.", 
+            backstory="You identify digital friction points that prevent ROI.",
+            tools=[scrape_tool], llm=gemini_llm, verbose=True
+        ),
+        "social_agent": Agent(
+            role="Social Distribution Architect", 
+            goal="Repurpose strategy into a viral broadcast plan.", 
+            backstory="Expert in social media algorithms and viral hook engineering.",
+            llm=gemini_llm, verbose=True
+        ),
+        "geo_specialist": Agent(
+            role="GEO Specialist", 
+            goal=f"Optimize citation velocity in {city}.", 
+            backstory="Expert in Local Ranking Factors and AI-driven map discovery.",
+            llm=gemini_llm, verbose=True
+        ),
+        "strategist": Agent(
+            role="Chief Growth Officer", 
+            goal="Synthesize all agent intelligence into a roadmap.", 
+            backstory="The ultimate decision maker. You ensure all output aligns with the CEO's growth goals.",
+            llm=gemini_llm, verbose=True
+        )
     }
 
 # --- 4. THE STATEFUL WORKFLOW ---
@@ -80,7 +105,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         """Step 1: Filtered Discovery & Visual Forensics"""
         active_tasks = []
         
-        # ONLY run if explicitly toggled in Sidebar
         if self.toggles.get('analyst'):
             analyst_task = Task(
                 description=f"Identify 'Market Entry Gaps' and analyze competitor ad hooks in {self.inputs['city']}.",
@@ -106,15 +130,14 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             active_tasks.append(auditor_task)
 
         if active_tasks:
-            # Use only relevant agents to save memory/time
             active_agents = [task.agent for task in active_tasks]
             Crew(agents=active_agents, tasks=active_tasks, process=Process.sequential).kickoff()
             
-            # Save results to state if tasks were performed
             for task in active_tasks:
-                if "Market" in task.description: self.state.market_data = str(task.output.raw)
-                if "Forensic" in task.description or "visual" in task.description: self.state.vision_intel = str(task.output.raw)
-                if "conversion" in task.description: self.state.website_audit = str(task.output.raw)
+                out = str(task.output.raw)
+                if "Market" in task.description: self.state.market_data = out
+                if "Forensic" in task.description or "field photos" in task.description: self.state.vision_intel = out
+                if "conversion" in task.description: self.state.website_audit = out
             
         return "discovery_complete"
 
@@ -123,8 +146,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         """Step 2: Filtered Production & Ad Engineering"""
         production_tasks = []
         
-        # 1. ALWAYS Run Creative if it's not explicitly disabled, or handle via toggle
-        if self.toggles.get('builder'): # Mapping 'builder' toggle to Creative Agent
+        if self.toggles.get('builder'): 
             creative_task = Task(
                 description="""Engineer a Multichannel Ad Suite: 
                 1. Google (3 Headlines, 2 Desc), 2. Meta (Headline/Text), 3. Veo Prompt.""",
@@ -133,9 +155,8 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             )
             production_tasks.append(creative_task)
 
-        # 2. Add Optional production agents
         if self.toggles.get('seo'):
-            production_tasks.append(Task(description="Compose a technical SEO authority article.", agent=self.agents["seo_blogger"], expected_output="Technical article."))
+            production_tasks.append(Task(description="Compose a technical SEO article.", agent=self.agents["seo_blogger"], expected_output="Technical article."))
         if self.toggles.get('social'):
             production_tasks.append(Task(description="Create a 30-day viral schedule.", agent=self.agents["social_agent"], expected_output="Viral Hooks."))
         if self.toggles.get('geo'):
@@ -145,7 +166,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             active_agents = [task.agent for task in production_tasks]
             Crew(agents=active_agents, tasks=production_tasks, process=Process.sequential).kickoff()
             
-            # HARD MAPPING to ensure Creative Build is never "Pending" if run
             for task in production_tasks:
                 out = str(task.output.raw)
                 if "Multichannel" in task.description: self.state.ad_drafts = out
@@ -158,7 +178,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
     @listen("execution_complete")
     def phase_3_validation(self):
         """Step 3: ROI Roadmap Synthesis"""
-        # Only run Strategist if toggled
         if self.toggles.get('manager'):
             val_task = Task(
                 description="Synthesize all data into a 30-day ROI Growth Roadmap.",
@@ -173,11 +192,9 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
 # --- 5. EXECUTION WRAPPER ---
 def run_marketing_swarm(inputs):
-    # Initialize and execute the stateful flow
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
-    # Generate the high-level summary for the "Full Report" view
     formatted_string_report = f"""
 # 🚀 {inputs['biz_name']} | EXECUTIVE INTELLIGENCE SUMMARY
 
@@ -208,7 +225,6 @@ def run_marketing_swarm(inputs):
 {flow.state.production_schedule}
 """
 
-    # Return the data dictionary to app.py session state
     return {
         "analyst": flow.state.market_data,
         "ads": flow.state.competitor_ads,
