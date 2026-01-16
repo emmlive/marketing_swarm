@@ -64,16 +64,48 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATABASE INITIALIZATION ---
+# --- 3. DATABASE INITIALIZATION (FIXED FOR AUTHENTICATOR V0.3+) ---
 def init_db():
-    conn = sqlite3.connect('breatheeasy.db')
+    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, role TEXT, plan TEXT, credits INTEGER, logo_path TEXT, team_id TEXT, verified INTEGER DEFAULT 0)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS master_audit_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, user TEXT, action_type TEXT, target_biz TEXT, location TEXT, credit_cost INTEGER, status TEXT)''')
-    # Admin creation logic
-    hashed_pw = stauth.Hasher(['admin123']).generate()[0]
-    c.execute("INSERT OR IGNORE INTO users VALUES ('admin','admin@tech.ai','Admin',?,'admin','Unlimited',9999,'Logo1.jpeg','HQ_001',1)", (hashed_pw,))
-    conn.commit(); conn.close()
+    
+    # Create Tables
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+                    username TEXT PRIMARY KEY, 
+                    email TEXT, 
+                    name TEXT, 
+                    password TEXT, 
+                    role TEXT, 
+                    plan TEXT, 
+                    credits INTEGER, 
+                    logo_path TEXT, 
+                    team_id TEXT, 
+                    verified INTEGER DEFAULT 0)''')
+                    
+    c.execute('''CREATE TABLE IF NOT EXISTS master_audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                    timestamp TEXT, 
+                    user TEXT, 
+                    action_type TEXT, 
+                    target_biz TEXT, 
+                    location TEXT, 
+                    credit_cost INTEGER, 
+                    status TEXT)''')
+    
+    # --- UPDATED HASHER LOGIC ---
+    # In v0.3.0+, we pass the list of passwords to the .hash() method directly
+    passwords_to_hash = ['admin123']
+    hashed_passwords = stauth.Hasher(passwords_to_hash).generate()
+    admin_hashed_pw = hashed_passwords[0]
+    
+    # Initialize Root Admin
+    c.execute("""INSERT OR IGNORE INTO users 
+                 (username, email, name, password, role, plan, credits, logo_path, team_id, verified) 
+                 VALUES (?,?,?,?,'admin','Unlimited',9999,'Logo1.jpeg','HQ_001', 1)""", 
+              ('admin', 'admin@techinadvance.ai', 'Admin', admin_hashed_pw))
+    
+    conn.commit()
+    conn.close()
 
 init_db()
 
