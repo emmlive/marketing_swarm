@@ -15,7 +15,7 @@ load_dotenv(override=True)
 class SwarmState(BaseModel):
     market_data: str = "Analysis pending..."
     competitor_ads: str = "Ad tracking pending..."
-    vision_intel: str = "Visual audit pending..."  # FIXED: Ensures UI can always access this attribute
+    vision_intel: str = "Visual audit pending..." 
     ad_drafts: str = "Creative build pending..."
     website_audit: str = "Audit pending..."
     social_plan: str = "Social strategy pending..."
@@ -34,65 +34,66 @@ gemini_llm = LLM(
 search_tool = SerperDevTool(api_key=os.getenv("SERPER_API_KEY"))
 scrape_tool = ScrapeWebsiteTool()
 
-# --- 3. AGENT DEFINITIONS ---
+# --- 3. AGENT DEFINITIONS (OPTIMIZED FOR STRATEGIC DEPTH & FORENSICS) ---
 def get_swarm_agents(inputs):
     biz = inputs.get('biz_name', 'The Business')
     city = inputs.get('city', 'the local area')
     url = inputs.get('url', 'the provided website')
+    reqs = inputs.get('custom_reqs', 'Standard growth optimization.')
 
     return {
         "analyst": Agent(
             role="Chief Market Strategist (McKinsey Level)",
             goal=f"Identify high-value market entry gaps and price arbitrage opportunities for {biz} in {city}.",
-            backstory="Expert market scientist specializing in competitor fatigue and local vulnerabilities.",
+            backstory=f"""You are an expert market scientist. You quantify 'Market Entry Gaps' and 
+            'Competitor Fatigue' to find local vulnerabilities. Priority directives: {reqs}""",
             tools=[search_tool, scrape_tool], llm=gemini_llm, verbose=True
         ),
         "vision_agent": Agent(
-            role="Visual Identity Auditor",
-            goal=f"Analyze the visual psychological impact of competitor assets and {biz}'s current presence.",
-            backstory="Expert in design psychology and conversion-focused visual hierarchy.",
+            role="Technical Visual Auditor & Forensic Analyst",
+            goal=f"Analyze field photos (Roofing, HVAC, Construction) to identify damage or defects for {biz}.",
+            backstory="""You act as a technical forensics expert. You inspect photos (e.g. air ducts, roofing, 
+            damage) and provide an objective 'Evidence of Need' report to help close sales.""",
             llm=gemini_llm, verbose=True
         ),
         "creative": Agent(
-            role="Executive Creative Director",
-            goal="Engineer psychological ad hooks and high-end cinematic video concepts.",
-            backstory="Converts emotional triggers into precise cinematic scene descriptions for Veo video generation.",
+            role="Multichannel Direct-Response Ad Architect",
+            goal="Engineer deployable ad copy for Google Search, Facebook, and Instagram + Veo concepts.",
+            backstory="""Expert copywriter who understands platform constraints (character limits). 
+            You move users from 'Interest' to 'Action' with ready-to-paste ad sets.""",
             llm=gemini_llm, verbose=True
         ),
         "seo_blogger": Agent(
-            role="SEO Content Architect",
-            goal="Compose high-authority technical articles that secure AI search engine trust.",
-            backstory=f"Establishes {biz} as the definitive local leader through E-E-A-T technical authority content.",
+            role="SEO Content Architect (E-E-A-T Specialist)",
+            goal="Compose high-authority technical articles for SGE dominance.",
+            backstory=f"Establishes {biz} as the definitive local leader with technical authority content.",
             llm=gemini_llm, verbose=True
         ),
         "web_auditor": Agent(
             role="Conversion UX Auditor",
             goal=f"Diagnose technical conversion leaks on {url}.",
-            backstory="Identifies funnel leaks and provides developer-ready action items.",
+            backstory="Identifies digital funnel leaks and provides developer-ready action items.",
             tools=[scrape_tool], llm=gemini_llm, verbose=True
         ),
         "social_agent": Agent(
             role="Social Distribution Architect",
             goal="Repurpose strategy into a viral Omni-channel broadcast plan.",
-            backstory="Expert in viral hooks and deployment schedules.",
+            backstory="Expert in viral distribution mechanics and deployment schedules.",
             llm=gemini_llm, verbose=True
         ),
         "geo_specialist": Agent(
-            role="GEO Specialist",
-            goal=f"Optimize citation velocity and Map visibility for {biz} in {city}.",
-            backstory="Expert in Local Ranking Factors and AI Search (SGE) dominance.",
+            role="GEO Specialist (Local AI Search Optimization)",
+            goal=f"Optimize citation velocity and Map visibility in {city}.",
+            backstory="Expert in Local Ranking Factors and AI-driven local discovery.",
             llm=gemini_llm, verbose=True
         ),
         "strategist": Agent(
-            role="Chief Growth Officer",
-            goal="Synthesize all agent intelligence into a 30-day CEO roadmap.",
-            backstory="The ultimate decision maker validating every agent's work for ROI alignment.",
+            role="Chief Growth Officer (The Swarm Commander)",
+            goal="Synthesize all agent intelligence into a 30-day ROI growth roadmap.",
+            backstory=f"Ultimate decision maker. Validates work against CEO vision and: {reqs}.",
             llm=gemini_llm, verbose=True
         )
     }
-
-# --- 4. THE STATEFUL WORKFLOW ---
-
 
 class MarketingSwarmFlow(Flow[SwarmState]):
     def __init__(self, inputs):
@@ -103,17 +104,17 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
     @start()
     def phase_1_discovery(self):
-        """Step 1: Stakeholder Discovery, Ad Tracking & Visual Audit"""
+        """Step 1: Stakeholder Discovery, Ad Tracking & Visual Forensics"""
         analyst_task = Task(
-            description=f"Identify the 'Market Entry Gap' and analyze live ad hooks in {self.inputs['city']}.",
+            description=f"Identify 'Market Entry Gaps' and analyze competitor ad hooks in {self.inputs['city']}.",
             agent=self.agents["analyst"],
             expected_output="Markdown Report with Competitor Fatigue analysis and Psychological Ad Hook deconstruction."
         )
         
         vision_task = Task(
-            description=f"Perform a visual audit of competitors in the {self.inputs['industry']} space for {self.inputs['city']}.",
+            description=f"Analyze provided field photos (Roofing/HVAC/etc) for technical defects or rival brand weaknesses.",
             agent=self.agents["vision_agent"],
-            expected_output="Detailed breakdown of rival visual psychology and design gaps."
+            expected_output="Detailed Forensic Report identifying damage, severity scores, and design gaps."
         )
 
         active_tasks = [analyst_task, vision_task]
@@ -130,7 +131,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         Crew(agents=list(self.agents.values()), tasks=active_tasks, process=Process.sequential).kickoff()
         
         self.state.market_data = str(analyst_task.output.raw)
-        self.state.competitor_ads = "Analyzed within Market Data"
         self.state.vision_intel = str(vision_task.output.raw) 
         
         if auditor_task:
@@ -140,11 +140,18 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
     @listen("discovery_complete")
     def phase_2_execution(self):
-        """Step 2: Content Engineering & Production"""
+        """Step 2: Content Engineering & Ready-to-Push Ad Production"""
+        
+        
         creative_task = Task(
-            description="Develop 3 'Pain-Point' ad frameworks and a cinematic 'Video Prompt:' for Veo.",
+            description="""Engineer a Multichannel Ad Suite for the business:
+            1. GOOGLE SEARCH: 3 Headlines (30 char), 2 Descriptions (90 char).
+            2. META (FB/IG): 1 Emotional Headline, 1 Long-form Primary Text.
+            3. VEO: 1 High-fidelity Cinematic Video Scene Description.""",
             agent=self.agents["creative"],
-            expected_output="Executive Creative Brief with cinematic video directions."
+            expected_output="""Markdown table formatted as:
+            | Platform | Component | Copy/Prompt |
+            | :--- | :--- | :--- |"""
         )
         
         production_tasks = [creative_task]
@@ -184,15 +191,17 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
     @listen("execution_complete")
     def phase_3_validation(self):
-        """Step 3: CEO Level Synthesis & ROI Roadmap"""
+        """Step 3: CEO Level Synthesis & Phased ROI Roadmap"""
         val_task = Task(
             description="Synthesize all data into a 30-day ROI Growth Roadmap.",
             agent=self.agents["strategist"],
             expected_output="Master Growth Brief: Milestones and ROI Projections."
         )
         result = Crew(agents=[self.agents["strategist"]], tasks=[val_task]).kickoff()
+        
         self.state.strategist_brief = str(result)
         self.state.production_schedule = str(result)
+        
         return "swarm_finished"
 
 # --- 5. EXECUTION WRAPPER ---
@@ -207,14 +216,14 @@ def run_marketing_swarm(inputs):
 ### Strategic Market Analysis
 {flow.state.market_data}
 
-### 👁️ Visual Intelligence & Rival Asset Audit
+### 👁️ Visual Forensics & Field Audit
 {flow.state.vision_intel}
 
 ### Technical Website Audit
 {flow.state.website_audit}
 
-## 📝 PHASE 2: CONTENT ENGINEERING
-### Branded Creative Concepts
+## 📝 PHASE 2: CONTENT & MULTI-PLATFORM ADS
+### Deployable Ad Suite (Google, FB, IG)
 {flow.state.ad_drafts}
 
 ### Authority SEO Content
