@@ -84,24 +84,81 @@ def init_db():
 
 init_db()
 
-# --- 4. AUTHENTICATION ---
+# --- 4. AUTHENTICATION & ENROLLMENT SUITE ---
 def get_db_creds():
     conn = sqlite3.connect('breatheeasy.db')
     df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
     conn.close()
     return {'usernames': {row['username']: {'email':row['email'], 'name':row['name'], 'password':row['password']} for _, row in df.iterrows()}}
 
-authenticator = stauth.Authenticate(get_db_creds(), st.secrets['cookie']['name'], st.secrets['cookie']['key'], 30)
+authenticator = stauth.Authenticate(
+    get_db_creds(), 
+    st.secrets['cookie']['name'], 
+    st.secrets['cookie']['key'], 
+    30
+)
 
+# If not logged in, show the full gateway
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
-    auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment"])
-    with auth_tabs[0]: authenticator.login(location='main')
-    with auth_tabs[1]: 
+    auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment", "🤝 Join Team", "❓ Recovery"])
+    
+    with auth_tabs[0]: 
+        authenticator.login(location='main')
+    
+    with auth_tabs[1]:
+        st.subheader("Select Your Growth Tier")
+        # RESTORED: Pricing Packages
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown('<div class="price-card"><h3>Basic</h3><h2>$99</h2><p>50 Credits/mo</p></div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown('<div class="price-card" style="border-color:#7C3AED;"><h3>Pro</h3><h2>$249</h2><p>150 Credits/mo</p></div>', unsafe_allow_html=True)
+        with col3:
+            st.markdown('<div class="price-card"><h3>Enterprise</h3><h2>$499</h2><p>Unlimited*</p></div>', unsafe_allow_html=True)
+        
+        plan = st.selectbox("Confirm Plan", ["Basic", "Pro", "Enterprise"])
         res = authenticator.register_user(location='main')
-        if res: st.info("Enrollment successful. Please log in.")
-    st.stop()
+        if res:
+            e, u, n = res
+            raw_pw = st.text_input("Create Security Password", type="password", key="reg_pw")
+            if st.button("Finalize Enrollment & Pay"):
+                h = stauth.Hasher([raw_pw]).generate()[0]
+                # Map credits to plan
+                credit_map = {"Basic": 50, "Pro": 150, "Enterprise": 9999}
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("""
+                    INSERT INTO users (username, email, name, password, role, plan, credits, logo_path, team_id, verified) 
+                    VALUES (?,?,?,?,'member',?,?, 'Logo1.jpeg', ?, 0)
+                """, (u, e, n, h, plan, credit_map[plan], f"TEAM_{u}"))
+                conn.commit()
+                conn.close()
+                st.success("Account created! Verify your email to begin.")
+                st.rerun()
 
+    with auth_tabs[2]:
+        st.subheader("Join Existing Team")
+        invite_code = st.text_input("Enter Team ID (e.g., TEAM_admin)")
+        if st.button("Request Access"):
+            st.info("Request sent to Team Admin.")
+
+    with auth_tabs[3]:
+        # RESTORED: Forgot Password / Username
+        try:
+            username_to_re = authenticator.forgot_username()
+            if username_to_re:
+                st.success(f"Username found: {username_to_re}")
+        except Exception as e:
+            st.error(e)
+            
+        try:
+            res_pw, msg_pw = authenticator.forgot_password()
+            if res_pw:
+                st.success("Reset link sent to registered email.")
+        except Exception as e:
+            st.error(e)
+
+    st.stop() # Prevents rest of app from loading until login is successful
 # --- 5. LOGGED-IN DATA FETCH ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
