@@ -72,34 +72,49 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATABASE INITIALIZATION (VERIFIED & SECURED) ---
+# --- 3. DATABASE INITIALIZATION (ENTERPRISE & AUDIT READY) ---
 def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
     
-    # 1. Create Core Tables
+    # 3A. CORE USER REGISTRY
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, 
                   role TEXT, plan TEXT, credits INTEGER DEFAULT 0, 
                   logo_path TEXT, team_id TEXT)''')
     
+    # 3B. STRATEGIC LEADS & KANBAN DATA
     c.execute('''CREATE TABLE IF NOT EXISTS leads 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, 
                   industry TEXT, service TEXT, city TEXT, content TEXT, 
                   team_id TEXT, status TEXT DEFAULT 'Discovery')''')
     
+    # 3C. MASTER AUDIT LOGS (NEW: SPRINT 4 INFRASTRUCTURE)
+    # This tracks every technical forensic and ad generation event for Admin review
+    c.execute('''CREATE TABLE IF NOT EXISTS master_audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT,
+                    user TEXT,
+                    action_type TEXT,
+                    target_biz TEXT,
+                    location TEXT,
+                    credit_cost INTEGER,
+                    status TEXT
+                )''')
+
+    # 3D. LEGACY SYSTEM LOGS
     c.execute('''CREATE TABLE IF NOT EXISTS system_logs 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, 
                   action TEXT, user TEXT, details TEXT)''')
     
-    # 2. Add 'verified' column safely if it doesn't exist
+    # 3E. SAFETY MIGRATION: ADD 'VERIFIED' COLUMN IF MISSING
     try:
         c.execute("ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
-        # This means the column already exists, so we just skip it
+        # Column already exists, proceeding safely
         pass
     
-    # 3. Insert Root Admin
+    # 3F. INITIALIZE ROOT ADMIN (AUTO-VERIFIED)
     hashed_pw = stauth.Hasher.hash('admin123')
     c.execute("""INSERT OR IGNORE INTO users 
                  (username, email, name, password, role, plan, credits, logo_path, team_id, verified) 
@@ -109,6 +124,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+# Execute Initialization
 init_db()
 
 # --- 4. AUTHENTICATION ---
@@ -240,29 +256,83 @@ with st.sidebar:
 
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 7. SWARM EXECUTION ENGINE (ERROR-RESISTANT) ---
+# --- 7. SWARM EXECUTION ENGINE (ENTERPRISE LOGGING) ---
 if run_btn:
     # Validation
     if not biz_name or not full_loc:
-        st.error("❌ Identification required.")
+        st.error("❌ Identification required: Please provide Brand Name and Location.")
+    elif user_row['credits'] <= 0:
+        st.error("❌ Out of credits: Please contact your administrator for a credit injection.")
     else:
         with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
             try:
-                # We pass the user_requirements to the backend
+                # 7A. Execute Strategic Logic via main.py
                 report = run_marketing_swarm({
-                    'city': full_loc, 'industry': final_ind, 'service': svc, 
-                    'biz_name': biz_name, 'url': audit_url, 'toggles': toggles,
-                    'custom_reqs': user_requirements # NEW: Passed to main.py
+                    'city': full_loc, 
+                    'industry': final_ind, 
+                    'service': svc, 
+                    'biz_name': biz_name, 
+                    'url': audit_url, 
+                    'toggles': toggles,
+                    'custom_reqs': user_requirements 
                 })
                 
+                # 7B. Update Session State for UI Rendering
                 st.session_state.report, st.session_state.gen = report, True
-                # ... Database logic ...
-                status.update(label="✅ Swarm Complete!", state="complete")
+                
+                # 7C. ATOMIC INFRASTRUCTURE TRANSACTION
+                conn = sqlite3.connect('breatheeasy.db')
+                cursor = conn.cursor()
+                try:
+                    # 1. Deduct 1 Enterprise Credit
+                    cursor.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
+                    
+                    # 2. Record Lead Entry for Kanban Pipeline
+                    cursor.execute("""
+                        INSERT INTO leads (date, user, industry, service, city, content, team_id, status) 
+                        VALUES (?,?,?,?,?,?,?,?)
+                    """, (
+                        datetime.now().strftime("%Y-%m-%d"), 
+                        user_row['username'], 
+                        final_ind, 
+                        svc, 
+                        full_loc, 
+                        str(report), 
+                        user_row['team_id'], 
+                        'Discovery'
+                    ))
+
+                    # 3. RECORD MASTER AUDIT LOG (Sprint 4 Infrastructure)
+                    cursor.execute("""
+                        INSERT INTO master_audit_logs 
+                        (timestamp, user, action_type, target_biz, location, credit_cost, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        user_row['username'],
+                        "OMNI_SWARM_LAUNCH",
+                        biz_name,
+                        full_loc,
+                        1,
+                        "SUCCESS"
+                    ))
+                    
+                    conn.commit()
+                except Exception as db_e:
+                    conn.rollback()
+                    raise db_e
+                finally:
+                    conn.close()
+                
+                # 7D. Finalize UI State
+                status.update(label="✅ Strategy Engine Synced!", state="complete")
+                st.toast(f"Swarm for {biz_name} successfully logged and initialized.")
                 st.rerun()
+
             except Exception as e:
-                status.update(label="❌ Backend Error Detected", state="error")
-                st.error(f"The Swarm encountered an issue: {e}")
-                # We do NOT st.stop() here so the rest of the UI (Tabs) still renders
+                status.update(label="❌ Swarm Interrupted", state="error")
+                st.error(f"The Swarm encountered a backend issue: {e}")
+                # Rest of UI continues to render defensively
 
 # --- 6. MULTIMODAL COMMAND CENTER (DEFENSIVE RENDERING) ---
 
@@ -289,36 +359,72 @@ TAB = {name: tabs[i] for i, name in enumerate(tab_titles)}
 
 with TAB["📖 Guide"]:
     st.header("📖 Agent Intelligence Manual")
-    if not user_is_verified:
-        st.warning("🔒 Access Restricted: Please verify your email via the sidebar to unlock full agent directives.")
+    st.info("The Omni-Swarm engine coordinates 8 specialized AI agents to deconstruct markets and engineer high-ticket growth.")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        with st.expander("🕵️ Intelligence Seats", expanded=True):
-            st.markdown("- **Analyst**: Market gaps and pricing.\n- **Ad Tracker**: Hook deconstruction and competitor spend.")
-    with col2:
-        with st.expander("👔 Strategic Seats", expanded=True):
-            st.markdown("- **Strategist**: 30-day ROI roadmap.\n- **SEO**: Authority articles and domain dominance.")
+    g_col1, g_col2 = st.columns(2)
+    with g_col1:
+        with st.expander("🕵️ Intelligence & Audit Cluster", expanded=True):
+            st.markdown("""
+            - **Market Analyst:** Quantifies the 'Market Entry Gap' and competitor pricing arbitrage.
+            - **Forensic Vision:** Diagnoses technical defects in field photos and deconstructs rival design psychology.
+            - **Ad Tracker:** Performs psychological teardowns of live competitor hooks and spend patterns.
+            - **Web Auditor:** Identifies conversion friction and technical 'money leaks' on any URL.
+            """)
+    with g_col2:
+        with st.expander("👔 Production & Strategy Cluster", expanded=True):
+            st.markdown("""
+            - **Creative Director:** Engineers cross-platform ad copy (Google/Meta) and cinematic Veo video prompts.
+            - **SEO Architect:** Crafts technical E-E-A-T articles to dominate AI-Search (SGE) results.
+            - **GEO Specialist:** Optimizes local 'Citation Velocity' and AI-Map visibility.
+            - **Swarm Strategist:** Synthesizes all intelligence into a 30-Day Phased ROI Roadmap.
+            """)
 
 def render_agent(tab_key, title, report_key):
+    # --- SPRINT 3: IMPLEMENTATION MANUALS ---
+    DEPLOYMENT_GUIDES = {
+        "analyst": "Identify the 'Price-Gap' in the competitor table. Use this to undercut rivals while maintaining premium positioning in your high-margin services.",
+        "ads": "Copy these platform-specific ad sets directly into Google or Meta Ads Manager. The psychological hooks are engineered to disrupt local rival traffic.",
+        "creative": "Implement these multi-channel copy sets. Use the cinematic Veo prompts to generate high-fidelity video ads for Meta Reels or YouTube Shorts.",
+        "strategist": "This 30-day roadmap is your CEO-level execution checklist. Present the ROI projections to stakeholders to justify marketing spend allocation.",
+        "social": "Deploy these viral hooks across LinkedIn, IG, and X using the distribution schedule to hit your audience during peak local engagement hours.",
+        "geo": "Update your Google Business Profile keywords and local citation metadata based on these technical AI-search ranking factors.",
+        "audit": "Forward this technical brief to your web development team. It contains specific action items to patch 'money leaks' and increase conversion speed.",
+        "seo": "Publish this technical article to your domain. It is optimized with E-E-A-T markers to secure high-authority rankings in AI Search Generative Experience (SGE)."
+    }
+
     with TAB[tab_key]:
         st.subheader(f"{title} Command Seat")
         
-        # Security & Verification Check
+        # 1. SECURITY & VERIFICATION CHECK
         if not user_is_verified:
             st.error("🛡️ Verification Required: This agent's seat is locked until email verification is complete.")
             return
 
+        # 2. STRATEGIC DEPLOYMENT GUIDE (World-Class SaaS UI)
+        guide_text = DEPLOYMENT_GUIDES.get(report_key, "Review this report to align with your growth strategy.")
+        st.markdown(f"""
+            <div style="background-color:rgba(37, 99, 235, 0.1); padding:15px; border-radius:10px; border-left: 6px solid #2563EB; margin-bottom:25px;">
+                <b style="color:#2563EB; font-size: 1.1rem;">🚀 DEPLOYMENT GUIDE:</b><br>
+                <span style="color:#1E293B; font-size: 0.95rem;">{guide_text}</span>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # 3. AGENT INTELLIGENCE RENDERING
         if st.session_state.gen:
             # DEFENSIVE FETCH: Prevents AttributeError if backend fails to return a key
             content = st.session_state.report.get(report_key, "Intelligence generation for this agent is pending or unavailable.")
-            edited = st.text_area(f"Refine {title}", value=str(content), height=350, key=f"edit_{report_key}")
             
+            # Interactive Refinement Area
+            edited = st.text_area(f"Refine {title} Output", value=str(content), height=350, key=f"edit_{report_key}")
+            
+            # Multimodal Export Engine
             c1, c2 = st.columns(2)
-            with c1: st.download_button("📄 Word", create_word_doc(edited, title), f"{title}.docx", key=f"w_{report_key}")
-            with c2: st.download_button("📕 PDF", create_pdf(edited, svc, full_loc), f"{title}.pdf", key=f"p_{report_key}")
+            with c1: 
+                st.download_button("📄 Word Brief", create_word_doc(edited, title), f"{title}_Brief.docx", key=f"w_{report_key}")
+            with c2: 
+                st.download_button("📕 PDF Intelligence", create_pdf(edited, svc, full_loc), f"{title}_Report.pdf", key=f"p_{report_key}")
         else: 
-            st.info(f"Launch swarm to populate the {title} seat.")
+            st.info(f"Launch the Omni-Swarm to populate the {title} Command Seat.")
 
 # Render Standard Agents
 for t, k in [("🕵️ Analyst","analyst"), ("📺 Ads","ads"), ("🎨 Creative","creative"), ("👔 Strategist","strategist"), ("✍ Social","social"), ("🧠 GEO","geo"), ("🌐 Auditor","audit"), ("✍ SEO","seo")]:
@@ -327,29 +433,64 @@ for t, k in [("🕵️ Analyst","analyst"), ("📺 Ads","ads"), ("🎨 Creative"
 # Render Specialty Tabs
 with TAB["👁️ Vision"]:
     st.subheader("👁️ Vision Inspector")
+    
+    # 1. SECURITY & VERIFICATION CHECK
     if not user_is_verified:
-        st.error("🛡️ Verification Required to access Vision Intelligence.")
+        st.error("🛡️ Verification Required: Vision Intelligence is locked until email verification is complete.")
     else:
+        # 2. DEPLOYMENT GUIDE: TECHNICAL FORENSICS
+        st.markdown("""
+            <div style="background-color:rgba(37, 99, 235, 0.1); padding:15px; border-radius:10px; border-left: 6px solid #2563EB; margin-bottom:25px;">
+                <b style="color:#2563EB; font-size: 1.1rem;">🚀 DEPLOYMENT GUIDE:</b><br>
+                <span style="color:#1E293B; font-size: 0.95rem;">
+                <b>Field Analysis:</b> Use the 'Severity Score' to justify urgent repairs or service calls. 
+                Share the 'Evidence of Need' summary directly with customers to build trust via transparency.
+                </span>
+            </div>
+        """, unsafe_allow_html=True)
+
         if st.session_state.gen:
             v_intel = st.session_state.report.get('vision_intel', "Vision analysis data not found in state.")
             st.markdown(f'<div class="executive-brief">{v_intel}</div>', unsafe_allow_html=True)
         
-        v_file = st.file_uploader("Upload Evidence for Analysis", type=['png','jpg','jpeg'], key="vis_up_main")
-        if v_file: st.image(v_file, use_container_width=True, caption="Target Asset")
+        # 3. FILE UPLOADER FOR CUSTOMER EVIDENCE
+        v_file = st.file_uploader("Upload Evidence for Analysis (Roofing, HVAC, Damage)", type=['png','jpg','jpeg'], key="vis_up_main")
+        if v_file: 
+            st.image(v_file, use_container_width=True, caption="Target Asset for Forensic Swarm")
 
 with TAB["🎬 Veo Studio"]:
     st.subheader("🎬 Veo Cinematic Studio")
+    
+    # 1. SECURITY & VERIFICATION CHECK
     if not user_is_verified:
-        st.error("🛡️ Verification Required to access Cinematic Production.")
-    elif st.session_state.gen:
-        creative_context = st.session_state.report.get('creative', '')
-        v_prompt = st.text_area("Video Scene Description", value=str(creative_context)[:300], height=150, key="veo_prompt_area")
-        if st.button("📽️ GENERATE AD", key="veo_gen_btn_main"):
-            with st.spinner("Rendering cinematic asset..."):
-                v_vid = generate_cinematic_ad(v_prompt)
-                if v_vid: st.video(v_vid)
-    else: 
-        st.warning("Launch swarm first to generate creative context for video.")
+        st.error("🛡️ Verification Required: Cinematic Production is locked until email verification is complete.")
+    else:
+        # 2. DEPLOYMENT GUIDE: VIDEO MARKETING
+        st.markdown("""
+            <div style="background-color:rgba(124, 58, 237, 0.1); padding:15px; border-radius:10px; border-left: 6px solid #7C3AED; margin-bottom:25px;">
+                <b style="color:#7C3AED; font-size: 1.1rem;">🎬 PRODUCTION GUIDE:</b><br>
+                <span style="color:#1E293B; font-size: 0.95rem;">
+                Deploy these cinematic assets as <b>Meta Reels, YouTube Shorts, or Website Backgrounds.</b> 
+                The prompt is engineered for Google's Veo model to ensure high-fidelity brand storytelling.
+                </span>
+            </div>
+        """, unsafe_allow_html=True)
+
+        if st.session_state.gen:
+            creative_context = st.session_state.report.get('creative', '')
+            v_prompt = st.text_area("Video Scene Description (Refine for Cinematic Output)", 
+                                     value=str(creative_context)[:500], 
+                                     height=150, 
+                                     key="veo_prompt_area")
+            
+            if st.button("📽️ GENERATE CINEMATIC AD", key="veo_gen_btn_main", use_container_width=True):
+                with st.spinner("Veo Engine Rendering Cinematic Asset..."):
+                    v_vid = generate_cinematic_ad(v_prompt)
+                    if v_vid: 
+                        st.video(v_vid)
+                        st.success("Cinematic Asset Rendered Successfully.")
+        else: 
+            st.warning("Launch the Omni-Swarm first to generate creative context and specific scene descriptions for the Veo Studio.")
 
 # Admin Tab Rendering (Only if it exists in the map)
 if "⚙ Admin" in TAB:
@@ -386,21 +527,91 @@ with TAB["🤝 Team Intel"]:
 # --- 9C. GOD-MODE ADMIN (ISOLATED) ---
 if is_admin:
     with TAB["⚙ Admin"]:
-        st.header("⚙️ God-Mode Admin Control")
+        st.header("⚙️ God-Mode Management")
+        st.warning("⚡ Root Access: You are viewing global system infrastructure and audit trails.")
+        
+        # --- 1. GLOBAL INFRASTRUCTURE METRICS ---
         conn = sqlite3.connect('breatheeasy.db')
-        all_u = pd.read_sql_query("SELECT username, email, credits FROM users", conn)
-        st.dataframe(all_u, use_container_width=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            u_del = st.text_input("User to Purge", placeholder="Username")
-            if st.button("❌ Terminate"):
+        
+        # Fetch data for metrics
+        total_swarms = pd.read_sql_query("SELECT COUNT(*) as count FROM master_audit_logs", conn).iloc[0]['count']
+        total_users = pd.read_sql_query("SELECT COUNT(*) as count FROM users", conn).iloc[0]['count']
+        
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Global Swarm Count", total_swarms)
+        m2.metric("Total Registered Users", total_users)
+        m3.metric("System Integrity", "Verified", delta="SSL/DB Active")
+
+        st.divider()
+
+        # --- 2. MASTER AUDIT LOG TABLE ---
+        st.subheader("📊 Global Activity Audit Trail")
+        st.write("Real-time tracking of all forensic inspections and ad generations.")
+        
+        # Query the new Sprint 4 table
+        audit_df = pd.read_sql_query("""
+            SELECT timestamp, user, action_type, target_biz, location, credit_cost, status 
+            FROM master_audit_logs 
+            ORDER BY id DESC LIMIT 500
+        """, conn)
+
+        if not audit_df.empty:
+            # Render the Live Table
+            st.dataframe(
+                audit_df, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "timestamp": "Execution Time",
+                    "user": "Account",
+                    "action_type": "Operation",
+                    "target_biz": "Target Brand",
+                    "location": "Market",
+                    "credit_cost": "Cost (Cr)",
+                    "status": st.column_config.StatusColumn("Status")
+                }
+            )
+            
+            # --- 3. CSV EXPORT ENGINE ---
+            csv_data = audit_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Export Full Audit Log (CSV)",
+                data=csv_data,
+                file_name=f"audit_log_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                help="Download the complete immutable trail for compliance and billing review."
+            )
+        else:
+            st.info("No system activity recorded in master_audit_logs yet.")
+
+        st.divider()
+
+        # --- 4. USER REGISTRY & TERMINATION ---
+        st.subheader("👤 User Management")
+        all_u = pd.read_sql_query("SELECT username, email, credits, plan, verified FROM users", conn)
+        st.dataframe(all_u, use_container_width=True, hide_index=True)
+        
+        col_adm1, col_adm2 = st.columns(2)
+        with col_adm1:
+            st.write("**Terminate User Access**")
+            u_del = st.text_input("Exact Username to Purge", placeholder="Enter username", key="admin_purge_user")
+            if st.button("❌ Execute Permanent Purge", type="primary"):
                 if u_del != 'admin':
                     conn.execute("DELETE FROM users WHERE username=?", (u_del,))
-                    conn.commit(); st.success("Purged."); st.rerun()
-        with col2:
-            target = st.selectbox("Injection Target", all_u['username'], key="admin_inj_target")
-            amt = st.number_input("Credits", value=50, key="admin_inj_amt")
-            if st.button("💉 Inject"):
+                    conn.commit()
+                    st.success(f"User {u_del} wiped from registry.")
+                    st.rerun()
+                else:
+                    st.error("Root Admin protection active.")
+
+        with col_adm2:
+            st.write("**Credit Injection**")
+            target = st.selectbox("Target Account", all_u['username'], key="admin_credit_target")
+            amt = st.number_input("Injection Volume", value=100, step=50, key="admin_credit_amt")
+            if st.button("💉 Finalize Injection"):
                 conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amt, target))
-                conn.commit(); st.success("Injected."); st.rerun()
+                conn.commit()
+                st.success(f"Injected {amt} credits into {target}.")
+                st.rerun()
+        
         conn.close()
