@@ -570,7 +570,7 @@ with TAB["🤝 Team Intel"]:
                         conn.commit(); st.rerun()
     conn.close()
 
-# --- 9C. GOD-MODE ADMIN (ISOLATED) ---
+# --- 9C. GOD-MODE ADMIN (ISOLATED & STABILIZED) ---
 if is_admin:
     with TAB["⚙ Admin"]:
         st.header("⚙️ God-Mode Management")
@@ -590,11 +590,10 @@ if is_admin:
 
         st.divider()
 
-        # --- 2. MASTER AUDIT LOG TABLE ---
+        # --- 2. MASTER AUDIT LOG TABLE (FIXED COLUMN CONFIG) ---
         st.subheader("📊 Global Activity Audit Trail")
-        st.write("Real-time tracking of all forensic inspections and ad generations.")
         
-        # Query the new Sprint 4 table
+        # Query the Sprint 4 Master Audit Table
         audit_df = pd.read_sql_query("""
             SELECT timestamp, user, action_type, target_biz, location, credit_cost, status 
             FROM master_audit_logs 
@@ -602,7 +601,7 @@ if is_admin:
         """, conn)
 
         if not audit_df.empty:
-            # Render the Live Table
+            # Render with Stable Column Config to avoid AttributeError
             st.dataframe(
                 audit_df, 
                 use_container_width=True, 
@@ -614,7 +613,11 @@ if is_admin:
                     "target_biz": "Target Brand",
                     "location": "Market",
                     "credit_cost": "Cost (Cr)",
-                    "status": st.column_config.StatusColumn("Status")
+                    "status": st.column_config.SelectboxColumn(
+                        "Status",
+                        options=["SUCCESS", "FAILED", "PENDING"],
+                        width="small"
+                    )
                 }
             )
             
@@ -624,40 +627,27 @@ if is_admin:
                 label="📥 Export Full Audit Log (CSV)",
                 data=csv_data,
                 file_name=f"audit_log_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv",
-                help="Download the complete immutable trail for compliance and billing review."
+                mime="text/csv"
             )
         else:
             st.info("No system activity recorded in master_audit_logs yet.")
 
         st.divider()
-
-        # --- 4. USER REGISTRY & TERMINATION ---
-        st.subheader("👤 User Management")
-        all_u = pd.read_sql_query("SELECT username, email, credits, plan, verified FROM users", conn)
-        st.dataframe(all_u, use_container_width=True, hide_index=True)
         
-        col_adm1, col_adm2 = st.columns(2)
-        with col_adm1:
-            st.write("**Terminate User Access**")
-            u_del = st.text_input("Exact Username to Purge", placeholder="Enter username", key="admin_purge_user")
-            if st.button("❌ Execute Permanent Purge", type="primary"):
-                if u_del != 'admin':
-                    conn.execute("DELETE FROM users WHERE username=?", (u_del,))
-                    conn.commit()
-                    st.success(f"User {u_del} wiped from registry.")
-                    st.rerun()
-                else:
-                    st.error("Root Admin protection active.")
-
-        with col_adm2:
-            st.write("**Credit Injection**")
-            target = st.selectbox("Target Account", all_u['username'], key="admin_credit_target")
-            amt = st.number_input("Injection Volume", value=100, step=50, key="admin_credit_amt")
-            if st.button("💉 Finalize Injection"):
-                conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amt, target))
-                conn.commit()
-                st.success(f"Injected {amt} credits into {target}.")
-                st.rerun()
+        # --- 4. USER MANAGEMENT (CREDITS & TERMINATION) ---
+        st.subheader("👤 User Registry Management")
+        all_users = pd.read_sql_query("SELECT username, email, credits, plan, verified FROM users", conn)
+        st.dataframe(all_users, use_container_width=True, hide_index=True)
         
+        # Credit Injection Logic
+        st.write("**Credit Injection & User Access**")
+        target_u = st.selectbox("Select User", all_users['username'], key="admin_target")
+        amt = st.number_input("Credits to Add", value=10, step=10)
+        
+        if st.button("Inject Credits"):
+            conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amt, target_u))
+            conn.commit()
+            st.success(f"Successfully injected {amt} credits to {target_u}")
+            st.rerun()
+
         conn.close()
