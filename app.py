@@ -12,10 +12,11 @@ from fpdf import FPDF
 from io import BytesIO
 from PIL import Image
 
-# --- 0. SPRINT 5: PERFORMANCE HELPERS & GEO-CACHING ---
+# --- SECTION #0: SPRINT 5 PERFORMANCE HELPERS & GEO-CACHING ---
+
 @st.cache_data(ttl=3600)
 def get_geo_data():
-    """Sprint 5: High-speed geographic lookup dictionary"""
+    """Sprint 5: High-speed geographic lookup dictionary for dynamic dropdowns"""
     return {
         "Alabama": ["Birmingham", "Huntsville", "Mobile"],
         "Arizona": ["Phoenix", "Scottsdale", "Tucson"],
@@ -26,7 +27,7 @@ def get_geo_data():
     }
 
 def check_system_health():
-    """Sprint 5: Technical forensic heartbeat monitor"""
+    """Sprint 5: Technical forensic heartbeat monitor for API and DB status"""
     health = {
         "Gemini 2.0": os.getenv("GOOGLE_API_KEY") is not None,
         "Serper API": os.getenv("SERPER_API_KEY") is not None,
@@ -40,6 +41,37 @@ def is_verified(username):
     res = conn.execute("SELECT verified FROM users WHERE username = ?", (username,)).fetchone()
     conn.close()
     return res[0] == 1 if res else False
+
+def toggle_theme():
+    """Sprint 1: Handles UI color mode switching between Light and Dark"""
+    if 'theme' not in st.session_state:
+        st.session_state.theme = 'light'
+    st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
+
+def update_account_settings(username, new_email, new_name):
+    """Sprint 4: Enterprise profile management for the Team Intel tab"""
+    conn = sqlite3.connect('breatheeasy.db')
+    conn.execute("UPDATE users SET email = ?, name = ? WHERE username = ?", (new_email, new_name, username))
+    conn.commit()
+    conn.close()
+    st.success("Enterprise Profile Updated Successfully!")
+
+# --- EXPORT ENGINE HELPERS (SPRINT 3) ---
+def create_word_doc(content, title):
+    from docx import Document
+    doc = Document()
+    doc.add_heading(f'Intelligence Brief: {title}', 0)
+    doc.add_paragraph(str(content))
+    bio = BytesIO(); doc.save(bio); return bio.getvalue()
+
+def create_pdf(content, title):
+    from fpdf import FPDF
+    pdf = FPDF(); pdf.add_page(); pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, f'Intelligence Brief: {title}', 0, 1, 'C')
+    pdf.set_font("Arial", size=10)
+    clean_text = str(content).encode('latin-1', 'ignore').decode('latin-1')
+    pdf.multi_cell(0, 7, txt=clean_text)
+    return pdf.output(dest='S').encode('latin-1')
 
 # --- 1. SPRINT 1: EXECUTIVE UI & BRAND IDENTITY ---
 st.set_page_config(page_title="TechInAdvance AI | Enterprise Command", page_icon="Logo1.jpeg", layout="wide")
