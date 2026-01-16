@@ -69,42 +69,41 @@ def init_db():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
     
-    # Create Tables
+    # 1. Ensure CORE TABLES exist
     c.execute('''CREATE TABLE IF NOT EXISTS users (
-                    username TEXT PRIMARY KEY, 
-                    email TEXT, 
-                    name TEXT, 
-                    password TEXT, 
-                    role TEXT, 
-                    plan TEXT, 
-                    credits INTEGER, 
-                    logo_path TEXT, 
-                    team_id TEXT, 
-                    verified INTEGER DEFAULT 0)''')
+                    username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, 
+                    role TEXT, plan TEXT, credits INTEGER, logo_path TEXT, 
+                    team_id TEXT, verified INTEGER DEFAULT 0)''')
+                    
+    c.execute('''CREATE TABLE IF NOT EXISTS leads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, user TEXT, 
+                    industry TEXT, service TEXT, city TEXT, content TEXT, 
+                    team_id TEXT, status TEXT DEFAULT 'Discovery')''')
                     
     c.execute('''CREATE TABLE IF NOT EXISTS master_audit_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                    timestamp TEXT, 
-                    user TEXT, 
-                    action_type TEXT, 
-                    target_biz TEXT, 
-                    location TEXT, 
-                    credit_cost INTEGER, 
-                    status TEXT)''')
-    
-    # --- NEW HASHER SYNTAX ---
-    # In v0.3.0+, we use stauth.Hasher.hash() as a static method
-    admin_hashed_pw = stauth.Hasher.hash('admin123')
-    
-    # Initialize Root Admin
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, user TEXT, 
+                    action_type TEXT, target_biz TEXT, location TEXT, 
+                    credit_cost INTEGER, status TEXT)''')
+
+    # 2. SCHEMA MIGRATION: Add team_id to leads if it was missing from Sprint 3
+    try:
+        c.execute("SELECT team_id FROM leads LIMIT 1")
+    except sqlite3.OperationalError:
+        st.warning("⚠️ Migrating database to Sprint 4 (Adding Team Support)...")
+        c.execute("ALTER TABLE leads ADD COLUMN team_id TEXT")
+        c.execute("UPDATE leads SET team_id = 'HQ_001' WHERE team_id IS NULL")
+
+    # 3. Ensure Admin user exists with correct hash
+    admin_hash = stauth.Hasher.hash('admin123')
     c.execute("""INSERT OR IGNORE INTO users 
                  (username, email, name, password, role, plan, credits, logo_path, team_id, verified) 
                  VALUES (?,?,?,?,'admin','Unlimited',9999,'Logo1.jpeg','HQ_001', 1)""", 
-              ('admin', 'admin@techinadvance.ai', 'Admin', admin_hashed_pw))
+              ('admin', 'admin@techinadvance.ai', 'Admin', admin_hash))
     
     conn.commit()
     conn.close()
 
+# Run the fix
 init_db()
 
 # --- 3.5 CREDENTIAL LOADER (MUST BE ABOVE AUTHENTICATOR) ---
