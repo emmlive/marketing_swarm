@@ -117,14 +117,16 @@ def init_db():
 
 init_db()
 
-# --- 3. SPRINT 2: SECURE AUTHENTICATION & SIGN UP TIERS ---
+# --- SECTION #3: SPRINT 2 - SECURE AUTHENTICATION & SIGN UP TIERS ---
+
 def get_creds():
-    conn = sqlite3.connect('breatheeasy.db')
+    """Fetches credentials from the database for the authenticator"""
+    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
     conn.close()
     return {'usernames': {r['username']: {'email':r['email'], 'name':r['name'], 'password':r['password']} for _,r in df.iterrows()}}
 
-# Fix: Initialize to a stable session variable and create a local reference
+# Fix: Initialize to a stable session variable to prevent re-authentication loops
 if 'authenticator' not in st.session_state:
     st.session_state.authenticator = stauth.Authenticate(
         get_creds(), 
@@ -133,12 +135,13 @@ if 'authenticator' not in st.session_state:
         30
     )
 
-# This local variable 'authenticator' is what your sidebar calls for logout
+# Establish local reference for sidebar logout call
 authenticator = st.session_state.authenticator
 
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=180)
-    # Restore the 4 essential tabs
+    
+    # Restore the 4 essential tabs with correct naming
     auth_tabs = st.tabs(["🔑 Login", "📝 Sign Up", "🤝 Join Team", "❓ Forget Password"])
     
     with auth_tabs[0]: 
@@ -147,7 +150,8 @@ if not st.session_state.get("authentication_status"):
     with auth_tabs[1]:
         st.subheader("Select Enterprise Growth Package")
         c1, c2, c3 = st.columns(3)
-        # SPRINT 1: Restored HTML Pricing Cards
+        
+        # SPRINT 1: Restored HTML Pricing Cards with Executive Styling
         with c1: 
             st.markdown('<div class="price-card"><h3>Basic</h3><h2>$99</h2><p>50 Credits/mo</p></div>', unsafe_allow_html=True)
         with c2: 
@@ -155,36 +159,42 @@ if not st.session_state.get("authentication_status"):
         with c3: 
             st.markdown('<div class="price-card"><h3>Enterprise</h3><h2>$499</h2><p>Unlimited Agents</p></div>', unsafe_allow_html=True)
         
-        # Sign Up Process
+        # Sign Up Process Logic
         try:
-            res = authenticator.register_user(location='main')
-            if res:
-                # Capture registration data and inject default credits based on Sprint 2 logic
-                email, username, name = res
+            # register_user returns (email, username, name) upon success
+            reg_data = authenticator.register_user(location='main')
+            if reg_data:
+                email, username, name = reg_data
                 conn = sqlite3.connect('breatheeasy.db')
-                # Credits default to 50 for new signups
-                conn.execute("UPDATE users SET credits = 50, role = 'member' WHERE username = ?", (username,))
+                # SPRINT 2: Inject default credits and member role into the new record
+                conn.execute("""
+                    UPDATE users 
+                    SET credits = 50, role = 'member', plan = 'Basic', verified = 0 
+                    WHERE username = ?
+                """, (username,))
                 conn.commit()
                 conn.close()
-                st.success("Registration successful! Please log in.")
+                st.success("Registration successful! Please proceed to the Login tab.")
         except Exception as e:
-            st.error(f"Registration Error: {e}")
+            st.error(f"Sign Up System Error: {e}")
             
     with auth_tabs[2]:
         st.subheader("🤝 Join an Existing Team")
-        team_id_input = st.text_input("Enter Enterprise Team ID")
-        if st.button("Request Team Access"):
-            st.info(f"Access request for {team_id_input} has been sent to the Admin.")
+        team_id_input = st.text_input("Enter Enterprise Team ID", placeholder="e.g. TEAM_admin_123")
+        if st.button("Request Team Access", use_container_width=True):
+            st.info(f"Access request for {team_id_input} has been transmitted to the Team Administrator.")
             
     with auth_tabs[3]:
         st.subheader("❓ Account Recovery")
-        # Restored Forgot Password widget
+        # Restored Forgot Password widget for Sprint 2 completion
         try:
-            username_to_reset, email_to_reset, new_password = authenticator.forgot_password(location='main')
-            if username_to_reset:
-                st.success("Password reset request processed.")
+            res = authenticator.forgot_password(location='main')
+            if res:
+                username_to_reset, email_to_reset, new_password = res
+                st.success("Password reset request processed. Check your registered email.")
         except Exception as e:
-            pass # Handle reset UI internally
+            # Internal handling for widget display
+            pass
             
     st.stop()
 # Load Logged-In Context
