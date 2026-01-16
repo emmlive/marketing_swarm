@@ -339,13 +339,19 @@ with TAB["🎬 Veo Studio"]:
 # --- TAB: TEAM INTEL KANBAN (SPRINT 4) ---
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Pipeline Kanban")
-    conn = sqlite3.connect('breatheeasy.db')
-    team_df = pd.read_sql_query("SELECT * FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
-    if not team_df.empty:
-        st.dataframe(team_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No active team leads in the pipeline.")
-    conn.close()
+    try:
+        conn = sqlite3.connect('breatheeasy.db')
+        # We check if the table is empty first
+        check_leads = pd.read_sql_query("SELECT count(*) as count FROM leads", conn)
+        
+        if check_leads.iloc[0]['count'] > 0:
+            team_df = pd.read_sql_query("SELECT * FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
+            st.dataframe(team_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Your pipeline is currently empty. Launch a Swarm to generate leads.")
+        conn.close()
+    except Exception as e:
+        st.error(f"Kanban Data Error: Ensure database migration is complete.")
 
 # --- TAB: GOD-MODE ADMIN (STABILIZED) ---
 if is_admin:
