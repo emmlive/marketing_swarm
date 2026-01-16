@@ -84,13 +84,12 @@ def init_db():
 
 init_db()
 
-# --- 4. AUTHENTICATION & ENROLLMENT SUITE (STABILIZED) ---
+# --- 4. AUTHENTICATION & ENROLLMENT SUITE (V0.3.0+ COMPLIANT) ---
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
         df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
         conn.close()
-        # Convert DB rows into the dictionary format required by stauth
         return {
             'usernames': {
                 row['username']: {
@@ -104,7 +103,7 @@ def get_db_creds():
         st.error(f"Database Connection Error: {e}")
         return {'usernames': {}}
 
-# Initialize Authenticator with credentials from the DB
+# 1. Initialize Authenticator
 db_credentials = get_db_creds()
 authenticator = stauth.Authenticate(
     db_credentials, 
@@ -113,50 +112,47 @@ authenticator = stauth.Authenticate(
     30
 )
 
-# --- THE LOGIN GATE ---
-# Check if the user is already logged in via cookie
-if st.session_state.get("authentication_status") is None or st.session_state.get("authentication_status") is False:
+# 2. THE LOGIN GATE
+if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
-    
-    # Create the Login/Register/Recovery Interface
     auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment", "🤝 Join Team", "❓ Recovery"])
     
     with auth_tabs[0]: 
-        # This is the actual login form
-        name, authentication_status, username = authenticator.login(location='main')
+        # UPDATED SYNTAX: In newer versions, .login() handles state automatically
+        # and usually only takes 'main' or 'sidebar' as an argument.
+        authenticator.login(location='main')
+        
+        # Manually check the status to provide feedback
+        if st.session_state["authentication_status"] is False:
+            st.error('Username/password is incorrect')
+        elif st.session_state["authentication_status"] is None:
+            st.warning('Please enter your username and password')
     
     with auth_tabs[1]:
         st.subheader("Select Your Growth Tier")
         c1, c2, c3 = st.columns(3)
         with c1: st.markdown('<div class="price-card"><h3>Basic</h3><h2>$99</h2><p>50 Credits</p></div>', unsafe_allow_html=True)
-        with c2: st.markdown('<div class="price-card" style="border-color:#7C3AED;"><h3>Pro</h3><h2>$249</h2><p>150 Credits</p></div>', unsafe_allow_html=True)
-        with c3: st.markdown('<div class="price-card"><h3>Enterprise</h3><h2>$499</h2><p>Unlimited*</p></div>', unsafe_allow_html=True)
+        with col2: st.markdown('<div class="price-card" style="border-color:#7C3AED;"><h3>Pro</h3><h2>$249</h2><p>150 Credits</p></div>', unsafe_allow_html=True)
+        with col3: st.markdown('<div class="price-card"><h3>Enterprise</h3><h2>$499</h2><p>Unlimited*</p></div>', unsafe_allow_html=True)
         
-        # Enrollment Logic
-        res = authenticator.register_user(location='main')
-        if res:
-            st.success("Registration successful! Please head to the Login tab.")
+        # Registration
+        try:
+            if authenticator.register_user(location='main'):
+                st.success('User registered successfully! Please log in.')
+        except Exception as e:
+            st.error(e)
 
     with auth_tabs[2]:
-        st.subheader("Team Access")
+        st.subheader("Join Existing Team")
         st.text_input("Enter Team ID")
-        st.button("Request Join")
+        st.button("Request Access")
 
     with auth_tabs[3]:
         st.subheader("Account Recovery")
         authenticator.forgot_password(location='main')
         authenticator.forgot_username(location='main')
 
-    # IMPORTANT: If not authenticated, stop the script here so 
-    # the rest of the app (sidebar/tabs) doesn't try to load.
-    if st.session_state.get("authentication_status") is False:
-        st.error('Username/password is incorrect')
-    elif st.session_state.get("authentication_status") is None:
-        st.warning('Please enter your username and password')
-    
-    st.stop() 
-
-# --- IF WE REACH HERE, THE USER IS LOGGED IN ---
+    st.stop() # Force stop until authenticated
 
     st.stop() # Prevents rest of app from loading until login is successful
 # --- 5. LOGGED-IN DATA FETCH ---
