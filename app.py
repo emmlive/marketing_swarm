@@ -291,23 +291,28 @@ with st.sidebar:
 
     authenticator.logout('Sign Out', 'sidebar')
 
-# --- 7. SWARM EXECUTION ENGINE (ENTERPRISE LOGGING & PROGRESS) ---
+# --- 7. SWARM EXECUTION ENGINE (FORCE PERSISTENCE & DATA ANCHOR) ---
 if run_btn:
-    # Validation
+    # 7A. Validation Check
     if not biz_name or not full_loc:
         st.error("❌ Identification required: Please provide Brand Name and Location.")
     elif user_row['credits'] <= 0:
-        st.error("❌ Out of credits: Please contact your administrator for a credit injection.")
+        st.error("❌ Out of credits: Please contact your administrator.")
     else:
+        # 1. PRE-RUN HYGIENE: Clear old reports to ensure clean rendering
+        st.session_state.report = {} 
+        st.session_state.gen = False
+
         with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
-            # 7A. SPRINT 5: INITIALIZE PROGRESS VISUALIZER
-            progress_bar = st.progress(0, text="Initializing Swarm Neural Network...")
-            
             try:
-                # PHASE 1: DISCOVERY & FORENSICS
-                progress_bar.progress(15, text="🕵️ Phase 1: Analyst & Vision Agents scouring market...")
+                # 2. PROGRESS VISUALIZER
+                progress_bar = st.progress(0, text="Initializing Swarm...")
                 
-                report = run_marketing_swarm({
+                # 3. EXECUTE BACKEND SWARM
+                # This calls the run_marketing_swarm function in main.py
+                progress_bar.progress(10, text="🕵️ Phase 1: Market Discovery & Forensics...")
+                
+                report_data = run_marketing_swarm({
                     'city': full_loc, 
                     'industry': final_ind, 
                     'service': svc, 
@@ -316,39 +321,22 @@ if run_btn:
                     'toggles': toggles,
                     'custom_reqs': user_requirements 
                 })
-                
-                # PHASE 2: CONTENT ENGINEERING
-                progress_bar.progress(65, text="✍️ Phase 2: Creative, SEO & Social Agents generating assets...")
-                
-                # PHASE 3: CEO STRATEGY SYNTHESIS
-                progress_bar.progress(90, text="👔 Phase 3: Strategist synthesizing 30-Day ROI Roadmap...")
-                
-                # 7B. Update Session State for UI Rendering
-                st.session_state.report, st.session_state.gen = report, True
-                
-                # 7C. ATOMIC INFRASTRUCTURE TRANSACTION
+
+                # 4. DATA ANCHORING: Hard-lock the results into session_state
+                # We map the returned dictionary to the UI state immediately
+                st.session_state.report = report_data
+                st.session_state.gen = True  # This locks the Tabs view to "Visible"
+
+                progress_bar.progress(85, text="👔 Phase 3: Finalizing Strategy & Logging...")
+
+                # 5. ATOMIC DATABASE TRANSACTION
                 conn = sqlite3.connect('breatheeasy.db')
                 cursor = conn.cursor()
                 try:
-                    # 1. Deduct 1 Enterprise Credit
+                    # Deduct Credits
                     cursor.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
                     
-                    # 2. Record Lead Entry for Kanban Pipeline
-                    cursor.execute("""
-                        INSERT INTO leads (date, user, industry, service, city, content, team_id, status) 
-                        VALUES (?,?,?,?,?,?,?,?)
-                    """, (
-                        datetime.now().strftime("%Y-%m-%d"), 
-                        user_row['username'], 
-                        final_ind, 
-                        svc, 
-                        full_loc, 
-                        str(report), 
-                        user_row['team_id'], 
-                        'Discovery'
-                    ))
-
-                    # 3. RECORD MASTER AUDIT LOG
+                    # Log to Master Audit
                     cursor.execute("""
                         INSERT INTO master_audit_logs 
                         (timestamp, user, action_type, target_biz, location, credit_cost, status)
@@ -362,23 +350,27 @@ if run_btn:
                         1,
                         "SUCCESS"
                     ))
-                    
                     conn.commit()
                 except Exception as db_e:
                     conn.rollback()
                     raise db_e
                 finally:
                     conn.close()
-                
-                # 7D. SPRINT 5: FINAL COMPLETION
-                progress_bar.progress(100, text="✅ Intelligence Synchronized Successfully.")
+
+                # 6. FINAL UI SYNC
+                progress_bar.progress(100, text="✅ Intelligence Synchronized.")
                 status.update(label="🚀 Swarm Complete!", state="complete")
-                st.toast(f"Swarm for {biz_name} successfully logged and initialized.")
+                
+                # Small delay to ensure state stability before the UI refresh
+                import time
+                time.sleep(0.5)
+                
                 st.rerun()
 
             except Exception as e:
                 status.update(label="❌ Swarm Interrupted", state="error")
-                st.error(f"The Swarm encountered a backend issue: {e}")
+                st.error(f"Critical Backend Error: {e}")
+                st.session_state.gen = False # Ensure tabs don't show empty on error
                 
 # --- 6. MULTIMODAL COMMAND CENTER (DEFENSIVE RENDERING) ---
 
