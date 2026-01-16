@@ -106,6 +106,80 @@ def init_db():
     conn.close()
 
 init_db()
+
+# --- 3.5 CREDENTIAL LOADER (MUST BE ABOVE AUTHENTICATOR) ---
+def get_db_creds():
+    try:
+        conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+        # We fetch the latest user list to populate the authenticator
+        df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
+        conn.close()
+        
+        # Standard dictionary format for streamlit-authenticator
+        return {
+            'usernames': {
+                row['username']: {
+                    'email': row['email'], 
+                    'name': row['name'], 
+                    'password': row['password']
+                } for _, row in df.iterrows()
+            }
+        }
+    except Exception as e:
+        st.error(f"Failed to load credentials: {e}")
+        return {'usernames': {}}
+
+# --- 4. AUTHENTICATION & ENROLLMENT (UPDATED VERSION) ---
+
+# Now the call will work because the function is defined above
+db_credentials = get_db_creds()
+
+authenticator = stauth.Authenticate(
+    db_credentials, 
+    st.secrets['cookie']['name'], 
+    st.secrets['cookie']['key'], 
+    30
+)
+
+if not st.session_state.get("authentication_status"):
+    st.image("Logo1.jpeg", width=200)
+    auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment", "❓ Recovery"])
+    
+    with auth_tabs[0]:
+        authenticator.login(location='main')
+    
+    with auth_tabs[1]:
+        # RESTORED: ENROLLMENT WITH CORRECT HASHING
+        st.subheader("Create Your Enterprise Account")
+        new_email = st.text_input("Email")
+        new_username = st.text_input("Username")
+        new_name = st.text_input("Full Name")
+        new_pw = st.text_input("Password", type="password")
+        
+        if st.button("Finalize Registration", use_container_width=True):
+            if new_username and new_pw:
+                # FIX: Use the new static hash method
+                hashed_pw = stauth.Hasher.hash(new_pw)
+                
+                try:
+                    conn = sqlite3.connect('breatheeasy.db')
+                    conn.execute("""
+                        INSERT INTO users (username, email, name, password, role, plan, credits, logo_path, team_id, verified)
+                        VALUES (?, ?, ?, ?, 'member', 'Basic', 50, 'Logo1.jpeg', ?, 0)
+                    """, (new_username, new_email, new_name, hashed_pw, f"TEAM_{new_username}"))
+                    conn.commit()
+                    conn.close()
+                    st.success("Registration successful! Please head to the Login tab.")
+                except sqlite3.IntegrityError:
+                    st.error("Username already exists.")
+            else:
+                st.warning("Please fill in all fields.")
+
+    if st.session_state["authentication_status"] is False:
+        st.error('Username/password is incorrect')
+    
+    st.stop()
+    
 # --- 4. AUTHENTICATION ---
 db_credentials = get_db_creds()
 authenticator = stauth.Authenticate(
