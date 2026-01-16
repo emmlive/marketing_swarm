@@ -129,9 +129,9 @@ def get_db_creds():
         st.error(f"Failed to load credentials: {e}")
         return {'usernames': {}}
 
-# --- 4. AUTHENTICATION INITIALIZATION ---
+# --- 4. AUTHENTICATION INITIALIZATION (WIDGET-SAFE EDITION) ---
 
-# 4A. Credential Loader (MUST stay at this indentation level)
+# 4A. Credential Loader (Global scope)
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -149,25 +149,24 @@ def get_db_creds():
     except Exception as e:
         return {'usernames': {}}
 
-# 4B. The Authenticator (Cached to prevent DuplicateKeyError)
-@st.cache_resource
-def load_authenticator():
-    return stauth.Authenticate(
+# 4B. Initialize Authenticator via Session State (No @st.cache_resource)
+if 'authenticator' not in st.session_state:
+    st.session_state.authenticator = stauth.Authenticate(
         get_db_creds(), 
         st.secrets['cookie']['name'], 
         st.secrets['cookie']['key'], 
         30
     )
 
-authenticator = load_authenticator()
+# Alias it for easier use in the code below
+authenticator = st.session_state.authenticator
 
-# 4C. THE LOGIN GATE (This is line 154 where your error was)
+# 4C. THE LOGIN GATE
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
     auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment", "🤝 Join Team", "❓ Recovery"])
     
     with auth_tabs[0]:
-        # New syntax for v0.3.0+
         authenticator.login(location='main')
         if st.session_state["authentication_status"] is False:
             st.error('Username/password is incorrect')
@@ -175,31 +174,26 @@ if not st.session_state.get("authentication_status"):
             st.warning('Please enter your username and password')
     
     with auth_tabs[1]:
-        st.subheader("Select Plan")
-        c1, c2, c3 = st.columns(3)
-        with c1: st.markdown('<div class="price-card"><h3>Basic</h3><h2>$99</h2></div>', unsafe_allow_html=True)
-        with c2: st.markdown('<div class="price-card"><h3>Pro</h3><h2>$249</h2></div>', unsafe_allow_html=True)
-        with c3: st.markdown('<div class="price-card"><h3>Enterprise</h3><h2>$499</h2></div>', unsafe_allow_html=True)
-        
-        if authenticator.register_user(location='main'):
-            st.success('User registered successfully! Please log in.')
+        st.subheader("Enrollment")
+        # Ensure registration also uses the session state version
+        try:
+            if authenticator.register_user(location='main'):
+                st.success('User registered successfully! Please log in.')
+        except Exception as e:
+            st.error(f"Registration Error: {e}")
 
     with auth_tabs[2]:
-        st.text_input("Enter Team ID")
-        st.button("Request Access")
+        st.text_input("Enter Team ID", key="join_team_input")
+        st.button("Request Access", key="join_team_btn")
 
     with auth_tabs[3]:
         authenticator.forgot_password(location='main')
         authenticator.forgot_username(location='main')
 
-    # STOP the app here so the sidebar doesn't load for logged-out users
     st.stop()
 
-# --- 5. LOGGED-IN SESSION (Execution starts here after successful login) ---
-conn = sqlite3.connect('breatheeasy.db')
-user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
-conn.close()
-is_admin = user_row['role'] == 'admin'
+# --- 5. LOGGED-IN SESSION ---
+# (The rest of your code follows here...)
 
 # --- 6. EXPORT HELPERS ---
 def create_word_doc(content, title):
