@@ -683,4 +683,4 @@ with TAB["🤝 Team Intel"]:
             st.success(f"Successfully injected {amt} credits to {target_u}")
             st.rerun()
 
-     
+        conn.close()
