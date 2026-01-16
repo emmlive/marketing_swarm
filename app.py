@@ -270,42 +270,106 @@ if run_btn:
             conn.commit(); conn.close()
             st.rerun()
 
-# --- 9. DYNAMIC REPORT TABS ---
-if st.session_state.gen:
-    # We map keys to match your main.py outputs exactly
-    agent_map = [
-        ("🕵️ Analyst", "analyst"), ("🎨 Creative", "creative"), 
-        ("👔 Strategist", "strategist"), ("📱 Social", "social"), 
-        ("📍 GEO", "geo"), ("🌐 Auditor", "auditor"), ("✍ SEO", "seo")
-    ]
-    
-    tabs = st.tabs([a[0] for a in agent_map] + ["⚙ Admin"])
-    
-    for i, (title, key) in enumerate(agent_map):
-        with tabs[i]:
-            st.subheader(title)
-            content = st.session_state.report.get(key, "Pending...")
-            edited = st.text_area(f"Refine {title}", value=str(content), height=300, key=f"edit_{key}")
-            c1, c2 = st.columns(2)
-            c1.download_button("📄 Word", create_word_doc(edited, title), f"{key}.docx", key=f"w_{key}")
-            c2.download_button("📕 PDF", create_pdf(edited, svc, full_loc), f"{key}.pdf", key=f"p_{key}")
+# --- 9. MULTIMODAL COMMAND CENTER (SPRINT 1-5 INTEGRATED) ---
 
-    # GOD-MODE ADMIN
-    with tabs[-1]:
-        if user_row['role'] == 'admin':
-            st.header("⚙️ Admin God-Mode")
-            conn = sqlite3.connect('breatheeasy.db')
-            logs = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC", conn)
-            st.dataframe(logs, use_container_width=True)
+# 1. DEFINE THE COMPLETE TAB LIST
+# We define these globally so they exist even before 'gen' is True
+agent_map = [
+    ("🕵️ Analyst", "analyst"), ("🎨 Creative", "creative"), 
+    ("👔 Strategist", "strategist"), ("📱 Social", "social"), 
+    ("📍 GEO", "geo"), ("🌐 Auditor", "auditor"), ("✍ SEO", "seo")
+]
+
+tab_labels = ["📖 Guide"] + [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
+if is_admin:
+    tab_labels.append("⚙ Admin")
+
+# 2. INITIALIZE TABS
+tabs_list = st.tabs(tab_labels)
+TAB = {name: tabs_list[i] for i, name in enumerate(tab_labels)}
+
+# --- TAB: GUIDE (SPRINT 1) ---
+with TAB["📖 Guide"]:
+    st.header("📖 Agent Intelligence Manual")
+    st.info("The Omni-Swarm engine coordinates 8 specialized AI agents to engineer high-ticket growth.")
+    g1, g2 = st.columns(2)
+    with g1:
+        with st.expander("🕵️ Intelligence Cluster", expanded=True):
+            st.markdown("- **Analyst:** Market Entry Gaps\n- **Vision:** Forensic Diagnostics\n- **Auditor:** Conversion Leaks")
+    with g2:
+        with st.expander("👔 Strategy Cluster", expanded=True):
+            st.markdown("- **Creative:** Multi-channel Hooks\n- **SEO:** Technical E-E-A-T Articles\n- **Strategist:** 30-Day ROI Roadmap")
+
+# --- TABS: DYNAMIC AGENT RENDERING (SPRINT 2 & 3) ---
+for i, (title, report_key) in enumerate(agent_map):
+    with TAB[title]:
+        if st.session_state.gen:
+            st.subheader(f"{title} Intelligence")
+            content = st.session_state.report.get(report_key, "Intelligence pending...")
             
-            st.subheader("Credit Injection")
-            u_to_pay = st.selectbox("User", pd.read_sql_query("SELECT username FROM users", conn))
-            amt = st.number_input("Amount", 10)
-            if st.button("Inject"):
-                conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amt, u_to_pay))
-                conn.commit(); st.success("Done"); st.rerun()
-            conn.close()
+            # Refinement & Export Engine
+            edited = st.text_area(f"Refine {title}", value=str(content), height=350, key=f"edit_{report_key}")
+            c1, c2 = st.columns(2)
+            with c1: st.download_button("📄 Word Brief", create_word_doc(edited, title), f"{title}.docx", key=f"w_{report_key}")
+            with c2: st.download_button("📕 PDF Report", create_pdf(edited, svc, full_loc), f"{title}.pdf", key=f"p_{report_key}")
         else:
-            st.error("Access Denied")
-else:
-    st.info("👋 Configure the sidebar and click Launch.")
+            st.info(f"🚀 Launch the Omni-Swarm to populate the {title} Command Seat.")
+
+# --- TAB: VISION INSPECTOR (SPRINT 4) ---
+with TAB["👁️ Vision"]:
+    st.subheader("👁️ Vision Inspector")
+    if st.session_state.gen:
+        v_intel = st.session_state.report.get('vision_intel', "Vision diagnostics pending.")
+        st.markdown(f'<div style="background:#f0f2f6; p:20px; border-radius:10px;">{v_intel}</div>', unsafe_allow_html=True)
+    v_file = st.file_uploader("Upload Forensic Evidence", type=['png','jpg','jpeg'], key="vis_upload")
+    if v_file: st.image(v_file, caption="Asset for Analysis", use_container_width=True)
+
+# --- TAB: VEO STUDIO (SPRINT 5) ---
+with TAB["🎬 Veo Studio"]:
+    st.subheader("🎬 Veo Cinematic Studio")
+    if st.session_state.gen:
+        creative_context = st.session_state.report.get('creative', '')
+        v_prompt = st.text_area("Video Scene Prompt", value=str(creative_context)[:500], height=150)
+        if st.button("📽️ GENERATE AD", type="primary"):
+            with st.spinner("Rendering..."):
+                v_vid = generate_cinematic_ad(v_prompt)
+                if v_vid: st.video(v_vid)
+    else:
+        st.warning("Swarm required to generate video context.")
+
+# --- TAB: TEAM INTEL KANBAN (SPRINT 4) ---
+with TAB["🤝 Team Intel"]:
+    st.header("🤝 Global Pipeline Kanban")
+    conn = sqlite3.connect('breatheeasy.db')
+    team_df = pd.read_sql_query("SELECT * FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
+    if not team_df.empty:
+        st.dataframe(team_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No active team leads in the pipeline.")
+    conn.close()
+
+# --- TAB: GOD-MODE ADMIN (STABILIZED) ---
+if is_admin:
+    with TAB["⚙ Admin"]:
+        st.header("⚙️ God-Mode Management")
+        conn = sqlite3.connect('breatheeasy.db')
+        
+        # 1. Global Metrics
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Global Swarms", pd.read_sql_query("SELECT COUNT(*) FROM master_audit_logs", conn).iloc[0,0])
+        m2.metric("Total Users", pd.read_sql_query("SELECT COUNT(*) FROM users", conn).iloc[0,0])
+        m3.metric("System Health", "Verified")
+
+        # 2. Audit Table
+        audit_df = pd.read_sql_query("SELECT timestamp, user, action_type, status FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
+        st.dataframe(audit_df, use_container_width=True, hide_index=True)
+        
+        # 3. Credit Injection
+        st.subheader("👤 User Credit Management")
+        all_u = pd.read_sql_query("SELECT username FROM users", conn)['username'].tolist()
+        u_sel = st.selectbox("Target Account", all_u)
+        u_amt = st.number_input("Credits to Inject", 10, 500, 50)
+        if st.button("Execute Injection"):
+            conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (u_amt, u_sel))
+            conn.commit(); st.success(f"Injected {u_amt} to {u_sel}"); st.rerun()
+        conn.close()
