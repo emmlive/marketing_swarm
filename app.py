@@ -129,97 +129,77 @@ def get_db_creds():
         st.error(f"Failed to load credentials: {e}")
         return {'usernames': {}}
 
-# --- 4. AUTHENTICATION INITIALIZATION (STABILIZED) ---
+# --- 4. AUTHENTICATION INITIALIZATION ---
 
-# Define a function to cache the authenticator object
+# 4A. Credential Loader (MUST stay at this indentation level)
+def get_db_creds():
+    try:
+        conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+        df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
+        conn.close()
+        return {
+            'usernames': {
+                row['username']: {
+                    'email': row['email'], 
+                    'name': row['name'], 
+                    'password': row['password']
+                } for _, row in df.iterrows()
+            }
+        }
+    except Exception as e:
+        return {'usernames': {}}
+
+# 4B. The Authenticator (Cached to prevent DuplicateKeyError)
 @st.cache_resource
-def get_authenticator():
-    # Fetch credentials from DB
-    db_credentials = get_db_creds()
-    
-    # Initialize the Authenticator
+def load_authenticator():
     return stauth.Authenticate(
-        db_credentials, 
+        get_db_creds(), 
         st.secrets['cookie']['name'], 
         st.secrets['cookie']['key'], 
         30
     )
 
-# Call the cached function
-authenticator = get_authenticator()
+authenticator = load_authenticator()
 
-# Now proceed with your login gate
-if not st.session_state.get("authentication_status"):
-    # ... rest of your login code
+# 4C. THE LOGIN GATE (This is line 154 where your error was)
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=200)
-    auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment", "❓ Recovery"])
+    auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment", "🤝 Join Team", "❓ Recovery"])
     
     with auth_tabs[0]:
+        # New syntax for v0.3.0+
         authenticator.login(location='main')
+        if st.session_state["authentication_status"] is False:
+            st.error('Username/password is incorrect')
+        elif st.session_state["authentication_status"] is None:
+            st.warning('Please enter your username and password')
     
     with auth_tabs[1]:
-        # RESTORED: ENROLLMENT WITH CORRECT HASHING
-        st.subheader("Create Your Enterprise Account")
-        new_email = st.text_input("Email")
-        new_username = st.text_input("Username")
-        new_name = st.text_input("Full Name")
-        new_pw = st.text_input("Password", type="password")
+        st.subheader("Select Plan")
+        c1, c2, c3 = st.columns(3)
+        with c1: st.markdown('<div class="price-card"><h3>Basic</h3><h2>$99</h2></div>', unsafe_allow_html=True)
+        with c2: st.markdown('<div class="price-card"><h3>Pro</h3><h2>$249</h2></div>', unsafe_allow_html=True)
+        with c3: st.markdown('<div class="price-card"><h3>Enterprise</h3><h2>$499</h2></div>', unsafe_allow_html=True)
         
-        if st.button("Finalize Registration", use_container_width=True):
-            if new_username and new_pw:
-                # FIX: Use the new static hash method
-                hashed_pw = stauth.Hasher.hash(new_pw)
-                
-                try:
-                    conn = sqlite3.connect('breatheeasy.db')
-                    conn.execute("""
-                        INSERT INTO users (username, email, name, password, role, plan, credits, logo_path, team_id, verified)
-                        VALUES (?, ?, ?, ?, 'member', 'Basic', 50, 'Logo1.jpeg', ?, 0)
-                    """, (new_username, new_email, new_name, hashed_pw, f"TEAM_{new_username}"))
-                    conn.commit()
-                    conn.close()
-                    st.success("Registration successful! Please head to the Login tab.")
-                except sqlite3.IntegrityError:
-                    st.error("Username already exists.")
-            else:
-                st.warning("Please fill in all fields.")
+        if authenticator.register_user(location='main'):
+            st.success('User registered successfully! Please log in.')
 
-    if st.session_state["authentication_status"] is False:
-        st.error('Username/password is incorrect')
-    
-    st.stop()
-    
-# --- 4. AUTHENTICATION ---
-db_credentials = get_db_creds()
-authenticator = stauth.Authenticate(
-    db_credentials, 
-    st.secrets['cookie']['name'], 
-    st.secrets['cookie']['key'], 
-    30
-)
+    with auth_tabs[2]:
+        st.text_input("Enter Team ID")
+        st.button("Request Access")
 
-# New syntax: .login() no longer returns a tuple you can unpack
-if not st.session_state.get("authentication_status"):
-    auth_tabs = st.tabs(["🔑 Login", "📝 Enrollment", "❓ Recovery"])
-    with auth_tabs[0]:
-        # Just call it; it updates st.session_state internally
-        authenticator.login(location='main') 
-        
-    with auth_tabs[1]:
-        # Update your registration hashing if you have custom logic:
-        # new_hash = stauth.Hasher.hash(user_input_password)
-        pass
+    with auth_tabs[3]:
+        authenticator.forgot_password(location='main')
+        authenticator.forgot_username(location='main')
 
-    if st.session_state["authentication_status"] is False:
-        st.error('Username/password is incorrect')
-    
+    # STOP the app here so the sidebar doesn't load for logged-out users
     st.stop()
 
-# --- 5. LOGGED-IN SESSION ---
+# --- 5. LOGGED-IN SESSION (Execution starts here after successful login) ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
+is_admin = user_row['role'] == 'admin'
 
 # --- 6. EXPORT HELPERS ---
 def create_word_doc(content, title):
