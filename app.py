@@ -371,20 +371,93 @@ with TAB["🎬 Veo Studio"]:
         if st.button("📽️ GENERATE AD"): st.info("Veo Engine Rendering Active...")
     else: st.warning("Launch Swarm to generate creative context.")
 
-# D. Team Intel (Sprint 4 Account Management)
+# --- SECTION #9: SPRINT 4 - TEAM INTEL & ACCOUNT MANAGEMENT ---
+
 with TAB["🤝 Team Intel"]:
-    st.header("🤝 Team Account Management")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("👤 User Profile")
-        st.write(f"**Username:** {user_row['username']} | **Plan:** {user_row['plan']}")
-        if st.button("Request Security Credential Reset"): st.success("Email sent.")
-    with c2:
-        st.subheader("📊 Team Lead Pipeline")
-        conn = sqlite3.connect('breatheeasy.db')
-        team_df = pd.read_sql_query("SELECT city, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
-        st.dataframe(team_df, use_container_width=True)
-        conn.close()
+    st.header("🤝 Team Intelligence & Account Management")
+    st.markdown("---")
+    
+    # 1. TOP ROW: ACCOUNT STATUS & IDENTITY
+    col_profile, col_stats = st.columns([1, 1])
+    
+    with col_profile:
+        st.subheader("👤 Your Enterprise Profile")
+        with st.form("account_management_form", clear_on_submit=False):
+            st.write(f"**Username:** `{user_row['username']}`")
+            new_name = st.text_input("Full Name / Team Label", value=user_row['name'])
+            new_email = st.text_input("Verified Email Address", value=user_row['email'])
+            
+            # Logic to handle profile updates
+            if st.form_submit_button("💾 Save Profile Changes"):
+                update_account_settings(user_row['username'], new_email, new_name)
+                st.rerun()
+                
+    with col_stats:
+        st.subheader("💳 Usage & Credentials")
+        st.metric("Current Balance", f"{user_row['credits']} Credits", delta="Omni-Swarm Ready")
+        st.write(f"**Subscription Tier:** {user_row['plan']}")
+        
+        st.divider()
+        if st.button("🔐 Reset Security Credentials", use_container_width=True):
+            # In a live environment, this triggers a SMTP password reset flow
+            st.success(f"A secure reset link has been dispatched to {user_row['email']}.")
+
+    st.markdown("---")
+
+    # 2. BOTTOM ROW: THE KANBAN PIPELINE
+    st.subheader("📊 Global Team Lead Pipeline")
+    
+    conn = sqlite3.connect('breatheeasy.db')
+    # Fetch lead data specific to the user's Team ID
+    team_df = pd.read_sql_query("""
+        SELECT id, city, service, status 
+        FROM leads 
+        WHERE team_id = ? 
+        ORDER BY id DESC
+    """, conn, params=(user_row['team_id'],))
+    
+    if team_df.empty:
+        st.info("No active leads found. Launch an Omni-Swarm to populate your team pipeline.")
+    else:
+        # Professional Kanban Column Layout
+        stages = ["Discovery", "Execution", "ROI Verified"]
+        k_cols = st.columns(len(stages))
+        
+        for i, stage in enumerate(stages):
+            with k_cols[i]:
+                st.markdown(f"""
+                    <div style="background-color:#2563EB; color:white; padding:8px; 
+                    border-radius:5px; text-align:center; font-weight:bold; margin-bottom:15px;">
+                        {stage.upper()}
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Filter leads for this specific stage
+                stage_leads = team_df[team_df['status'] == stage]
+                
+                for _, lead in stage_leads.iterrows():
+                    with st.container():
+                        st.markdown(f"""
+                            <div class="kanban-card">
+                                <b>{lead['city']}</b><br>
+                                <small>{lead['service']}</small>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Pipeline Movement Tool
+                        new_stage = st.selectbox(
+                            "Move to:", 
+                            stages, 
+                            index=stages.index(stage), 
+                            key=f"move_{lead['id']}",
+                            label_visibility="collapsed"
+                        )
+                        
+                        if new_stage != stage:
+                            conn.execute("UPDATE leads SET status = ? WHERE id = ?", (new_stage, lead['id']))
+                            conn.commit()
+                            st.rerun()
+    conn.close()
 
 # E. Admin (Sprint 4 Expanded Elements)
 if "⚙ Admin" in TAB:
