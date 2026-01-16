@@ -418,6 +418,7 @@ with TAB["📖 Guide"]:
             """)
 
 def render_agent(tab_key, title, report_key):
+    
     # --- SPRINT 3: IMPLEMENTATION MANUALS ---
     DEPLOYMENT_GUIDES = {
         "analyst": "Identify the 'Price-Gap' in the competitor table. Use this to undercut rivals while maintaining premium positioning in your high-margin services.",
@@ -448,111 +449,45 @@ def render_agent(tab_key, title, report_key):
         """, unsafe_allow_html=True)
 
        if st.session_state.gen:
-    # 1. Define the Tab Labels (Mapping keys must match main.py return dict)
+    # 1. Define Map (Matches main.py keys)
     agent_map = [
-        ("🕵️ Analyst", "analyst"), 
-        ("🎨 Creative", "creative"), 
-        ("👔 Strategist", "strategist"), 
-        ("📱 Social", "social"), 
-        ("📍 GEO", "geo"), 
-        ("🌐 Auditor", "auditor"), 
-        ("✍ SEO", "seo")
+        ("🕵️ Analyst", "analyst"), ("🎨 Creative", "creative"), 
+        ("👔 Strategist", "strategist"), ("📱 Social", "social"), 
+        ("📍 GEO", "geo"), ("🌐 Auditor", "auditor"), ("✍ SEO", "seo")
     ]
     
-    # 2. Initialize the Tabs Infrastructure
+    # 2. Initialize Tabs
     all_tab_labels = [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "⚙ Admin"]
     TAB = st.tabs(all_tab_labels)
 
-    # 3. LOOP THROUGH STANDARD AGENTS (Dynamic Rendering & Export Engine)
+    # 3. Dynamic Loop (Standard Agents)
     for i, (title, report_key) in enumerate(agent_map):
         with TAB[i]:
             st.subheader(f"{title} Intelligence")
+            content = st.session_state.report.get(report_key, "Pending...")
+            edited = st.text_area(f"Refine {title}", value=str(content), height=350, key=f"edit_{report_key}")
             
-            # Fetch content from the session state anchoring
-            content = st.session_state.report.get(report_key, "Intelligence for this agent is not available in this swarm run.")
-            
-            # Interactive Refinement Area
-            edited = st.text_area(
-                f"Refine {title} Output", 
-                value=str(content), 
-                height=350, 
-                key=f"edit_{report_key}"
-            )
-            
-            st.divider()
-            
-            # Multimodal Export Engine
-            st.write("📤 **Export Strategic Brief**")
             c1, c2 = st.columns(2)
-            with c1: 
-                st.download_button(
-                    label="📄 Download Word Brief", 
-                    data=create_word_doc(edited, title), 
-                    file_name=f"{title}_Brief.docx", 
-                    key=f"w_{report_key}",
-                    use_container_width=True
-                )
-            with c2: 
-                st.download_button(
-                    label="📕 Download PDF Report", 
-                    data=create_pdf(edited, svc, full_loc), 
-                    file_name=f"{title}_Report.pdf", 
-                    key=f"p_{report_key}",
-                    use_container_width=True
-                )
+            with c1: st.download_button("📄 Word", create_word_doc(edited, title), f"{title}.docx", key=f"w_{report_key}")
+            with c2: st.download_button("📕 PDF", create_pdf(edited, svc, full_loc), f"{title}.pdf", key=f"p_{report_key}")
 
-    # 4. MANUALLY RENDER SPECIALTY TABS
-    
-    # --- TAB: VISION INSPECTOR ---
-    with TAB[7]:
+    # --- MUST BE INDENTED HERE ---
+    # 4. Specialty Tabs
+    with TAB[7]: # Vision
         st.subheader("👁️ Vision Inspector")
-        if not is_verified(st.session_state["username"]):
-            st.error("🛡️ Verification Required to access Vision Intelligence.")
-        else:
-            v_intel = st.session_state.report.get('vision', "Vision analysis data not found.")
-            st.markdown(f'<div class="executive-brief">{v_intel}</div>', unsafe_allow_html=True)
-            v_file = st.file_uploader("Upload Evidence for Analysis", type=['png','jpg','jpeg'], key="vis_up_main")
-            if v_file: st.image(v_file, use_container_width=True, caption="Target Asset")
-
-    # --- TAB: VEO STUDIO ---
-    with TAB[8]:
+        # ... (Verification & Image Logic)
+        
+    with TAB[8]: # Veo
         st.subheader("🎬 Veo Cinematic Studio")
-        if not is_verified(st.session_state["username"]):
-            st.error("🛡️ Verification Required to access Cinematic Production.")
-        else:
-            creative_context = st.session_state.report.get('creative', '')
-            v_prompt = st.text_area("Video Scene Description", value=str(creative_context)[:500], height=150, key="veo_prompt_area")
-            if st.button("📽️ GENERATE AD", key="veo_gen_btn_main", use_container_width=True):
-                with st.spinner("Rendering cinematic asset..."):
-                    v_vid = generate_cinematic_ad(v_prompt)
-                    if v_vid: st.video(v_vid)
-
-    # --- TAB: ADMIN MANAGEMENT (GOD-MODE) ---
-    with TAB[9]:
+        # ... (Prompt & Generation Logic)
+        
+    with TAB[9]: # Admin
         if st.session_state.get('user_role') == 'admin':
-            st.header("⚙️ God-Mode Management")
-            conn = sqlite3.connect('breatheeasy.db')
-            
-            # Admin Metrics
-            total_swarms = pd.read_sql_query("SELECT COUNT(*) as count FROM master_audit_logs", conn).iloc[0]['count']
-            st.metric("Global Swarm Count", total_swarms)
-            
-            # Audit Table with Stable Column Config
-            audit_df = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC", conn)
-            st.dataframe(
-                audit_df, 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={
-                    "status": st.column_config.SelectboxColumn("Status", options=["SUCCESS", "FAILED"])
-                }
-            )
-            conn.close()
-        else:
-            st.error("🚫 Administrative Access Denied.")
+            # ... (Database & Metrics Logic)
+            pass
 
 else:
-    st.info("👋 Welcome! Configure your Swarm Personnel in the sidebar and click 'Launch' to generate intelligence.")
+    st.info("👋 Welcome! Configure your Swarm Personnel in the sidebar and click 'Launch'.")
 # Render Specialty Tabs
 with TAB["👁️ Vision"]:
     st.subheader("👁️ Vision Inspector")
@@ -648,69 +583,98 @@ with TAB["🤝 Team Intel"]:
     conn.close()
 
 # --- 9C. GOD-MODE ADMIN (ISOLATED & STABILIZED) ---
+# Ensure this is placed at the end of your 'if st.session_state.gen:' block
+# and correctly indented within the Specialty Tabs section.
+
 if is_admin:
-    with TAB["⚙ Admin"]:
+    with TAB[9]: # Assuming Admin is the 10th tab (Index 9)
         st.header("⚙️ God-Mode Management")
         st.warning("⚡ Root Access: You are viewing global system infrastructure and audit trails.")
         
         # --- 1. GLOBAL INFRASTRUCTURE METRICS ---
         conn = sqlite3.connect('breatheeasy.db')
         
-        # Fetch data for metrics
-        total_swarms = pd.read_sql_query("SELECT COUNT(*) as count FROM master_audit_logs", conn).iloc[0]['count']
-        total_users = pd.read_sql_query("SELECT COUNT(*) as count FROM users", conn).iloc[0]['count']
-        
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Global Swarm Count", total_swarms)
-        m2.metric("Total Registered Users", total_users)
-        m3.metric("System Integrity", "Verified", delta="SSL/DB Active")
-
-        st.divider()
-
-        # --- 2. MASTER AUDIT LOG TABLE (FIXED COLUMN CONFIG) ---
-        st.subheader("📊 Global Activity Audit Trail")
-        
-        # Query the Sprint 4 Master Audit Table
-        audit_df = pd.read_sql_query("""
-            SELECT timestamp, user, action_type, target_biz, location, credit_cost, status 
-            FROM master_audit_logs 
-            ORDER BY id DESC LIMIT 500
-        """, conn)
-
-        if not audit_df.empty:
-            # Render with Stable Column Config to avoid AttributeError
-            st.dataframe(
-                audit_df, 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={
-                    "timestamp": "Execution Time",
-                    "user": "Account",
-                    "action_type": "Operation",
-                    "target_biz": "Target Brand",
-                    "location": "Market",
-                    "credit_cost": "Cost (Cr)",
-                    "status": st.column_config.SelectboxColumn(
-                        "Status",
-                        options=["SUCCESS", "FAILED", "PENDING"],
-                        width="small"
-                    )
-                }
-            )
+        try:
+            # Fetch real-time data for high-level metrics
+            total_swarms = pd.read_sql_query("SELECT COUNT(*) as count FROM master_audit_logs", conn).iloc[0]['count']
+            total_users = pd.read_sql_query("SELECT COUNT(*) as count FROM users", conn).iloc[0]['count']
             
-            # --- 3. CSV EXPORT ENGINE ---
-            csv_data = audit_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Export Full Audit Log (CSV)",
-                data=csv_data,
-                file_name=f"audit_log_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv"
-            )
-        else:
-            st.info("No system activity recorded in master_audit_logs yet.")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Global Swarm Count", total_swarms)
+            m2.metric("Total Registered Users", total_users)
+            m3.metric("System Integrity", "Verified", delta="SSL/DB Active")
 
-        st.divider()
-        
+            st.divider()
+
+            # --- 2. MASTER AUDIT LOG TABLE (STABILIZED) ---
+            st.subheader("📊 Global Activity Audit Trail")
+            
+            # Query the Sprint 4 Master Audit Table for the last 500 entries
+            audit_df = pd.read_sql_query("""
+                SELECT timestamp, user, action_type, target_biz, location, credit_cost, status 
+                FROM master_audit_logs 
+                ORDER BY id DESC LIMIT 500
+            """, conn)
+
+            if not audit_df.empty:
+                # Render with Stable Column Config (Avoids experimental StatusColumn errors)
+                st.dataframe(
+                    audit_df, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "timestamp": "Execution Time",
+                        "user": "Account",
+                        "action_type": "Operation",
+                        "target_biz": "Target Brand",
+                        "location": "Market",
+                        "credit_cost": "Cost (Cr)",
+                        "status": st.column_config.SelectboxColumn(
+                            "Status",
+                            options=["SUCCESS", "FAILED", "PENDING"],
+                            width="small"
+                        )
+                    }
+                )
+                
+                # --- 3. CSV EXPORT ENGINE ---
+                csv_data = audit_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Export Full Audit Log (CSV)",
+                    data=csv_data,
+                    file_name=f"audit_log_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.info("No system activity recorded in master_audit_logs yet.")
+
+            st.divider()
+            
+            # --- 4. USER MANAGEMENT & CREDIT INJECTION (RESTORED) ---
+            st.subheader("👤 User Registry & Credit Management")
+            users_df = pd.read_sql_query("SELECT username, email, credits, verified FROM users", conn)
+            st.dataframe(users_df, use_container_width=True, hide_index=True)
+            
+            st.write("**Rapid Credit Injection**")
+            target_u = st.selectbox("Target Account", users_df['username'], key="admin_credit_target")
+            amt = st.number_input("Credits to Inject", value=10, step=5)
+            
+            if st.button("EXECUTE INJECTION", type="primary", use_container_width=True):
+                conn.execute("UPDATE users SET credits = credits + ? WHERE username = ?", (amt, target_u))
+                conn.commit()
+                st.success(f"Successfully injected {amt} credits into {target_u}")
+                st.rerun()
+
+        except Exception as e:
+            st.error(f"Admin Dashboard Error: {e}")
+        finally:
+            conn.close()
+            else:
+            # ACCESS DENIED: Logic for non-admin users
+            st.error("🚫 Administrative Access Denied.")
+            st.info("Your account does not have the permissions required to view system infrastructure.")
+
         # --- 4. USER MANAGEMENT (CREDITS & TERMINATION) ---
         st.subheader("👤 User Registry Management")
         all_users = pd.read_sql_query("SELECT username, email, credits, plan, verified FROM users", conn)
