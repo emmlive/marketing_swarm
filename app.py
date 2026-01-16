@@ -129,9 +129,9 @@ def get_db_creds():
         st.error(f"Failed to load credentials: {e}")
         return {'usernames': {}}
 
-# --- 4. AUTHENTICATION INITIALIZATION (WIDGET-SAFE EDITION) ---
+# --- 4. AUTHENTICATION INITIALIZATION ---
 
-# 4A. Credential Loader (Global scope)
+# 4A. Credential Loader
 def get_db_creds():
     try:
         conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
@@ -146,10 +146,10 @@ def get_db_creds():
                 } for _, row in df.iterrows()
             }
         }
-    except Exception as e:
+    except Exception:
         return {'usernames': {}}
 
-# 4B. Initialize Authenticator via Session State (No @st.cache_resource)
+# 4B. Initialize Authenticator in Session State (Prevents Duplicate Key Error)
 if 'authenticator' not in st.session_state:
     st.session_state.authenticator = stauth.Authenticate(
         get_db_creds(), 
@@ -158,7 +158,6 @@ if 'authenticator' not in st.session_state:
         30
     )
 
-# Alias it for easier use in the code below
 authenticator = st.session_state.authenticator
 
 # 4C. THE LOGIN GATE
@@ -175,25 +174,44 @@ if not st.session_state.get("authentication_status"):
     
     with auth_tabs[1]:
         st.subheader("Enrollment")
-        # Ensure registration also uses the session state version
-        try:
-            if authenticator.register_user(location='main'):
-                st.success('User registered successfully! Please log in.')
-        except Exception as e:
-            st.error(f"Registration Error: {e}")
+        if authenticator.register_user(location='main'):
+            st.success('User registered successfully! Please log in.')
 
     with auth_tabs[2]:
-        st.text_input("Enter Team ID", key="join_team_input")
-        st.button("Request Access", key="join_team_btn")
+        st.text_input("Enter Team ID", key="join_team_gate")
+        st.button("Request Access", key="join_team_btn_gate")
 
     with auth_tabs[3]:
-        authenticator.forgot_password(location='main')
-        authenticator.forgot_username(location='main')
+        # FIXED: Only call these ONCE here to avoid "2 forget passwords"
+        st.subheader("Account Recovery")
+        try:
+            authenticator.forgot_password(location='main')
+            authenticator.forgot_username(location='main')
+        except Exception as e:
+            st.error(f"Recovery Error: {e}")
 
+    # CRITICAL: Stop the script here. This prevents the NameError on user_row.
     st.stop()
 
-# --- 5. LOGGED-IN SESSION ---
-# (The rest of your code follows here...)
+# --- 5. LOGGED-IN SESSION (ONLY ACCESSIBLE AFTER LOGIN) ---
+try:
+    conn = sqlite3.connect('breatheeasy.db')
+    # Use st.session_state["username"] which is guaranteed by the Authenticator
+    query = "SELECT * FROM users WHERE username = ?"
+    user_data = pd.read_sql_query(query, conn, params=(st.session_state["username"],))
+    conn.close()
+
+    if not user_data.empty:
+        user_row = user_data.iloc[0]
+        is_admin = (user_row['role'] == 'admin')
+    else:
+        st.error("User profile not found in database.")
+        st.stop()
+except Exception as e:
+    st.error(f"Session Loading Error: {e}")
+    st.stop()
+
+# Now user_row['logo_path'] will work perfectly because the code only reaches this point after login.
 
 # --- 6. EXPORT HELPERS ---
 def create_word_doc(content, title):
