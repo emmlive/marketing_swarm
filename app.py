@@ -176,3 +176,104 @@ conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
 is_admin = (user_row['role'] == 'admin')
+
+# --- SECTION #4: SPRINT 3 - DYNAMIC COMMAND SIDEBAR ---
+with st.sidebar:
+    # 1. System Health & Theme (Restored Sprint 1)
+    health = check_system_health()
+    col_h, col_t = st.columns([2, 1])
+    with col_h: st.caption(f"{'🟢' if all(health.values()) else '🔴'} **SYSTEM OPERATIONAL**")
+    with col_t: 
+        if st.button("🌓", key="theme_toggle"): toggle_theme()
+
+    # 2. Branding & Credits
+    st.image("Logo1.jpeg", width=120)
+    st.metric("Credits Available", user_row['credits'])
+    st.divider()
+
+    # 3. Dynamic Industry & Service Logic
+    biz_name = st.text_input("🏢 Brand Name", placeholder="e.g. Acme Solar")
+    
+    industry_map = {
+        "Residential Services": ["HVAC", "Roofing", "Solar", "Plumbing"],
+        "Medical & Health": ["Dental", "Plastic Surgery", "Veterinary"],
+        "Legal & Professional": ["Family Law", "Personal Injury", "CPA"],
+        "Other (Manual Entry)": []
+    }
+    
+    selected_ind_cluster = st.selectbox("📂 Industry Cluster", sorted(list(industry_map.keys())))
+    
+    if selected_ind_cluster == "Other (Manual Entry)":
+        final_ind = st.text_input("Type Industry Name")
+        final_service = st.text_input("Type Specific Service")
+    else:
+        final_ind = selected_ind_cluster
+        service_list = industry_map[selected_ind_cluster]
+        final_service = st.selectbox("🛠️ Specific Service", service_list)
+
+    # 4. Dynamic Geography (State -> City)
+    geo_dict = get_geo_data()
+    selected_state = st.selectbox("🎯 Target State", sorted(geo_dict.keys()))
+    city_list = sorted(geo_dict[selected_state]) + ["Other (Manual City)"]
+    selected_city = st.selectbox(f"🏙️ Select City", city_list)
+    
+    if selected_city == "Other (Manual City)":
+        custom_city = st.text_input(f"Type City Name", key="m_city")
+        full_loc = f"{custom_city}, {selected_state}"
+    else:
+        full_loc = f"{selected_city}, {selected_state}"
+
+    # 5. Strategic Directives (The "Prompt" Box)
+    st.divider()
+    agent_info = st.text_area("✍️ Strategic Directives", 
+                             placeholder="e.g. Focus on high-ticket luxury clients...", 
+                             key="agent_directives_box")
+
+    # 6. Swarm Personnel Toggles
+    st.subheader("🤖 Swarm Personnel")
+    # This uses the global agent_map we defined in Sprint 1
+    toggles = {k: st.toggle(v, value=True, key=f"tg_{k}") for k, v in dict(agent_map).items()}
+
+    # 7. The Launch Button & Security Gate
+    st.divider()
+    if is_verified(st.session_state["username"]):
+        run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
+    else:
+        st.error("🛡️ Verification Locked")
+        if st.button("🔓 DEMO: Verify Now", use_container_width=True):
+            conn = sqlite3.connect('breatheeasy.db')
+            conn.execute("UPDATE users SET verified=1 WHERE username=?", (user_row['username'],))
+            conn.commit(); conn.close(); st.success("Verified!"); st.rerun()
+        run_btn = False
+
+    authenticator.logout('🔒 Sign Out', 'sidebar')
+
+# --- SECTION #5: SPRINT 3 - EXECUTION ENGINE ---
+if run_btn:
+    if not biz_name or not final_service:
+        st.error("Identification required: Brand Name and Service must be populated.")
+    else:
+        with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
+            try:
+                # Calls the external main.py backend
+                report = run_marketing_swarm({
+                    'city': full_loc, 
+                    'biz_name': biz_name, 
+                    'service': final_service, 
+                    'directives': agent_info
+                })
+                
+                st.session_state.report = report
+                st.session_state.gen = True
+                
+                # Deduct Credits & Log Activity (Sprint 4 Preview)
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
+                conn.execute("INSERT INTO master_audit_logs (timestamp, user, action_type, target_biz, location, status) VALUES (?,?,?,?,?,?)", 
+                             (datetime.now().strftime("%Y-%m-%d %H:%M"), user_row['username'], "SWARM_LAUNCH", biz_name, full_loc, "SUCCESS"))
+                conn.commit(); conn.close()
+                
+                status.update(label="🚀 Swarm Intelligence Captured!", state="complete")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Backend Coordination Error: {e}")
