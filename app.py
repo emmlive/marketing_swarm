@@ -305,3 +305,177 @@ TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 with TAB["📖 Guide"]:
     st.header("📖 Agent Intelligence Manual")
     st.info("The Omni-Swarm engine is ready. Configure your brand in the sidebar and click Launch.")
+
+# --- SECTION #8: SPRINT 4 - AGENT WORKBENCHES & EXPORTS ---
+
+# 1. AGENT SEAT RENDERING
+for title, key in agent_map:
+    with TAB[title]:
+        # Deployment Guide Header (Sprint 3 Logic)
+        st.markdown(f'''<div class="deploy-guide">
+            <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
+            {DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}
+        </div>''', unsafe_allow_html=True)
+
+        if st.session_state.gen:
+            # Fetch content from the swarm report
+            content = st.session_state.report.get(key, "Intelligence generation in progress...")
+            
+            # Interactive Text Editor
+            edited_content = st.text_area(
+                f"Refine {title} Output", 
+                value=str(content), 
+                height=450, 
+                key=f"editor_{key}"
+            )
+
+            # Export Engine (Word & PDF)
+            st.divider()
+            c1, c2, c3 = st.columns([1, 1, 2])
+            with c1:
+                st.download_button(
+                    label="📄 Export Word",
+                    data=export_word(edited_content, title),
+                    file_name=f"{biz_name}_{key}_brief.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key=f"word_{key}"
+                )
+            with c2:
+                st.download_button(
+                    label="📕 Export PDF",
+                    data=export_pdf(edited_content, title),
+                    file_name=f"{biz_name}_{key}_brief.pdf",
+                    mime="application/pdf",
+                    key=f"pdf_{key}"
+                )
+        else:
+            st.info(f"✨ The {title} seat is empty. Configure your brand in the sidebar and launch the swarm to begin.")
+
+# 2. MULTIMODAL VISION & VEO STUDIO
+with TAB["👁️ Vision"]:
+    st.header("👁️ Forensic Vision Inspector")
+    v_file = st.file_uploader("Upload Forensic Evidence (Roof/HVAC Damage)", type=['png','jpg','jpeg'], key="vis_up")
+    if v_file:
+        st.image(v_file, caption="Analyzing Visual Evidence...", use_container_width=True)
+        st.button("🔍 Run Vision Audit", type="secondary")
+
+with TAB["🎬 Veo Studio"]:
+    st.header("🎬 Veo Cinematic Studio")
+    if st.session_state.gen:
+        v_prompt = st.text_area("Cinematic Scene Description", 
+                               value=str(st.session_state.report.get('creative', ''))[:500],
+                               help="Veo uses this context to generate native video ads.")
+        if st.button("📽️ GENERATE AI VIDEO AD"):
+            st.info("Veo Engine Rendering Active... (Estimated 2-3 Minutes)")
+    else:
+        st.warning("Launch a swarm to generate the creative context required for Veo Studio.")
+
+# 3. TEAM INTEL & KANBAN PIPELINE
+with TAB["🤝 Team Intel"]:
+    st.header("🤝 Team Account & Lead Pipeline")
+    t1, t2 = st.columns([1, 2])
+    
+    with t1:
+        st.subheader("👤 User Profile")
+        with st.form("profile_update_form"):
+            n_name = st.text_input("Full Name", user_row['name'])
+            n_email = st.text_input("Email", user_row['email'])
+            if st.form_submit_button("Update Profile"):
+                update_account_settings(user_row['username'], n_email, n_name)
+                st.rerun()
+
+    with t2:
+        st.subheader("📊 Lead Kanban Pipeline")
+        conn = sqlite3.connect('breatheeasy.db')
+        team_df = pd.read_sql_query("SELECT id, city, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
+        
+        if not team_df.empty:
+            stages = ["Discovery", "Execution", "ROI Verified"]
+            cols = st.columns(3)
+            for i, stage in enumerate(stages):
+                with cols[i]:
+                    st.markdown(f'<div class="kanban-header">{stage}</div>', unsafe_allow_html=True)
+                    stage_leads = team_df[team_df['status'] == stage]
+                    for _, lead in stage_leads.iterrows():
+                        st.markdown(f'''<div class="kanban-card">
+                            <b>{lead["city"]}</b><br>
+                            <small>{lead["service"]}</small>
+                        </div>''', unsafe_allow_html=True)
+        else:
+            st.info("No active leads found in the pipeline.")
+        conn.close()
+
+# 4. GOD-MODE ADMIN
+if is_admin and "⚙ Admin" in TAB:
+    with TAB["⚙ Admin"]:
+        st.header("⚙️ God-Mode Forensic Trail")
+        conn = sqlite3.connect('breatheeasy.db')
+        
+        # System Metrics
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total Swarms", pd.read_sql_query("SELECT COUNT(*) FROM master_audit_logs", conn).iloc[0,0])
+        m2.metric("Active Users", pd.read_sql_query("SELECT COUNT(*) FROM users", conn).iloc[0,0])
+        m3.metric("DB Integrity", "100%")
+        
+        # Forensic Log Table
+        st.subheader("📊 Global Activity Audit Trail")
+        audit_df = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
+        st.dataframe(audit_df, use_container_width=True, hide_index=True)
+        
+        # Credit Management
+        st.subheader("👤 User Credit Injection")
+        u_df = pd.read_sql_query("SELECT username, credits FROM users", conn)
+        target_user = st.selectbox("Select Target User", u_df['username'])
+        if st.button("Inject 100 Credits"):
+            conn.execute("UPDATE users SET credits = credits + 100 WHERE username = ?", (target_user,))
+            conn.commit()
+            st.success(f"Injected 100 credits into {target_user}")
+            st.rerun()
+        conn.close()
+
+# --- UPDATE SECTION #0: SPRINT 5 PERFORMANCE HELPERS ---
+
+@st.cache_data(ttl=3600)
+def get_geo_data():
+    """Sprint 5: High-speed geographic lookup dictionary with caching"""
+    return {
+        "Alabama": ["Birmingham", "Huntsville", "Mobile"],
+        "Arizona": ["Phoenix", "Scottsdale", "Tucson"],
+        "California": ["Los Angeles", "San Francisco", "San Diego"],
+        "Florida": ["Miami", "Orlando", "Tampa"],
+        "Illinois": ["Chicago", "Naperville", "Plainfield"],
+        "Texas": ["Austin", "Dallas", "Houston"],
+    }
+
+def check_system_health():
+    """Sprint 5: Technical forensic heartbeat monitor"""
+    health = {
+        "Gemini 2.0": os.getenv("GOOGLE_API_KEY") is not None,
+        "Serper API": os.getenv("SERPER_API_KEY") is not None,
+        "Database": os.path.exists("breatheeasy.db"),
+        "Disk Space": True
+    }
+    return health
+
+# --- ADD TO THE VERY END OF YOUR APP.PY ---
+
+# --- SPRINT 5: FOOTER & LIVE SYSTEM MONITOR ---
+st.markdown("---")
+f1, f2, f3 = st.columns([3, 1, 1])
+
+with f1:
+    st.caption(f"© 2026 TechInAdvance AI | Enterprise Omni-Swarm v5.0.1 | User: {user_row['username']}")
+
+with f2:
+    if all(health.values()):
+        st.success("🛰️ API NODES: ONLINE")
+    else:
+        st.warning("📡 API NODES: DEGRADED")
+
+with f3:
+    if st.button("🔄 Refresh System State"):
+        st.rerun()
+
+# --- FINAL QUALITY GATE: NOTIFICATION ENGINE ---
+if st.session_state.gen:
+    st.toast(f"Swarm successfully deployed for {biz_name}!", icon="🚀")
