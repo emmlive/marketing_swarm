@@ -248,32 +248,90 @@ with st.sidebar:
 
     authenticator.logout('🔒 Sign Out', 'sidebar')
 
-# --- SECTION #5: SPRINT 3 - EXECUTION ENGINE ---
-if run_btn:
-    if not biz_name or not final_service:
-        st.error("Identification required: Brand Name and Service must be populated.")
+# --- SECTION #4: SPRINT 3 - DYNAMIC COMMAND SIDEBAR ---
+with st.sidebar:
+    # 1. System Health (Restored from Heartbeat Helper)
+    health = check_system_health()
+    st.caption(f"{'🟢' if all(health.values()) else '🔴'} **SYSTEM ONLINE**")
+    
+    st.image("Logo1.jpeg", width=120)
+    st.metric("Credits Available", user_row['credits'])
+    st.divider()
+
+    # 2. Dynamic Industry & Service Logic
+    biz_name = st.text_input("🏢 Brand Name", placeholder="e.g. Acme Solar")
+    
+    industry_map = {
+        "Residential Services": ["HVAC", "Roofing", "Solar", "Plumbing"],
+        "Medical & Health": ["Dental", "Plastic Surgery", "Veterinary"],
+        "Legal & Professional": ["Family Law", "Personal Injury", "CPA"],
+        "Custom": ["Type Manual Service..."]
+    }
+    
+    selected_ind_cluster = st.selectbox("📂 Industry Cluster", sorted(list(industry_map.keys())))
+    
+    # Handle Dynamic Service Selection
+    if selected_ind_cluster == "Custom":
+        final_service = st.text_input("Enter Service Name")
     else:
-        with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
-            try:
-                # Calls the external main.py backend
-                report = run_marketing_swarm({
-                    'city': full_loc, 
-                    'biz_name': biz_name, 
-                    'service': final_service, 
-                    'directives': agent_info
-                })
-                
-                st.session_state.report = report
-                st.session_state.gen = True
-                
-                # Deduct Credits & Log Activity (Sprint 4 Preview)
-                conn = sqlite3.connect('breatheeasy.db')
-                conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
-                conn.execute("INSERT INTO master_audit_logs (timestamp, user, action_type, target_biz, location, status) VALUES (?,?,?,?,?,?)", 
-                             (datetime.now().strftime("%Y-%m-%d %H:%M"), user_row['username'], "SWARM_LAUNCH", biz_name, full_loc, "SUCCESS"))
-                conn.commit(); conn.close()
-                
-                status.update(label="🚀 Swarm Intelligence Captured!", state="complete")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Backend Coordination Error: {e}")
+        service_list = industry_map[selected_ind_cluster]
+        final_service = st.selectbox("🛠️ Specific Service", service_list)
+
+    # 3. Dynamic Geography (State -> City)
+    geo_dict = get_geo_data()
+    selected_state = st.selectbox("🎯 Target State", sorted(geo_dict.keys()))
+    selected_city = st.selectbox(f"🏙️ Target City", sorted(geo_dict[selected_state]))
+    full_loc = f"{selected_city}, {selected_state}"
+
+    # 4. Strategic Directives (Prompt Engineering Box)
+    st.divider()
+    agent_info = st.text_area("✍️ Strategic Directives", 
+                             placeholder="e.g. Focus on high-ticket commercial clients, emphasize our 25-year warranty.",
+                             help="This info guides the AI swarm's focus.")
+
+    # 5. Swarm Personnel Expander
+    with st.expander("🤖 Swarm Personnel", expanded=False):
+        # Maps the UI labels to the backend agent keys
+        toggles = {k: st.toggle(v, value=True, key=f"tg_{k}") for k, v in dict(agent_map).items()}
+
+    # 6. Launch & Logout
+    st.divider()
+    if is_verified(st.session_state["username"]):
+        run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
+    else:
+        st.error("🛡️ Account Verification Required")
+        run_btn = False
+
+    authenticator.logout('🔒 Sign Out', 'sidebar')
+
+# --- SECTION #5: SPRINT 3 - TAB RENDERING & EXECUTION ---
+if run_btn:
+    with st.status("🛠️ Coordinating Swarm Agents...", expanded=True):
+        # Call the swarm backend
+        report = run_marketing_swarm({
+            'city': full_loc, 
+            'biz_name': biz_name, 
+            'service': final_service, 
+            'directives': agent_info
+        })
+        st.session_state.report = report
+        st.session_state.gen = True
+        st.rerun()
+
+# Render Tabs with proper icons (as seen in Image 1)
+tab_labels = ["📖 Guide"] + [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
+if is_admin: tab_labels.append("⚙ Admin")
+
+tabs_obj = st.tabs(tab_labels)
+TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
+
+with TAB["📖 Guide"]:
+    st.header("📖 Agent Intelligence Manual")
+    st.markdown("""
+    The **Omni-Swarm** engine coordinates 8 specialized AI agents to engineer business growth.
+    1. **Forensics:** Web Auditor & Ad Tracker identify rival weaknesses.
+    2. **Strategy:** Swarm Strategist builds a phased 30-Day ROI Roadmap.
+    3. **Production:** Creative & SEO Architects build high-converting assets.
+    """)
+    if not st.session_state.gen:
+        st.info("Launch a Swarm in the sidebar to populate the seats below.")
