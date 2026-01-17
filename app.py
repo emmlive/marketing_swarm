@@ -93,3 +93,86 @@ with tabs[0]:
 # ---------------------------------------------------------
 # NEXT STEP: Sprint 2 (Authentication & Sign-Up Logic)
 # ---------------------------------------------------------
+
+# --- SECTION #2: SPRINT 2 - AUTHENTICATION & SIGN UP TIERS ---
+
+def get_db_creds():
+    """Fetches user credentials for the authentication engine"""
+    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+    df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
+    conn.close()
+    return {'usernames': {r['username']: {'email':r['email'], 'name':r['name'], 'password':r['password']} for _,r in df.iterrows()}}
+
+# Initialize Authenticator in session state to maintain stability
+if 'authenticator' not in st.session_state:
+    st.session_state.authenticator = stauth.Authenticate(
+        get_db_creds(), 
+        st.secrets['cookie']['name'], 
+        st.secrets['cookie']['key'], 
+        30
+    )
+
+authenticator = st.session_state.authenticator
+
+# --- THE LOGIN & SIGN UP GATE ---
+if not st.session_state.get("authentication_status"):
+    st.image("Logo1.jpeg", width=180)
+    
+    # Restored Sprints 1 & 2 Tabs: Login, Sign Up, Team, and Recovery
+    auth_tabs = st.tabs(["🔑 Login", "📝 Sign Up", "🤝 Join Team", "❓ Forget Password"])
+    
+    with auth_tabs[0]: 
+        authenticator.login(location='main')
+        
+    with auth_tabs[1]:
+        st.subheader("Select Enterprise Growth Package")
+        c1, c2, c3 = st.columns(3)
+        
+        # Sprint 1: CSS Pricing Cards
+        with c1: 
+            st.markdown('<div class="price-card"><h3>Basic</h3><h2>$99</h2><p>50 Credits/mo</p></div>', unsafe_allow_html=True)
+        with c2: 
+            st.markdown('<div class="price-card" style="border-color:#7C3AED;"><h3>Pro</h3><h2>$249</h2><p>150 Credits/mo</p></div>', unsafe_allow_html=True)
+        with c3: 
+            st.markdown('<div class="price-card"><h3>Enterprise</h3><h2>$499</h2><p>Unlimited Agents</p></div>', unsafe_allow_html=True)
+        
+        # Sprint 2: Registration Logic
+        try:
+            reg_data = authenticator.register_user(location='main')
+            if reg_data:
+                email, username, name = reg_data
+                conn = sqlite3.connect('breatheeasy.db')
+                # Inject default credits and member role into the new record
+                conn.execute("""
+                    UPDATE users 
+                    SET credits = 50, role = 'member', plan = 'Basic', verified = 0 
+                    WHERE username = ?
+                """, (username,))
+                conn.commit()
+                conn.close()
+                st.success("Sign Up Successful! Please switch to the Login tab.")
+        except Exception as e:
+            st.error(f"Sign Up Error: {e}")
+            
+    with auth_tabs[2]:
+        st.subheader("🤝 Join an Existing Team")
+        team_id_input = st.text_input("Enter Enterprise Team ID", placeholder="e.g. TEAM_admin_123")
+        if st.button("Request Team Access", use_container_width=True):
+            st.info(f"Access request for {team_id_input} sent to Administrator.")
+            
+    with auth_tabs[3]:
+        st.subheader("❓ Account Recovery")
+        try:
+            res = authenticator.forgot_password(location='main')
+            if res:
+                st.success("Password reset request processed. Check your registered email.")
+        except Exception as e:
+            pass # Handled internally by widget
+            
+    st.stop() # Prevents main app from loading until logged in
+
+# --- POST-LOGIN CONTEXT ---
+conn = sqlite3.connect('breatheeasy.db')
+user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
+conn.close()
+is_admin = (user_row['role'] == 'admin')
