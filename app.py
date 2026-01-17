@@ -15,7 +15,6 @@ from PIL import Image
 
 @st.cache_data(ttl=3600)
 def get_geo_data():
-    """Restored: Full 2026 High-speed geographic lookup"""
     return {
         "Alabama": ["Birmingham", "Huntsville", "Mobile"],
         "Arizona": ["Phoenix", "Scottsdale", "Tucson"],
@@ -26,7 +25,6 @@ def get_geo_data():
     }
 
 def check_system_health():
-    """Restored: Sprint 5 Forensic Heartbeat"""
     health = {
         "Gemini 2.0": os.getenv("GOOGLE_API_KEY") is not None,
         "Serper API": os.getenv("SERPER_API_KEY") is not None,
@@ -35,19 +33,16 @@ def check_system_health():
     return health
 
 def is_verified(username):
-    """Restored: Sprint 2 Security Gate"""
     conn = sqlite3.connect('breatheeasy.db')
     res = conn.execute("SELECT verified FROM users WHERE username = ?", (username,)).fetchone()
     conn.close()
     return res[0] == 1 if res else False
 
 def toggle_theme():
-    """Restored: Sprint 1 Dark/Light Toggle"""
     if 'theme' not in st.session_state: st.session_state.theme = 'light'
     st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
 
 def update_account_settings(username, new_email, new_name):
-    """Restored: Sprint 4 Profile Management"""
     conn = sqlite3.connect('breatheeasy.db')
     conn.execute("UPDATE users SET email = ?, name = ? WHERE username = ?", (new_email, new_name, username))
     conn.commit(); conn.close()
@@ -97,7 +92,25 @@ def init_db():
 
 init_db()
 
-# --- SECTION #2: AUTHENTICATION & SIGN UP TIERS ---
+# --- SECTION #2: GLOBAL LOGIC DEFINITIONS (FIXES NAMEERROR) ---
+agent_map = [
+    ("🕵️ Analyst", "analyst"), ("📺 Ads", "ads"), ("🎨 Creative", "creative"), 
+    ("👔 Strategist", "strategist"), ("📱 Social", "social"), ("📍 GEO", "geo"), 
+    ("🌐 Auditor", "audit"), ("✍ SEO", "seo")
+]
+
+DEPLOY_GUIDES = {
+    "analyst": "Identify Price-Gaps in the competitor table to undercut rivals.",
+    "ads": "Copy platform hooks directly into Meta/Google Manager.",
+    "creative": "Implement multi-channel copy and cinematic Veo video prompts.",
+    "strategist": "This 30-day ROI roadmap is your CEO-level execution checklist.",
+    "social": "Deploy viral hooks across LinkedIn/IG based on local schedule.",
+    "geo": "Update Google Business Profile metadata based on AI technical factors.",
+    "audit": "Forward this brief to your web team to patch conversion leaks.",
+    "seo": "Publish this article to secure rankings in AI Search (SGE)."
+}
+
+# --- SECTION #3: AUTHENTICATION ---
 def get_db_creds():
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
@@ -123,17 +136,17 @@ if not st.session_state.get("authentication_status"):
     with auth_tabs[3]: authenticator.forgot_password(location='main')
     st.stop()
 
-# --- SECTION #3: SESSION DATA ---
+# --- SECTION #4: SESSION CONTEXT ---
 conn = sqlite3.connect('breatheeasy.db')
 user_row = pd.read_sql_query("SELECT * FROM users WHERE username = ?", conn, params=(st.session_state["username"],)).iloc[0]
 conn.close()
 is_admin = (user_row['role'] == 'admin')
 
-# --- SECTION #4: DYNAMIC COMMAND SIDEBAR ---
+# --- SECTION #5: DYNAMIC SIDEBAR (SPRINT 5) ---
 with st.sidebar:
     health = check_system_health()
     col_h, col_t = st.columns([2, 1])
-    with col_h: st.caption(f"{'🟢' if all(health.values()) else '🔴'} **SYSTEM OPERATIONAL**")
+    with col_h: st.caption(f"{'🟢' if all(health.values()) else '🔴'} **SYSTEM HEARTBEAT**")
     with col_t: 
         if st.button("🌓"): toggle_theme()
 
@@ -167,21 +180,20 @@ with st.sidebar:
     agent_info = st.text_area("✍️ Strategic Directives", placeholder="e.g. Focus on high-ticket luxury clients...", key="agent_directives_box")
 
     st.subheader("🤖 Swarm Personnel")
-    agent_config = {"analyst": "🕵️ Analyst", "ads": "📺 Ad Tracker", "creative": "🎨 Creative", "strategist": "👔 Strategist", "social": "📱 Social", "geo": "📍 GEO", "audit": "🌐 Auditor", "seo": "✍ SEO"}
-    toggles = {k: st.toggle(v, value=True, key=f"tg_{k}") for k, v in agent_config.items()}
+    toggles = {k: st.toggle(v, value=True, key=f"tg_{k}") for k, v in dict(agent_map).items()}
 
     st.divider()
     if is_verified(st.session_state["username"]):
         run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
     else:
         st.error("🛡️ Verification Locked")
-        if st.button("🔓 DEMO: Verify Now", use_container_width=True):
+        if st.button("🔓 DEMO: Verify Now"):
             conn = sqlite3.connect('breatheeasy.db'); conn.execute("UPDATE users SET verified=1 WHERE username=?", (user_row['username'],)); conn.commit(); conn.close(); st.rerun()
         run_btn = False
 
     authenticator.logout('🔒 Sign Out', 'sidebar')
 
-# --- SECTION #5: EXECUTION ENGINE ---
+# --- SECTION #6: EXECUTION ---
 if run_btn:
     with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
         report = run_marketing_swarm({'city': full_loc, 'biz_name': biz_name, 'service': final_service, 'directives': agent_info})
@@ -193,59 +205,47 @@ if run_btn:
                      (datetime.now().strftime("%Y-%m-%d %H:%M"), user_row['username'], "SWARM", biz_name, full_loc, "SUCCESS"))
         conn.commit(); conn.close(); st.rerun()
 
-# --- SECTION #6: MULTIMODAL COMMAND CENTER ---
-tab_labels = ["📖 Guide", "🕵️ Analyst", "📺 Ads", "🎨 Creative", "👔 Strategist", "📱 Social", "📍 GEO", "🌐 Auditor", "✍ SEO", "👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
+# --- SECTION #7: COMMAND CENTER ---
+tab_labels = ["📖 Guide"] + [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 if is_admin: tab_labels.append("⚙ Admin")
 
 tabs_obj = st.tabs(tab_labels)
 TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
-# A. Guide & Manual (Sprint 1)
 with TAB["📖 Guide"]:
     st.header("📖 Agent Intelligence Manual")
-    st.markdown("""
-    The **Omni-Swarm** engine coordinates 8 specialized AI agents to engineer growth.
-    - **Forensics:** Web Auditor & Ad Tracker identify rival psychological and technical weaknesses.
-    - **Strategy:** Swarm Strategist builds a phased 30-Day ROI Roadmap.
-    - **Production:** Creative & SEO Architects build high-converting assets.
-    """)
+    st.markdown("The **Omni-Swarm** engine coordinates 8 specialized AI agents for business growth.")
 
-# B. Dynamic Agent Seats (Sprints 2 & 3)
-DEPLOY_GUIDES = {"analyst": "Identify Price-Gaps.", "ads": "Copy platform hooks.", "creative": "Implement copy/prompts.", "strategist": "CEO-level checklist.", "social": "Deploy viral hooks.", "geo": "Update citations.", "audit": "Patch technical leaks.", "seo": "Publish for SGE."}
 for title, key in agent_map:
     with TAB[title]:
-        st.markdown(f'<div class="deploy-guide"><b>🚀 DEPLOYMENT GUIDE:</b><br>{DEPLOY_GUIDES.get(key,"Review report.")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="deploy-guide"><b>🚀 DEPLOYMENT GUIDE:</b><br>{DEPLOY_GUIDES.get(key)}</div>', unsafe_allow_html=True)
         if st.session_state.gen:
-            content = st.session_state.report.get(key, "Intelligence generation in progress...")
+            content = st.session_state.report.get(key, "Pending...")
             edited = st.text_area(f"Refine {title}", value=str(content), height=400, key=f"ed_{key}")
             c1, c2 = st.columns(2)
-            with c1: st.download_button("📄 Word", export_word(edited, title), f"{key}.docx")
-            with c2: st.download_button("📕 PDF", export_pdf(edited, title), f"{key}.pdf")
+            with c1: st.download_button("📄 Word", export_word(edited, title), f"{key}.docx", key=f"w_{key}")
+            with c2: st.download_button("📕 PDF", export_pdf(edited, title), f"{key}.pdf", key=f"p_{key}")
 
-# C. Vision & Veo Studio (Sprints 4 & 5)
 with TAB["👁️ Vision"]:
-    st.subheader("👁️ Forensic Vision Inspector")
+    st.subheader("👁️ Vision Inspector")
     v_file = st.file_uploader("Upload Evidence", type=['png','jpg','jpeg'], key="vis_up")
     if v_file: st.image(v_file, use_container_width=True)
 
 with TAB["🎬 Veo Studio"]:
     st.subheader("🎬 Veo Cinematic Studio")
     if st.session_state.gen:
-        v_prompt = st.text_area("Scene Description", value=str(st.session_state.report.get('creative', ''))[:500])
+        v_prompt = st.text_area("Scene Description", value=str(st.session_state.report.get('creative', ''))[:500], key="v_area")
         if st.button("📽️ GENERATE AD"): st.info("Veo Rendering Engine Active...")
 
-# D. Team Intel Kanban (Sprint 4)
 with TAB["🤝 Team Intel"]:
-    st.header("🤝 Team Account & Lead Pipeline")
+    st.header("🤝 Account & Lead Pipeline")
     t1, t2 = st.columns([1, 2])
     with t1:
-        st.subheader("👤 Account Tools")
         with st.form("profile_form"):
             n_name = st.text_input("Name", user_row['name'])
             n_email = st.text_input("Email", user_row['email'])
             if st.form_submit_button("Save"): update_account_settings(user_row['username'], n_email, n_name)
     with t2:
-        st.subheader("📊 Kanban Pipeline")
         conn = sqlite3.connect('breatheeasy.db')
         team_df = pd.read_sql_query("SELECT id, city, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
         if not team_df.empty:
@@ -258,14 +258,11 @@ with TAB["🤝 Team Intel"]:
                         st.markdown(f'<div class="kanban-card">{lead["city"]}<br><small>{lead["service"]}</small></div>', unsafe_allow_html=True)
         conn.close()
 
-# E. God-Mode Admin (Sprint 4)
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
-        st.header("⚙️ God-Mode Forensics")
+        st.header("⚙️ God-Mode")
         conn = sqlite3.connect('breatheeasy.db')
-        m1, m2 = st.columns(2); m1.metric("Global Swarms", pd.read_sql_query("SELECT COUNT(*) FROM master_audit_logs", conn).iloc[0,0]); m2.metric("Total Users", pd.read_sql_query("SELECT COUNT(*) FROM users", conn).iloc[0,0])
         st.dataframe(pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn), use_container_width=True)
-        u_df = pd.read_sql_query("SELECT username, credits FROM users", conn)
-        target = st.selectbox("Inject Credits", u_df['username'])
+        target = st.selectbox("Inject Credits", pd.read_sql_query("SELECT username FROM users", conn)['username'])
         if st.button("Inject 100"): conn.execute("UPDATE users SET credits = credits + 100 WHERE username = ?", (target,)); conn.commit(); st.rerun()
         conn.close()
