@@ -10,49 +10,51 @@ from docx import Document
 from main import run_marketing_swarm 
 
 # --- SECTION #0: GLOBAL HELPERS ---
-import unicodedata
+import unicodedata # Ensure this is at the very top with other imports
 
 def export_pdf(content, title):
-    """Sprint 3: High-Resilience PDF Engine (Unicode-Safe)"""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, f'Intelligence Brief: {title}', 0, 1, 'C')
-    pdf.set_font("Arial", size=10)
-    
-    # 1. UNICODE NORMALIZATION (The 'Nuclear' Sanitizer)
-    # This converts characters like 'smart quotes' or 'accented letters' 
-    # into their closest ASCII equivalent.
-    text_content = str(content)
-    normalized_text = unicodedata.normalize('NFKD', text_content)
-    
-    # 2. STRING CLEANUP
-    # Specifically targeting the characters FPDF hates most
-    replacements = {
-        '\u2013': '-', '\u2014': '-', 
-        '\u2018': "'", '\u2019': "'", 
-        '\u201c': '"', '\u201d': '"',
-        '\u2022': '*', # AI-generated bullet points
-        '\u20ac': 'EUR', # Euro
-        '\u00a3': 'GBP'  # Pound
-    }
-    for original, replacement in replacements.items():
-        normalized_text = normalized_text.replace(original, replacement)
-    
-    # 3. FINAL ASCII FILTER
-    # This removes anything that isn't in the standard latin-1 range 
-    # to prevent the fpdf.py line 1170 crash.
-    safe_data = normalized_text.encode('ascii', 'ignore').decode('ascii')
-    
-    pdf.multi_cell(0, 7, txt=safe_data)
-    
-    # Return as safe stream
+    """Folder 06: Final Resilient PDF Engine (Strict ASCII fallback)"""
     try:
-        # We use latin-1 ignore here as a final safety wrapper
-        return pdf.output(dest='S').encode('latin-1', 'ignore')
-    except Exception:
-        # If all else fails, return raw output
-        return pdf.output(dest='S')
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(0, 10, f'Intelligence Brief: {title}', 0, 1, 'C')
+        pdf.set_font("Arial", size=10)
+        
+        # 1. Force string conversion
+        text_content = str(content)
+        
+        # 2. Decompose Unicode (e.g., turn accented 'é' into 'e')
+        # This is the most professional way to handle AI text
+        normalized = unicodedata.normalize('NFKD', text_content)
+        
+        # 3. Strict ASCII Encode/Decode
+        # 'ignore' will strip any character that cannot be represented in Latin-1
+        # This is the "Safety Shield" that prevents the UnicodeEncodeError
+        clean_text = normalized.encode('ascii', 'ignore').decode('ascii')
+        
+        # 4. Manual mapping for common symbols that ASCII ignore might delete
+        clean_text = clean_text.replace('\u2022', '*').replace('\u2013', '-').replace('\u2014', '-')
+        
+        pdf.multi_cell(0, 7, txt=clean_text)
+        
+        # 5. Safe Output Generation
+        # We return the bytes directly as the PDF engine provides them
+        output_bytes = pdf.output(dest='S')
+        
+        # If output_bytes is already a byte string (standard in FPDF), return it
+        if isinstance(output_bytes, bytes):
+            return output_bytes
+        # Otherwise, encode carefully
+        return str(output_bytes).encode('latin-1', 'replace')
+        
+    except Exception as e:
+        # Emergency recovery: Return a basic text-based PDF error msg if it STILL fails
+        error_pdf = FPDF()
+        error_pdf.add_page()
+        error_pdf.set_font("Arial", size=12)
+        error_pdf.cell(0, 10, "PDF Generation Error: Non-standard characters detected.", 0, 1)
+        return error_pdf.output(dest='S')
 
 def export_word(content, title):
     """Standard Word export engine"""
