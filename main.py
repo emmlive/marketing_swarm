@@ -236,7 +236,7 @@ def run_marketing_swarm(inputs):
 """
 
 # 4. SYSTEMIC MAPPING (Revised for Flow State Sync)
-    # Ensure these flow.state variables match exactly what you defined in your Flow class
+    # This dictionary maps internal flow state variables to the UI keys in app.py
     master_data = {
         "analyst": getattr(flow.state, 'market_data', "No analyst data found."),
         "ads": getattr(flow.state, 'competitor_ads', "No ad data found."),
@@ -250,5 +250,9 @@ def run_marketing_swarm(inputs):
         "full_report": formatted_string_report 
     }
 
-    # 5. FILTER: Return only toggled agents + the full summary
+    # 5. FILTERED RETURN
+    # We pull the 'active_swarm' list from the inputs we sent from app.py
+    active_list = inputs.get('active_swarm', [])
+    
+    # We only return what the user asked for + the full summary
     return {k: v for k, v in master_data.items() if k in active_list or k == "full_report"}
