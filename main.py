@@ -334,11 +334,10 @@ def run_marketing_swarm(inputs):
 {flow.state.production_schedule}
 """
 
-# 4. SYSTEMIC MAPPING (Revised for Flow State Sync)
-    # This dictionary maps internal flow state variables to the UI keys in app.py
+# 4. SYSTEMIC MAPPING (Final Alignment for Go-Live)
+    # This dictionary bridges your Backend State to your Frontend Tabs
     master_data = {
         "analyst": getattr(flow.state, 'market_data', "No analyst data found."),
-        "ads": getattr(flow.state, 'competitor_ads', "No ad data found."),
         "vision": getattr(flow.state, 'vision_intel', "No visual intel found."), 
         "creative": getattr(flow.state, 'ad_drafts', "No creative drafts found."),
         "strategist": getattr(flow.state, 'strategist_brief', "Final brief pending."),
@@ -346,12 +345,12 @@ def run_marketing_swarm(inputs):
         "geo": getattr(flow.state, 'geo_intel', "GEO data not selected."),
         "seo": getattr(flow.state, 'seo_article', "SEO Content not selected."),
         "audit": getattr(flow.state, 'website_audit', "Website audit pending."),
-        "full_report": formatted_string_report 
+        "full_report": getattr(flow.state, 'full_report', "Full report generation failed.")
     }
 
     # 5. FILTERED RETURN
-    # We pull the 'active_swarm' list from the inputs we sent from app.py
+    # We retrieve the list of buttons the user actually clicked
     active_list = inputs.get('active_swarm', [])
     
-    # We only return what the user asked for + the full summary
+    # We return the data for active agents + the full summary for the PDF
     return {k: v for k, v in master_data.items() if k in active_list or k == "full_report"}
