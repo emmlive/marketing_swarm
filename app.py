@@ -378,22 +378,26 @@ with st.sidebar:
 
     authenticator.logout('🔒 Sign Out', 'sidebar')
 
-# 4. EXECUTION BRIDGE (Updated for Sync)
-
+# --- 4. EXECUTION BRIDGE (Final SDLC Sync) ---
 if run_btn:
     if not biz_name:
-        st.error("Error: Brand Name is required for swarm coordination.")
+        st.error("🚨 Error: Brand Name is required to initiate swarm coordination.")
     else:
-        # 1. Identify which agents are actually toggled ON
-        # This fixes the 'Agent not selected' issue by filtering the map
-        active_agents = [key for title, key in agent_map if toggles.get(key)]
+        # 1. AGENT SELECTION FILTER
+        # This extracts only the keys where the toggle is True
+        # It creates a list like ['analyst', 'seo', 'audit']
+        active_agents = [k for k, v in toggles.items() if v] 
         
         if not active_agents:
             st.warning("⚠️ Warning: No agents selected. Please toggle at least one Swarm Personnel.")
         else:
+            # 2. COORDINATED EXECUTION
+            # The 'with st.status' block creates a professional loading experience
             with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
-                # 2. Pass the active list to your backend main.py
-                # Ensure your backend main.py is set up to receive 'active_swarm'
+                st.write(f"📡 Dispatching agents for **{biz_name}** in **{full_loc}**...")
+                
+                # PASS DATA TO BACKEND (main.py)
+                # We send the active_swarm list so the engine knows what to run
                 report = run_marketing_swarm({
                     'city': full_loc, 
                     'biz_name': biz_name, 
@@ -402,19 +406,26 @@ if run_btn:
                     'active_swarm': active_agents 
                 })
                 
-                # 3. Securely store results in session state
+                # 3. STATE PERSISTENCE
                 st.session_state.report = report
                 st.session_state.gen = True
                 
-                # 4. Final Audit Log and Refresh
+                # 4. DATABASE UPDATES (Audit & Credits)
                 conn = sqlite3.connect('breatheeasy.db')
+                # Deduct 1 credit for the successful launch
                 conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
-                # Log the successful generation for the Admin Tab
-                conn.execute("INSERT INTO master_audit_logs (timestamp, user, action_type, target_biz, location, status) VALUES (?,?,?,?,?,?)", 
-                             (datetime.now().strftime("%Y-%m-%d %H:%M"), user_row['username'], "SWARM_COMPLETE", biz_name, full_loc, "SUCCESS"))
-                conn.commit(); conn.close()
+                # Log the launch in the master audit table for the Admin Tab
+                conn.execute("""
+                    INSERT INTO master_audit_logs (timestamp, user, action_type, target_biz, location, status) 
+                    VALUES (?,?,?,?,?,?)""", 
+                    (datetime.now().strftime("%Y-%m-%d %H:%M"), user_row['username'], "SWARM_LAUNCH", biz_name, full_loc, "SUCCESS")
+                )
+                conn.commit()
+                conn.close()
                 
-                status.update(label="🚀 Swarm Intelligence Captured!", state="complete")
+                status.update(label="🚀 Swarm Intelligence Captured!", state="complete", expanded=False)
+                
+                # 5. REFRESH UI
                 st.rerun()
 
 # --- FOLDER 06: OMNI-SWARM_SPRINTS - THE INTELLIGENCE HUB ---
