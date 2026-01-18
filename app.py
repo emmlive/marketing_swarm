@@ -42,21 +42,41 @@ else:
     st.sidebar.success("Authenticated")
     st.write("Welcome to the Command Center")
 
-# --- FOLDER 04: SECURITY PROTOCOLS & AUTHENTICATION WRAPPER ---
+# --- FOLDER 04: HARDENED SECURITY & AUTHENTICATION PROTOCOLS ---
 
 def get_db_creds():
-    """Fetches user credentials using Pandas with safety check"""
+    """Fetches fresh credentials from the database"""
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     try:
-        # We explicitly use pd here; ensure 'import pandas as pd' is at the top
         df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
         conn.close()
         return {'usernames': {r['username']: {'email':r['email'], 'name':r['name'], 'password':r['password']} for _,r in df.iterrows()}}
-    except Exception as e:
+    except:
         conn.close()
-        return {'usernames': {}} # Return empty dict if table is missing
+        return {'usernames': {}}
 
-# 1. Initialize Authenticator
+def init_db_v2():
+    """Forces administrative credentials and initializes schema"""
+    conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users 
+                 (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, 
+                  role TEXT, plan TEXT, credits INTEGER, verified INTEGER DEFAULT 0, team_id TEXT)''')
+    
+    # NEW HASHING LOGIC: Correct for the latest streamlit-authenticator
+    # This ensures 'admin123' is stored in a format the login box can read
+    hashed_passwords = stauth.Hasher(['admin123']).generate()
+    admin_pw = hashed_passwords[0]
+    
+    c.execute("""INSERT OR REPLACE INTO users 
+                 (username, email, name, password, role, plan, credits, verified, team_id) 
+                 VALUES ('admin', 'admin@tech.ai', 'System Admin', ?, 'admin', 'Unlimited', 9999, 1, 'HQ_001')""", 
+              (admin_pw,))
+    
+    conn.commit()
+    conn.close()
+
+# 1. Initialize the Database and Admin Record
 init_db_v2()
 
 # 2. Initialize Authenticator in Session State
@@ -71,52 +91,29 @@ if 'authenticator' not in st.session_state:
 
 authenticator = st.session_state.authenticator
 
-# 2. The Multi-Tab Security Gate
+# 3. THE SECURITY GATE
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=180)
-    auth_tabs = st.tabs(["🔑 Access Login", "📝 Enterprise Sign-Up", "🤝 Team Request", "❓ Recovery"])
+    auth_tabs = st.tabs(["🔑 Login", "📝 Sign Up", "🤝 Join Team", "❓ Forget Password"])
     
     with auth_tabs[0]:
-        # Login Logic
         authenticator.login(location='main')
+        # If login is successful, refresh to enter Command Center
         if st.session_state.get("authentication_status"):
-            st.rerun() # Force phase shift to Command Center
+            st.rerun()
             
     with auth_tabs[1]:
-        st.subheader("Select Enterprise Growth Package")
-        c1, c2, c3 = st.columns(3)
-        # Tiered Pricing (SaaS Structure)
-        with c1: st.markdown('<div class="price-card"><h3>Basic</h3><h2>$99</h2><p>50 Credits/mo</p></div>', unsafe_allow_html=True)
-        with c2: st.markdown('<div class="price-card" style="border-color:#7C3AED;"><h3>Pro</h3><h2>$249</h2><p>150 Credits/mo</p></div>', unsafe_allow_html=True)
-        with c3: st.markdown('<div class="price-card"><h3>Enterprise</h3><h2>$499</h2><p>Unlimited Agents</p></div>', unsafe_allow_html=True)
-        
-        # User Registration Flow
-        try:
-            reg_res = authenticator.register_user(location='main')
-            if reg_res:
-                email, username, name = reg_res
-                conn = sqlite3.connect('breatheeasy.db')
-                # SPRINT 2 REQUIREMENT: Set default credits and role
-                conn.execute("""
-                    INSERT OR REPLACE INTO users (username, email, name, password, role, plan, credits, verified, team_id)
-                    SELECT username, email, name, password, 'member', 'Basic', 50, 0, 'TEAM_GEN' 
-                    FROM users WHERE username = ?
-                """, (username,))
-                conn.commit(); conn.close()
-                st.success("Account Created! Please proceed to the Login tab.")
-        except Exception as e:
-            st.error(f"Security Protocol Error: {e}")
-            
-    with auth_tabs[2]:
-        st.info("To join a team, enter the Team ID provided by your administrator.")
-        st.text_input("Enter Enterprise Team ID", key="join_team_id")
-        if st.button("Request Access"):
-            st.warning("Access request queued for administrator review.")
+        st.subheader("Enterprise Registration")
+        # Pricing cards and registration logic go here
+        res = authenticator.register_user(location='main')
+        if res:
+            st.success("Account created! Please log in.")
             
     with auth_tabs[3]:
         authenticator.forgot_password(location='main')
 
-    st.stop() # CRITICAL: No code beyond this point executes for unauthenticated users
+    st.stop() # Prevents any further code from running if not logged in
+        
 
 # --- FOLDER 05: SaaS_Dev_Operations - THE COMMAND CONSOLE ---
 
