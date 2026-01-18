@@ -350,14 +350,20 @@ with st.sidebar:
     # Swarm Personnel Toggles
     with st.expander("🤖 Swarm Personnel", expanded=False):
         # Global definition of agents to be used across tabs
+       # 1. Global definition of agents (Titles and Internal Keys)
         agent_map = [
             ("🕵️ Analyst", "analyst"), ("📺 Ads", "ads"), ("🎨 Creative", "creative"), 
             ("👔 Strategist", "strategist"), ("📱 Social", "social"), ("📍 GEO", "geo"), 
             ("🌐 Auditor", "audit"), ("✍ SEO", "seo")
         ]
-        toggles = {k: st.toggle(v, value=True, key=f"tg_{k}") for v, k in agent_map}
 
-    st.divider()
+        # 2. CORRECTED SIDEBAR TOGGLES
+        # This maps the Internal Key (k) to the Toggle state, and displays the Title (v)
+        # Old was: {k: st.toggle(v, ...)} -> Swapped
+        # New is:
+        toggles = {key: st.toggle(title, value=True, key=f"tg_{key}") for title, key in agent_map}
+
+        st.divider()
     
     # Verification Security Gate (Sprint 2)
     if user_row['verified'] == 1:
