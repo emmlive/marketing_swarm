@@ -121,50 +121,109 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         """Phase 1: Market Research & Audit"""
         active_tasks = []
         
+        # 1. ANALYST
         if "analyst" in self.active_swarm:
-            analyst_task = Task(
-                description=f"Analyze market gaps for {self.state.biz_name} in {self.state.location}.",
+            active_tasks.append(Task(
+                description=f"Identify market gaps and competitor hooks for {self.state.biz_name} in {self.state.location}.",
                 agent=self.agents["analyst"],
-                expected_output="Markdown Report."
-            )
-            active_tasks.append(analyst_task)
+                expected_output="A structured Markdown Market Analysis."
+            ))
 
+        # 2. VISION
         if "vision" in self.active_swarm:
-            vision_task = Task(
-                description=f"Forensic visual audit for {self.state.biz_name}.",
+            active_tasks.append(Task(
+                description=f"Perform forensic visual audit for {self.state.biz_name}.",
                 agent=self.agents["vision_agent"],
-                expected_output="Visual Report."
-            )
-            active_tasks.append(vision_task)
+                expected_output="Forensic visual report."
+            ))
             
+        # 3. AUDITOR (Hardened against raw text dumping)
         if "audit" in self.active_swarm:
             active_tasks.append(Task(
-                description=f"Scan {self.inputs.get('url', 'web')} for conversion friction.",
+                description=f"Scan {self.inputs.get('url', 'web')} for friction. DO NOT copy-paste raw site text. Provide 3-5 high-level executive bullet points only.",
                 agent=self.agents["web_auditor"],
-                expected_output="Technical Audit."
+                expected_output="An Executive Technical Audit summary."
             ))
 
         if active_tasks:
-            crew = Crew(
+            discovery_crew = Crew(
                 agents=[t.agent for t in active_tasks],
                 tasks=active_tasks,
                 process=Process.sequential
             )
-            crew.kickoff()
+            discovery_crew.kickoff()
             
-            # Save results to state
+            # Save results to state with lowercase matching
             for task in active_tasks:
                 out = str(task.output.raw)
-                if "market" in task.description.lower(): self.state.market_data = out
-                if "visual" in task.description.lower(): self.state.vision_intel = out
-                if "scan" in task.description.lower(): self.state.website_audit = out
+                desc = task.description.lower()
+                if "market" in desc: self.state.market_data = out
+                if "forensic" in desc: self.state.vision_intel = out
+                if "scan" in desc: self.state.website_audit = out
             
+        # This string 'fires the starter pistol' for Phase 2
         return "discovery_complete"
 
     @listen("discovery_complete")
     def phase_2_execution(self):
-        """Phase 2: Full Production & Strategy Engineering"""
+        """Phase 2: Strategy and Content Production"""
         production_tasks = []
+        
+        # Mapping all missing agents
+        if "strategist" in self.active_swarm:
+            production_tasks.append(Task(
+                description=f"Create a Master Strategy for {self.state.biz_name}.",
+                agent=self.agents["strategist"],
+                expected_output="Executive Strategic Brief."
+            ))
+
+        if "creative" in self.active_swarm:
+            production_tasks.append(Task(
+                description="Engineer a Multichannel Ad Suite.",
+                agent=self.agents["creative"],
+                expected_output="Ad copy table."
+            ))
+
+        if "seo" in self.active_swarm:
+            production_tasks.append(Task(
+                description="Compose a technical SEO article.",
+                agent=self.agents["seo_blogger"],
+                expected_output="SEO Article Content."
+            ))
+
+        if "social" in self.active_swarm:
+            production_tasks.append(Task(
+                description="Create a 30-day viral social plan.",
+                agent=self.agents["social_agent"],
+                expected_output="Social Content Calendar."
+            ))
+
+        if "geo" in self.active_swarm:
+            production_tasks.append(Task(
+                description="Develop local GEO intelligence plan.",
+                agent=self.agents["geo_specialist"],
+                expected_output="Local Search Strategy."
+            ))
+
+        if production_tasks:
+            prod_crew = Crew(
+                agents=[t.agent for t in production_tasks],
+                tasks=production_tasks,
+                process=Process.sequential
+            )
+            prod_crew.kickoff()
+            
+            # Capture the output for the missing agents
+            for task in production_tasks:
+                out = str(task.output.raw)
+                desc = task.description.lower()
+                if "strategy" in desc: self.state.strategist_brief = out
+                if "ad suite" in desc: self.state.ad_drafts = out
+                if "seo" in desc: self.state.seo_article = out
+                if "viral" in desc: self.state.social_plan = out
+                if "geo" in desc: self.state.geo_intel = out
+            
+        return "execution_complete"
         
         # 1. STRATEGIST (The Lead Architect)
         if "strategist" in self.active_swarm:
