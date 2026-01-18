@@ -231,17 +231,18 @@ def run_marketing_swarm(inputs):
 {flow.state.production_schedule}
 """
 
-    # 4. SYSTEMIC MAPPING (Matches Folder 06 keys in app.py)
+# 4. SYSTEMIC MAPPING (Revised for Flow State Sync)
+    # Ensure these flow.state variables match exactly what you defined in your Flow class
     master_data = {
-        "analyst": flow.state.market_data,
-        "ads": flow.state.competitor_ads,
-        "vision": flow.state.vision_intel, 
-        "creative": flow.state.ad_drafts,
-        "strategist": flow.state.strategist_brief,
-        "social": flow.state.social_plan,
-        "geo": flow.state.geo_intel,
-        "seo": flow.state.seo_article,
-        "audit": flow.state.website_audit,
+        "analyst": getattr(flow.state, 'market_data', "No analyst data found."),
+        "ads": getattr(flow.state, 'competitor_ads', "No ad data found."),
+        "vision": getattr(flow.state, 'vision_intel', "No visual intel found."), 
+        "creative": getattr(flow.state, 'ad_drafts', "No creative drafts found."),
+        "strategist": getattr(flow.state, 'strategist_brief', "Final brief pending."),
+        "social": getattr(flow.state, 'social_plan', "Social roadmap not generated."),
+        "geo": getattr(flow.state, 'geo_intel', "GEO data not selected."),
+        "seo": getattr(flow.state, 'seo_article', "SEO Content not selected."),
+        "audit": getattr(flow.state, 'website_audit', "Website audit pending."),
         "full_report": formatted_string_report 
     }
 
