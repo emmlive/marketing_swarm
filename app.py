@@ -1,11 +1,38 @@
 import streamlit as st
 import streamlit_authenticator as stauth
-import pandas as pd  # <--- THIS IS THE MISSING PIECE
+import pandas as pd
 import sqlite3
 import os
 from datetime import datetime
 from io import BytesIO
-from main import run_marketing_swarm
+from fpdf import FPDF
+from docx import Document
+from main import run_marketing_swarm 
+
+# --- SECTION #0: GLOBAL HELPERS ---
+def export_pdf(content, title):
+    """Character-safe PDF export engine"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, f'Intelligence Brief: {title}', 0, 1, 'C')
+    pdf.set_font("Arial", size=10)
+    
+    # Sanitize content for PDF encoding (Fixes UnicodeEncodeError)
+    clean_text = str(content).replace('\u2013', '-').replace('\u2014', '-').replace('\u2018', "'").replace('\u2019', "'").replace('\u201c', '"').replace('\u201d', '"')
+    safe_data = clean_text.encode('latin-1', 'replace').decode('latin-1')
+    
+    pdf.multi_cell(0, 7, txt=safe_data)
+    return pdf.output(dest='S').encode('latin-1', 'ignore')
+
+def export_word(content, title):
+    """Standard Word export engine"""
+    doc = Document()
+    doc.add_heading(f'Intelligence Brief: {title}', 0)
+    doc.add_paragraph(str(content))
+    bio = BytesIO()
+    doc.save(bio)
+    return bio.getvalue()
 
 # --- ARCHITECTURE SETUP (Folder 03) ---
 
@@ -136,6 +163,26 @@ if not st.session_state.get("authentication_status"):
         res = authenticator.register_user(location='main')
         if res:
             st.success("Account created! Please log in.")
+
+    with auth_tabs[2]:
+        st.subheader("🤝 Request Enterprise Team Access")
+        st.markdown("""
+        To sync with an existing corporate swarm, enter your **Organization ID** below. 
+        Your administrator will receive a notification to verify your seat.
+        """)
+        
+        with st.form("team_request_form"):
+            team_id_req = st.text_input("Enterprise Team ID", placeholder="e.g., HQ_NORTH_2026")
+            reason = st.text_area("Purpose of Access", placeholder="e.g., Regional Marketing Analyst")
+            
+            submit_req = st.form_submit_button("Submit Access Request", use_container_width=True)
+            
+            if submit_req:
+                if team_id_req:
+                    # Logic: In a live env, this would write to a 'pending_requests' table
+                    st.success(f"Request for Team {team_id_req} has been logged. Status: PENDING.")
+                else:
+                    st.error("Please provide a valid Team ID.")
             
     with auth_tabs[3]:
         authenticator.forgot_password(location='main')
