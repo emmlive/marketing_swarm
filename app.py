@@ -41,25 +41,27 @@ if 'app_phase' not in st.session_state:
     st.session_state.app_phase = "AUTH_GATE" 
 
 def init_db_v2():
-    """Forces administrative credentials and initializes schema using modern v0.4.x+ hashing"""
+    """Forces administrative credentials and initializes ALL required tables"""
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
     
-    # Create Table Schema
+    # 1. User Table
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, 
                   role TEXT, plan TEXT, credits INTEGER, verified INTEGER DEFAULT 0, team_id TEXT)''')
     
-    # Create Leads Table (Sprint 4 Kanban requirement)
+    # 2. Leads Table (For Kanban)
     c.execute('''CREATE TABLE IF NOT EXISTS leads 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, city TEXT, 
                   service TEXT, status TEXT DEFAULT "Discovery", team_id TEXT)''')
     
-    # MODERN HASHING: Optimized for streamlit-authenticator v0.4.0+
-    # No brackets, no .generate() - just the direct static call
-    admin_pw = stauth.Hasher.hash('admin123')
+    # 3. Audit Logs Table (FIXES YOUR DATABASE ERROR)
+    c.execute('''CREATE TABLE IF NOT EXISTS master_audit_logs 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, user TEXT, 
+                  action_type TEXT, target_biz TEXT, location TEXT, status TEXT)''')
     
-    # Inject/Refresh Admin Record
+    # 4. Inject/Refresh Admin
+    admin_pw = stauth.Hasher.hash('admin123')
     c.execute("""INSERT OR REPLACE INTO users 
                  (username, email, name, password, role, plan, credits, verified, team_id) 
                  VALUES ('admin', 'admin@tech.ai', 'System Admin', ?, 'admin', 'Unlimited', 9999, 1, 'HQ_001')""", 
