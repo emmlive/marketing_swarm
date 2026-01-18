@@ -8,29 +8,31 @@ from io import BytesIO
 from main import run_marketing_swarm
 
 # --- ARCHITECTURE SETUP (Folder 03) ---
-# This ensures the app knows its current 'Phase'
+
+# 1. State Controller: Tracks if we are at the Login Gate or the Command Center
 if 'app_phase' not in st.session_state:
-    st.session_state.app_phase = "AUTH_GATE" # Phases: AUTH_GATE, COMMAND_CENTER
+    st.session_state.app_phase = "AUTH_GATE" 
 
 def init_db_v2():
-    """Forces administrative credentials and initializes schema using modern hashing"""
+    """Forces administrative credentials and initializes schema using modern v0.4.x+ hashing"""
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
     
-    # 1. Create User Table
+    # Create Table Schema
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, 
                   role TEXT, plan TEXT, credits INTEGER, verified INTEGER DEFAULT 0, team_id TEXT)''')
     
-    # 2. MODERN HASHING: This works with the latest 2025/2026 library versions
-    # We use the static hash method directly
-    try:
-        admin_pw = stauth.Hasher.hash('admin123')
-    except AttributeError:
-        # Fallback for older versions if the static method isn't found
-        admin_pw = stauth.Hasher(['admin123']).generate()[0]
+    # Create Leads Table (Sprint 4 Kanban requirement)
+    c.execute('''CREATE TABLE IF NOT EXISTS leads 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, city TEXT, 
+                  service TEXT, status TEXT DEFAULT "Discovery", team_id TEXT)''')
     
-    # 3. Inject/Refresh Admin
+    # MODERN HASHING: Optimized for streamlit-authenticator v0.4.0+
+    # No brackets, no .generate() - just the direct static call
+    admin_pw = stauth.Hasher.hash('admin123')
+    
+    # Inject/Refresh Admin Record
     c.execute("""INSERT OR REPLACE INTO users 
                  (username, email, name, password, role, plan, credits, verified, team_id) 
                  VALUES ('admin', 'admin@tech.ai', 'System Admin', ?, 'admin', 'Unlimited', 9999, 1, 'HQ_001')""", 
@@ -38,6 +40,9 @@ def init_db_v2():
     
     conn.commit()
     conn.close()
+
+# MANDATORY: Execute initialization before any UI rendering
+init_db_v2()
 
 # --- CRITICAL: EXECUTION ORDER ---
 # Run this before the Authenticator is initialized
