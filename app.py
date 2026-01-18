@@ -372,27 +372,42 @@ with st.sidebar:
 
     authenticator.logout('🔒 Sign Out', 'sidebar')
 
-# 4. EXECUTION BRIDGE
+# 4. EXECUTION BRIDGE (Updated for Sync)
 if run_btn:
     if not biz_name:
         st.error("Error: Brand Name is required for swarm coordination.")
     else:
-        with st.status("🛠️ Coordinating Swarm Agents...", expanded=True):
-            # Pass directives and location to the backend
-            report = run_marketing_swarm({
-                'city': full_loc, 
-                'biz_name': biz_name, 
-                'service': "Omni-Service", 
-                'directives': agent_info
-            })
-            st.session_state.report = report
-            st.session_state.gen = True
-            
-            # Audit Log Entry (Sprint 4)
-            conn = sqlite3.connect('breatheeasy.db')
-            conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
-            conn.commit(); conn.close()
-            st.rerun()
+        # NEW: Identify which agents are actually toggled ON in the expander
+        # This creates a list like ['analyst', 'ads', 'seo'] based on the toggles
+        active_agents = [key for title, key in agent_map if toggles.get(key)]
+        
+        if not active_agents:
+            st.warning("⚠️ Please toggle at least one Swarm Personnel in the sidebar.")
+        else:
+            with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
+                # Pass the toggled agents to your backend
+                report = run_marketing_swarm({
+                    'city': full_loc, 
+                    'biz_name': biz_name, 
+                    'service': "Omni-Service", 
+                    'directives': agent_info,
+                    'active_swarm': active_agents  # <--- CRITICAL SYNC
+                })
+                
+                # Save to session state so Folder 06 can see it
+                st.session_state.report = report
+                st.session_state.gen = True
+                
+                # Audit Log Entry & Credit Deduction
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
+                conn.execute("INSERT INTO master_audit_logs (timestamp, user, action_type, target_biz, location, status) VALUES (?,?,?,?,?,?)", 
+                             (datetime.now().strftime("%Y-%m-%d %H:%M"), user_row['username'], "SWARM_LAUNCH", biz_name, full_loc, "SUCCESS"))
+                conn.commit()
+                conn.close()
+                
+                status.update(label="🚀 Swarm Intelligence Captured!", state="complete")
+                st.rerun()
 
 # --- FOLDER 06: OMNI-SWARM_SPRINTS - THE INTELLIGENCE HUB ---
 
