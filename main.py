@@ -124,77 +124,103 @@ class MarketingSwarmFlow(Flow[SwarmState]):
         # 5. Store the toggle list from Folder 05 sidebar
         self.active_swarm = inputs.get('active_swarm', [])
 
-    @start()
+   @start()
     def phase_1_discovery(self):
         """Phase 1: Market Research & Audit"""
-        # We only run the logic if the 'analyst' toggle was ON
-        if "analyst" in self.active_swarm:
-            # Here you would call your analyst crew/task
-            # result = self.agents['analyst_crew'].kickoff()
-            # self.state.market_data = result.raw
-            pass
+        active_tasks = []
         
-        if self.toggles.get('analyst'):
+        # 1. Analyst Task
+        if "analyst" in self.active_swarm:
             analyst_task = Task(
-                description=f"Identify 'Market Entry Gaps' and analyze competitor ad hooks in {self.inputs['city']}.",
+                description=f"Identify 'Market Entry Gaps' and analyze competitor ad hooks in {self.state.location} for {self.state.biz_name}.",
                 agent=self.agents["analyst"],
                 expected_output="Markdown Report with Competitor Fatigue analysis."
             )
             active_tasks.append(analyst_task)
 
-        if self.toggles.get('vision'):
+        # 2. Vision Task
+        if "vision" in self.active_swarm:
             vision_task = Task(
-                description=f"Analyze provided field photos for technical defects or rival brand weaknesses.",
+                description=f"Analyze field data for technical defects or rival brand weaknesses for {self.state.biz_name}.",
                 agent=self.agents["vision_agent"],
                 expected_output="Detailed Forensic Report identifying damage and design gaps."
             )
             active_tasks.append(vision_task)
             
-        if self.toggles.get('audit') and self.inputs.get('url'):
+        # 3. Audit Task
+        if "audit" in self.active_swarm:
             auditor_task = Task(
-                description=f"Scan {self.inputs.get('url')} for conversion friction.",
+                description=f"Scan {self.inputs.get('url', 'the web')} for conversion friction.",
                 agent=self.agents["web_auditor"],
                 expected_output="Executive Technical Audit."
             )
             active_tasks.append(auditor_task)
 
+        # EXECUTION: Only run the Crew if there are tasks to perform
         if active_tasks:
-            active_agents = [task.agent for task in active_tasks]
-            Crew(agents=active_agents, tasks=active_tasks, process=Process.sequential).kickoff()
+            crew = Crew(
+                agents=[task.agent for task in active_tasks],
+                tasks=active_tasks,
+                process=Process.sequential
+            )
+            result = crew.kickoff()
             
+            # Map results back to SwarmState
             for task in active_tasks:
                 out = str(task.output.raw)
                 if "Market" in task.description: self.state.market_data = out
-                if "Forensic" in task.description or "field photos" in task.description: self.state.vision_intel = out
+                if "Forensic" in task.description: self.state.vision_intel = out
                 if "conversion" in task.description: self.state.website_audit = out
             
         return "discovery_complete"
 
     @listen("discovery_complete")
     def phase_2_execution(self):
-        """Step 2: Filtered Production & Ad Engineering"""
+        """Phase 2: Filtered Production & Ad Engineering"""
         production_tasks = []
         
-        if self.toggles.get('builder'): 
+        # 1. Creative/Ads (Matches 'creative' key from app.py)
+        if "creative" in self.active_swarm: 
             creative_task = Task(
-                description="""Engineer a Multichannel Ad Suite: 
-                1. Google (3 Headlines, 2 Desc), 2. Meta (Headline/Text), 3. Veo Prompt.""",
+                description="Engineer a Multichannel Ad Suite for " + self.state.biz_name,
                 agent=self.agents["creative"],
                 expected_output="Markdown table with platform-specific copy."
             )
             production_tasks.append(creative_task)
 
-        if self.toggles.get('seo'):
-            production_tasks.append(Task(description="Compose a technical SEO article.", agent=self.agents["seo_blogger"], expected_output="Technical article."))
-        if self.toggles.get('social'):
-            production_tasks.append(Task(description="Create a 30-day viral schedule.", agent=self.agents["social_agent"], expected_output="Viral Hooks."))
-        if self.toggles.get('geo'):
-            production_tasks.append(Task(description="Develop local GEO plan.", agent=self.agents["geo_specialist"], expected_output="GEO Intelligence."))
+        # 2. SEO
+        if "seo" in self.active_swarm:
+            production_tasks.append(Task(
+                description="Compose a technical SEO article.", 
+                agent=self.agents["seo_blogger"], 
+                expected_output="Technical article."
+            ))
+
+        # 3. Social
+        if "social" in self.active_swarm:
+            production_tasks.append(Task(
+                description="Create a 30-day viral schedule.", 
+                agent=self.agents["social_agent"], 
+                expected_output="Viral Hooks."
+            ))
+
+        # 4. GEO
+        if "geo" in self.active_swarm:
+            production_tasks.append(Task(
+                description="Develop local GEO plan.", 
+                agent=self.agents["geo_specialist"], 
+                expected_output="GEO Intelligence."
+            ))
 
         if production_tasks:
-            active_agents = [task.agent for task in production_tasks]
-            Crew(agents=active_agents, tasks=production_tasks, process=Process.sequential).kickoff()
+            crew = Crew(
+                agents=[task.agent for task in production_tasks],
+                tasks=production_tasks,
+                process=Process.sequential
+            )
+            crew.kickoff()
             
+            # Map results back to SwarmState
             for task in production_tasks:
                 out = str(task.output.raw)
                 if "Multichannel" in task.description: self.state.ad_drafts = out
@@ -203,21 +229,6 @@ class MarketingSwarmFlow(Flow[SwarmState]):
                 if "GEO" in task.description: self.state.geo_intel = out
             
         return "execution_complete"
-
-    @listen("execution_complete")
-    def phase_3_validation(self):
-        """Step 3: ROI Roadmap Synthesis"""
-        if self.toggles.get('manager'):
-            val_task = Task(
-                description="Synthesize all data into a 30-day ROI Growth Roadmap.",
-                agent=self.agents["strategist"],
-                expected_output="Master Growth Brief: Milestones and ROI Projections."
-            )
-            result = Crew(agents=[self.agents["strategist"]], tasks=[val_task]).kickoff()
-            self.state.strategist_brief = str(result)
-            self.state.production_schedule = str(result)
-        
-        return "swarm_finished"
 
 # --- 5. EXECUTION WRAPPER ---
 def run_marketing_swarm(inputs):
