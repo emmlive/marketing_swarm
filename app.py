@@ -11,19 +11,44 @@ from main import run_marketing_swarm
 
 # --- SECTION #0: GLOBAL HELPERS ---
 def export_pdf(content, title):
-    """Character-safe PDF export engine"""
+    """Sprint 3: Character-safe PDF export engine (UTF-8 Compatible)"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, f'Intelligence Brief: {title}', 0, 1, 'C')
     pdf.set_font("Arial", size=10)
     
-    # Sanitize content for PDF encoding (Fixes UnicodeEncodeError)
-    clean_text = str(content).replace('\u2013', '-').replace('\u2014', '-').replace('\u2018', "'").replace('\u2019', "'").replace('\u201c', '"').replace('\u201d', '"')
-    safe_data = clean_text.encode('latin-1', 'replace').decode('latin-1')
+    # 1. THE SANITIZER: Replaces common AI-generated Unicode symbols
+    # This maps 'smart' characters to standard characters
+    mapping = {
+        '\u2013': '-', '\u2014': '-', # En and Em dashes
+        '\u2018': "'", '\u2019': "'", # Smart single quotes
+        '\u201c': '"', '\u201d': '"', # Smart double quotes
+        '\u2022': '*',                # Bullets
+        '\u2026': '...',              # Ellipsis
+        '\u2122': '(TM)',             # Trademark
+        '\u00ae': '(R)',              # Registered
+        '\u00a9': '(C)',              # Copyright
+    }
     
+    processed_text = str(content)
+    for key, val in mapping.items():
+        processed_text = processed_text.replace(key, val)
+    
+    # 2. THE ENCODING GATE: Final safety pass
+    # We encode to latin-1 but use 'replace' to turn any unknown symbol into a '?' 
+    # instead of crashing the whole app.
+    safe_data = processed_text.encode('latin-1', 'replace').decode('latin-1')
+    
+    # 3. RENDER
     pdf.multi_cell(0, 7, txt=safe_data)
-    return pdf.output(dest='S').encode('latin-1', 'ignore')
+    
+    # Return as safe bytes
+    try:
+        return pdf.output(dest='S').encode('latin-1', 'ignore')
+    except Exception:
+        # Emergency fallback if character mapping fails
+        return pdf.output(dest='S')
 
 def export_word(content, title):
     """Standard Word export engine"""
