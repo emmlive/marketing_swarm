@@ -12,44 +12,44 @@ from main import run_marketing_swarm
 # --- SECTION #0: GLOBAL HELPERS ---
 
 import unicodedata
+from fpdf import FPDF
+
+def force_ascii(text):
+    """Normalize and strip everything to safe ASCII"""
+    if text is None:
+        return ""
+    text = str(text)
+    text = unicodedata.normalize("NFKD", text)
+    return text.encode("ascii", "ignore").decode("ascii")
 
 def export_pdf(content, title):
-    """Folder 06: Final Resilient PDF Engine (Force-ASCII)"""
     try:
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(0, 10, f"Intelligence Brief: {title}", 0, 1, 'C')
+        pdf.set_font("Arial", "B", 16)
+
+        safe_title = force_ascii(title)
+        pdf.cell(0, 10, f"Intelligence Brief: {safe_title}", 0, 1, "C")
+
         pdf.set_font("Arial", size=10)
-        
-        # 1. Force conversion to string and normalize
-        raw_text = str(content)
-        # NFKD decomposes characters (e.g., turning a 'smart' quote into a normal one)
-        normalized = unicodedata.normalize('NFKD', raw_text)
-        
-        # 2. STRICT ASCII FILTER
-        # We encode to ASCII and IGNORE anything that isn't a standard character.
-        # This is the 'Shield' that prevents the internal fpdf.py crash.
-        ascii_text = normalized.encode('ascii', 'ignore').decode('ascii')
-        
-        # 3. Clean up common formatting characters that might have survived
-        clean_text = ascii_text.replace('\n', '  ').replace('\r', '')
-        
-        # 4. Write to PDF
-        pdf.multi_cell(0, 7, txt=clean_text)
-        
-        # 5. Return RAW BYTES
-        # We do NOT use .encode('latin-1') here because the library 
-        # already handles the byte conversion internally.
-        return pdf.output(dest='S')
-        
-    except Exception as e:
-        # Emergency Fallback: If it STILL fails, return an empty PDF with an error message
+
+        safe_content = force_ascii(content)
+        safe_content = safe_content.replace("\r", "").replace("\n", "  ")
+
+        pdf.multi_cell(0, 7, safe_content)
+
+        # IMPORTANT:
+        # FPDF returns a *latin-1 safe string*
+        # Streamlit needs bytes → encode ONCE, at the end
+        return pdf.output(dest="S").encode("latin-1")
+
+    except Exception:
         fallback = FPDF()
         fallback.add_page()
         fallback.set_font("Arial", size=12)
         fallback.cell(0, 10, "PDF Error: Character Conflict", 0, 1)
-        return fallback.output(dest='S')
+        return fallback.output(dest="S").encode("latin-1")
+
 def export_word(content, title):
     """Standard Word export engine"""
     doc = Document()
