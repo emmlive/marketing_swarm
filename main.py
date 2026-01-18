@@ -163,23 +163,50 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
     @listen("discovery_complete")
     def phase_2_execution(self):
-        """Phase 2: Content Generation"""
+        """Phase 2: Full Production & Strategy Engineering"""
         production_tasks = []
         
+        # 1. STRATEGIST (The Lead Architect)
+        if "strategist" in self.active_swarm:
+            production_tasks.append(Task(
+                description=f"Develop a Master Marketing Strategy for {self.state.biz_name}.",
+                agent=self.agents["strategist"],
+                expected_output="A high-level executive strategic brief."
+            ))
+
+        # 2. CREATIVE (Ad Copy)
         if "creative" in self.active_swarm:
             production_tasks.append(Task(
-                description=f"Ad suite for {self.state.biz_name}.", 
-                agent=self.agents["creative"], 
-                expected_output="Ad copy."
+                description="Engineer a Multichannel Ad Suite (Google, Meta, Veo).",
+                agent=self.agents["creative"],
+                expected_output="Markdown table with platform-specific ad copy."
             ))
 
+        # 3. SEO (The Blogger)
         if "seo" in self.active_swarm:
             production_tasks.append(Task(
-                description="SEO Article.", 
+                description="Compose a technical SEO-optimized authority article.", 
                 agent=self.agents["seo_blogger"], 
-                expected_output="Blog post."
+                expected_output="A 1000-word technical SEO article."
             ))
 
+        # 4. SOCIAL (Viral Specialist)
+        if "social" in self.active_swarm:
+            production_tasks.append(Task(
+                description="Create a 30-day viral social media content calendar.", 
+                agent=self.agents["social_agent"], 
+                expected_output="Calendar with hooks and captions."
+            ))
+
+        # 5. GEO (Local Search)
+        if "geo" in self.active_swarm:
+            production_tasks.append(Task(
+                description="Develop a local GEO-fencing and GMB optimization plan.", 
+                agent=self.agents["geo_specialist"], 
+                expected_output="Local SEO and GEO intelligence report."
+            ))
+
+        # --- EXECUTION & MAPPING ---
         if production_tasks:
             crew = Crew(
                 agents=[t.agent for t in production_tasks],
@@ -190,8 +217,13 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             
             for task in production_tasks:
                 out = str(task.output.raw)
-                if "Ad suite" in task.description: self.state.ad_drafts = out
-                if "SEO" in task.description: self.state.seo_article = out
+                desc = task.description.lower()
+                
+                if "strategy" in desc: self.state.strategist_brief = out
+                elif "multichannel" in desc: self.state.ad_drafts = out
+                elif "seo" in desc: self.state.seo_article = out
+                elif "viral" in desc: self.state.social_plan = out
+                elif "geo" in desc: self.state.geo_intel = out
             
         return "execution_complete"
 
