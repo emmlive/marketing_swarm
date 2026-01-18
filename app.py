@@ -11,56 +11,25 @@ from main import run_marketing_swarm
 
 # --- SECTION #0: GLOBAL HELPERS ---
 
-import unicodedata
 from fpdf import FPDF
+from pathlib import Path
 
-def force_safe_ascii(text):
-    if not text:
-        return ""
-    text = str(text)
-    text = unicodedata.normalize("NFKD", text)
-    text = text.replace("\u200b", "")  # zero-width space
-    text = text.replace("\ufeff", "")  # BOM
-    return text.encode("ascii", "ignore").decode("ascii")
+FONT_PATH = Path("fonts/DejaVuSans.ttf")  # must exist
 
-def export_pdf_resilient(content, title):
-    try:
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
+def export_pdf(content, title):
+    pdf = FPDF()
+    pdf.add_page()
 
-        pdf.cell(
-            0, 10,
-            f"Intelligence Brief: {force_safe_ascii(title)}",
-            ln=True,
-            align="C"
-        )
+    pdf.add_font("DejaVu", "", str(FONT_PATH), uni=True)
+    pdf.add_font("DejaVu", "B", str(FONT_PATH), uni=True)
 
-        pdf.set_font("Arial", size=10)
+    pdf.set_font("DejaVu", "B", 16)
+    pdf.cell(0, 10, f"Intelligence Brief: {title}", ln=True, align="C")
 
-        safe_text = force_safe_ascii(content)
-        safe_text = safe_text.replace("\r", "").replace("\n", "  ")
+    pdf.set_font("DejaVu", size=10)
+    pdf.multi_cell(0, 7, str(content))
 
-        # line length guard (FPDF edge case)
-        safe_text = "\n".join(
-            line[:1000] for line in safe_text.split("\n")
-        )
-
-        pdf.multi_cell(0, 7, safe_text)
-
-        return pdf.output(dest="S").encode("latin-1")
-
-    except Exception as e:
-        fallback = FPDF()
-        fallback.add_page()
-        fallback.set_font("Arial", size=12)
-        fallback.multi_cell(
-            0, 10,
-            "PDF GENERATION FAILED\n\n"
-            "Cause: Unsupported characters were detected.\n"
-            "Please contact support."
-        )
-        return fallback.output(dest="S").encode("latin-1")
+    return pdf.output(dest="S").encode("utf-8")
 
 def export_word(content, title):
     """Standard Word export engine"""
