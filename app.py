@@ -10,26 +10,113 @@ from docx import Document
 from main import run_marketing_swarm 
 
 # --- SECTION #0: GLOBAL HELPERS ---
+# =========================
+# PDF SAFETY & DEBUG LAYER
+# =========================
 
+import re
+import unicodedata
+import streamlit as st
 from fpdf import FPDF
-from pathlib import Path
+import fpdf
 
-FONT_PATH = Path("fonts/DejaVuSans.ttf")  # must exist
 
+# --------------------------------------------------
+# 🔐 NUCLEAR ASCII SANITIZER (NO UNICODE SURVIVES)
+# --------------------------------------------------
+def nuclear_ascii(text):
+    """
+    Converts any input into FPDF-safe ASCII.
+    NOTHING non-latin-1 survives this function.
+    """
+    if text is None:
+        return ""
+
+    # Force string
+    text = str(text)
+
+    # Normalize Unicode
+    text = unicodedata.normalize("NFKD", text)
+
+    # Remove zero-width & BOM characters
+    text = (
+        text.replace("\u200b", "")
+            .replace("\u200c", "")
+            .replace("\u200d", "")
+            .replace("\ufeff", "")
+    )
+
+    # Convert to strict ASCII
+    text = text.encode("ascii", "ignore").decode("ascii")
+
+    # Remove anything non-printable (except newline)
+    text = re.sub(r"[^\x20-\x7E\n]", "", text)
+
+    return text
+
+
+# --------------------------------------------------
+# 🧪 FINAL DEBUG CHECK (REMOVE AFTER STABILIZATION)
+# --------------------------------------------------
+st.write("🔎 FPDF version:", getattr(fpdf, "__version__", "UNKNOWN"))
+st.write("📦 FPDF module path:", fpdf.__file__)
+
+def debug_non_latin1(text, label):
+    offenders = []
+    for i, ch in enumerate(str(text)):
+        try:
+            ch.encode("latin-1")
+        except UnicodeEncodeError:
+            offenders.append((i, repr(ch), hex(ord(ch))))
+    if offenders:
+        st.write(f"⚠️ Non-Latin-1 chars in {label}:", offenders[:10])
+
+
+# --------------------------------------------------
+# 🛡️ HARDENED PDF EXPORT (WILL NOT CRASH)
+# --------------------------------------------------
 def export_pdf(content, title):
-    pdf = FPDF()
-    pdf.add_page()
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_auto_page_break(auto=True, margin=15)
 
-    pdf.add_font("DejaVu", "", str(FONT_PATH), uni=True)
-    pdf.add_font("DejaVu", "B", str(FONT_PATH), uni=True)
+        # ---- Title ----
+        pdf.set_font("Arial", "B", 16)
+        safe_title = nuclear_ascii(title)
+        pdf.cell(
+            0, 10,
+            f"Intelligence Brief: {safe_title}",
+            ln=True,
+            align="C"
+        )
 
-    pdf.set_font("DejaVu", "B", 16)
-    pdf.cell(0, 10, f"Intelligence Brief: {title}", ln=True, align="C")
+        # ---- Body ----
+        pdf.set_font("Arial", size=10)
+        safe_body = nuclear_ascii(content)
 
-    pdf.set_font("DejaVu", size=10)
-    pdf.multi_cell(0, 7, str(content))
+        # Normalize line breaks & limit line length
+        safe_body = safe_body.replace("\r", "")
+        safe_body = "\n".join(
+            line[:900] for line in safe_body.split("\n")
+        )
 
-    return pdf.output(dest="S").encode("utf-8")
+        pdf.multi_cell(0, 7, safe_body)
+
+        # Return Streamlit-safe bytes
+        return pdf.output(dest="S").encode("latin-1")
+
+    except Exception:
+        fallback = FPDF()
+        fallback.add_page()
+        fallback.set_font("Arial", size=12)
+        fallback.multi_cell(
+            0, 10,
+            "PDF GENERATION FAILED\n\n"
+            "All content was sanitized.\n"
+            "The error was safely handled."
+        )
+        return fallback.output(dest="S").encode("latin-1")
 
 def export_word(content, title):
     """Standard Word export engine"""
