@@ -463,19 +463,42 @@ DEPLOY_GUIDES = {
     "seo": "Publish for Search Generative Experience (SGE)."
 }
 
-for title, key in agent_map:
-    with TAB[title]:
-        st.markdown(f'<div class="deploy-guide"><b>🚀 DEPLOYMENT:</b> {DEPLOY_GUIDES.get(key)}</div>', unsafe_allow_html=True)
-        if st.session_state.get('gen'):
-            content = st.session_state.report.get(key, "Intelligence generated. Review below.")
-            edited = st.text_area(f"Refine {title}", value=str(content), height=400, key=f"ed_{key}")
+# --- FOLDER 06: AGENT SEATS - FINAL SYNCED RENDERER ---
+
+for i, (title, key) in enumerate(agent_map, 1):
+    with tabs_obj[i]:
+        # 1. Deployment Guide (Visual UI)
+        st.markdown(f'''<div class="deploy-guide">
+            <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
+            {DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}
+        </div>''', unsafe_allow_html=True)
+
+        # 2. Check if the report has been generated
+        if st.session_state.get('gen') and st.session_state.get('report'):
+            # FORCE FETCH: Get data from the report dictionary
+            # We use .get(key) to match the sidebar's toggle key ('analyst', 'ads', etc.)
+            agent_content = st.session_state.report.get(key)
             
-            # Export Buttons
-            c1, c2 = st.columns(2)
-            with c1: st.download_button("📄 Word Brief", export_word(edited, title), f"{key}.docx", key=f"w_{key}")
-            with c2: st.download_button("📕 PDF Report", export_pdf(edited, title), f"{key}.pdf", key=f"p_{key}")
+            if agent_content:
+                # INTERACTIVE WORKBENCH
+                edited = st.text_area(
+                    f"Refine {title} Intelligence", 
+                    value=str(agent_content), 
+                    height=450, 
+                    key=f"editor_{key}"
+                )
+
+                # EXPORT ENGINE
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.download_button("📄 Word Brief", export_word(edited, title), f"{biz_name}_{key}.docx", key=f"btn_w_{key}")
+                with c2:
+                    st.download_button("📕 PDF Report", export_pdf(edited, title), f"{biz_name}_{key}.pdf", key=f"btn_p_{key}")
+            else:
+                # This triggers if the agent was not selected in the sidebar
+                st.warning(f"⚠️ {title} was not selected for this deployment. Toggle it in the sidebar and re-launch.")
         else:
-            st.warning("Swarm intelligence not yet captured for this seat.")
+            st.info(f"✨ The {title} seat is ready for deployment. Launch the swarm from the sidebar.")
 
 # C. TEAM INTEL KANBAN (SPRINT 4)
 with TAB["🤝 Team Intel"]:
