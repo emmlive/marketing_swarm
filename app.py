@@ -13,17 +13,24 @@ if 'app_phase' not in st.session_state:
     st.session_state.app_phase = "AUTH_GATE" # Phases: AUTH_GATE, COMMAND_CENTER
 
 def init_db_v2():
-    """Final Master Database Schema"""
+    """Forces administrative credentials and initializes schema with updated hashing"""
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
-    # Ensure all columns from Sprints 1-5 exist
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, 
                   role TEXT, plan TEXT, credits INTEGER, verified INTEGER DEFAULT 0, team_id TEXT)''')
+    
+    # UPDATED HASHING LOGIC for latest streamlit-authenticator version
+    # Hasher no longer takes a list in the constructor in the newest versions
+    admin_pw = stauth.Hasher.hash('admin123') 
+    
+    c.execute("""INSERT OR REPLACE INTO users 
+                 (username, email, name, password, role, plan, credits, verified, team_id) 
+                 VALUES ('admin', 'admin@tech.ai', 'System Admin', ?, 'admin', 'Unlimited', 9999, 1, 'HQ_001')""", 
+              (admin_pw,))
+    
     conn.commit()
     conn.close()
-
-init_db_v2()
 
 # --- THE PHASE CONTROLLER ---
 # This is the 'Project Management' approach: Only show what is ready.
