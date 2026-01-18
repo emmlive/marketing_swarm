@@ -10,44 +10,48 @@ from docx import Document
 from main import run_marketing_swarm 
 
 # --- SECTION #0: GLOBAL HELPERS ---
+import unicodedata
+
 def export_pdf(content, title):
-    """Sprint 3: Character-safe PDF export engine (UTF-8 Compatible)"""
+    """Sprint 3: High-Resilience PDF Engine (Unicode-Safe)"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, f'Intelligence Brief: {title}', 0, 1, 'C')
     pdf.set_font("Arial", size=10)
     
-    # 1. THE SANITIZER: Replaces common AI-generated Unicode symbols
-    # This maps 'smart' characters to standard characters
-    mapping = {
-        '\u2013': '-', '\u2014': '-', # En and Em dashes
-        '\u2018': "'", '\u2019': "'", # Smart single quotes
-        '\u201c': '"', '\u201d': '"', # Smart double quotes
-        '\u2022': '*',                # Bullets
-        '\u2026': '...',              # Ellipsis
-        '\u2122': '(TM)',             # Trademark
-        '\u00ae': '(R)',              # Registered
-        '\u00a9': '(C)',              # Copyright
+    # 1. UNICODE NORMALIZATION (The 'Nuclear' Sanitizer)
+    # This converts characters like 'smart quotes' or 'accented letters' 
+    # into their closest ASCII equivalent.
+    text_content = str(content)
+    normalized_text = unicodedata.normalize('NFKD', text_content)
+    
+    # 2. STRING CLEANUP
+    # Specifically targeting the characters FPDF hates most
+    replacements = {
+        '\u2013': '-', '\u2014': '-', 
+        '\u2018': "'", '\u2019': "'", 
+        '\u201c': '"', '\u201d': '"',
+        '\u2022': '*', # AI-generated bullet points
+        '\u20ac': 'EUR', # Euro
+        '\u00a3': 'GBP'  # Pound
     }
+    for original, replacement in replacements.items():
+        normalized_text = normalized_text.replace(original, replacement)
     
-    processed_text = str(content)
-    for key, val in mapping.items():
-        processed_text = processed_text.replace(key, val)
+    # 3. FINAL ASCII FILTER
+    # This removes anything that isn't in the standard latin-1 range 
+    # to prevent the fpdf.py line 1170 crash.
+    safe_data = normalized_text.encode('ascii', 'ignore').decode('ascii')
     
-    # 2. THE ENCODING GATE: Final safety pass
-    # We encode to latin-1 but use 'replace' to turn any unknown symbol into a '?' 
-    # instead of crashing the whole app.
-    safe_data = processed_text.encode('latin-1', 'replace').decode('latin-1')
-    
-    # 3. RENDER
     pdf.multi_cell(0, 7, txt=safe_data)
     
-    # Return as safe bytes
+    # Return as safe stream
     try:
+        # We use latin-1 ignore here as a final safety wrapper
         return pdf.output(dest='S').encode('latin-1', 'ignore')
     except Exception:
-        # Emergency fallback if character mapping fails
+        # If all else fails, return raw output
         return pdf.output(dest='S')
 
 def export_word(content, title):
