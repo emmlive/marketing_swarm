@@ -13,6 +13,12 @@ load_dotenv(override=True)
 
 # --- 1. SHARED STATE (EXECUTIVE DATA SLOTS) ---
 class SwarmState(BaseModel):
+    # New Input Fields (Required for your __init__ to work)
+    biz_name: str = ""
+    location: str = ""
+    directives: str = ""
+
+    # Existing Agent Output Fields
     market_data: str = "Agent not selected for this run."
     competitor_ads: str = "Ad tracking pending..."
     vision_intel: str = "Agent not selected for this run." 
