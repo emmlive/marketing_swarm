@@ -24,14 +24,18 @@ class SwarmState(BaseModel):
     strategist_brief: str = "Final brief pending..."
     production_schedule: str = "Roadmap pending..."
 
-# --- 2. ENGINE INITIALIZATION ---
+# --- 2. ENGINE INITIALIZATION (Streamlit Cloud & Secrets Optimized) ---
+import streamlit as st
+
+# 1. Initialize LLM using the secret key directly
 gemini_llm = LLM(
     model="google/gemini-2.0-flash", 
-    api_key=os.getenv("GOOGLE_API_KEY"),
+    api_key=st.secrets["GOOGLE_API_KEY"], # Pulls from secrets.toml
     temperature=0.3 
 )
 
-search_tool = SerperDevTool(api_key=os.getenv("SERPER_API_KEY"))
+# 2. Initialize Tools using the secret keys directly
+search_tool = SerperDevTool(api_key=st.secrets["SERPER_API_KEY"]) # Pulls from secrets.toml
 scrape_tool = ScrapeWebsiteTool()
 
 # --- 3. AGENT DEFINITIONS (VALIDATED WITH BACKSTORIES) ---
