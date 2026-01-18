@@ -10,52 +10,47 @@ from docx import Document
 from main import run_marketing_swarm 
 
 # --- SECTION #0: GLOBAL HELPERS ---
-import unicodedata # Ensure this is at the very top with other imports
+
+import unicodedata
 
 def export_pdf(content, title):
-    """Folder 06: Final Resilient PDF Engine (Strict ASCII fallback)"""
+    """Folder 06: Final Resilient PDF Engine (Strict Byte-Stream)"""
     try:
+        # 1. Initialize PDF
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(0, 10, f'Intelligence Brief: {title}', 0, 1, 'C')
         pdf.set_font("Arial", size=10)
         
-        # 1. Force string conversion
+        # 2. Aggressive Character Sanitization
+        # NFKD breaks down 'smart' characters (like curly quotes) into standard ones
         text_content = str(content)
+        text_content = unicodedata.normalize('NFKD', text_content)
         
-        # 2. Decompose Unicode (e.g., turn accented 'é' into 'e')
-        # This is the most professional way to handle AI text
-        normalized = unicodedata.normalize('NFKD', text_content)
+        # 3. Strip everything except basic printable ASCII
+        # This is the "Nuclear Option" to ensure FPDF line 1170 never fails
+        clean_text = "".join(c for c in text_content if ord(c) < 128)
         
-        # 3. Strict ASCII Encode/Decode
-        # 'ignore' will strip any character that cannot be represented in Latin-1
-        # This is the "Safety Shield" that prevents the UnicodeEncodeError
-        clean_text = normalized.encode('ascii', 'ignore').decode('ascii')
-        
-        # 4. Manual mapping for common symbols that ASCII ignore might delete
+        # 4. Handle common bullet points manually if they were stripped
         clean_text = clean_text.replace('\u2022', '*').replace('\u2013', '-').replace('\u2014', '-')
         
+        # 5. Write to PDF
         pdf.multi_cell(0, 7, txt=clean_text)
         
-        # 5. Safe Output Generation
-        # We return the bytes directly as the PDF engine provides them
-        output_bytes = pdf.output(dest='S')
-        
-        # If output_bytes is already a byte string (standard in FPDF), return it
-        if isinstance(output_bytes, bytes):
-            return output_bytes
-        # Otherwise, encode carefully
-        return str(output_bytes).encode('latin-1', 'replace')
+        # 6. RETURN RAW BYTES
+        # pdf.output(dest='S') already returns a byte-string in modern FPDF
+        # We DO NOT .encode('latin-1') here because the library already tried and failed
+        return pdf.output(dest='S')
         
     except Exception as e:
-        # Emergency recovery: Return a basic text-based PDF error msg if it STILL fails
-        error_pdf = FPDF()
-        error_pdf.add_page()
-        error_pdf.set_font("Arial", size=12)
-        error_pdf.cell(0, 10, "PDF Generation Error: Non-standard characters detected.", 0, 1)
-        return error_pdf.output(dest='S')
-
+        # Emergency Fallback: If the text causes a crash, return an empty 'Error' PDF
+        fallback_pdf = FPDF()
+        fallback_pdf.add_page()
+        fallback_pdf.set_font("Arial", size=12)
+        fallback_pdf.cell(0, 10, "Intelligence Brief: Encoding Conflict Detected", 0, 1)
+        fallback_pdf.multi_cell(0, 7, txt="The report contained characters that could not be rendered in PDF format.")
+        return fallback_pdf.output(dest='S')
 def export_word(content, title):
     """Standard Word export engine"""
     doc = Document()
