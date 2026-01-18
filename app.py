@@ -57,6 +57,10 @@ def get_db_creds():
         return {'usernames': {}} # Return empty dict if table is missing
 
 # 1. Initialize Authenticator
+init_db_v2()
+
+# 2. Initialize Authenticator in Session State
+# We pass get_db_creds() directly to ensure the authenticator has the LATEST data
 if 'authenticator' not in st.session_state:
     st.session_state.authenticator = stauth.Authenticate(
         get_db_creds(), 
