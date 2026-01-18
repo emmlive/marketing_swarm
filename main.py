@@ -192,11 +192,17 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
 # --- 5. EXECUTION WRAPPER ---
 def run_marketing_swarm(inputs):
+    # 1. Initialize and execute the Swarm Flow
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
     
+    # 2. Capture the active list from the UI (Folder 05 sync)
+    active_list = inputs.get('active_swarm', [])
+
+    # 3. YOUR FORMATTED STRING (Keep this for the master export)
+    # We use .get() here as well to prevent crashes if an agent is skipped
     formatted_string_report = f"""
-# 🚀 {inputs['biz_name']} | EXECUTIVE INTELLIGENCE SUMMARY
+# 🚀 {inputs.get('biz_name', 'Enterprise')} | EXECUTIVE INTELLIGENCE SUMMARY
 
 ## 🔍 PHASE 1: MARKET DISCOVERY & AUDIT
 ### Strategic Market Analysis
@@ -225,7 +231,8 @@ def run_marketing_swarm(inputs):
 {flow.state.production_schedule}
 """
 
-    return {
+    # 4. SYSTEMIC MAPPING (Matches Folder 06 keys in app.py)
+    master_data = {
         "analyst": flow.state.market_data,
         "ads": flow.state.competitor_ads,
         "vision": flow.state.vision_intel, 
@@ -234,6 +241,9 @@ def run_marketing_swarm(inputs):
         "social": flow.state.social_plan,
         "geo": flow.state.geo_intel,
         "seo": flow.state.seo_article,
-        "auditor": flow.state.website_audit,
+        "audit": flow.state.website_audit,
         "full_report": formatted_string_report 
     }
+
+    # 5. FILTER: Return only toggled agents + the full summary
+    return {k: v for k, v in master_data.items() if k in active_list or k == "full_report"}
