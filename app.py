@@ -1,7 +1,11 @@
 import streamlit as st
 import streamlit_authenticator as stauth
+import pandas as pd  # <--- THIS IS THE MISSING PIECE
 import sqlite3
 import os
+from datetime import datetime
+from io import BytesIO
+from main import run_marketing_swarm
 
 # --- ARCHITECTURE SETUP (Folder 03) ---
 # This ensures the app knows its current 'Phase'
@@ -41,11 +45,16 @@ else:
 # --- FOLDER 04: SECURITY PROTOCOLS & AUTHENTICATION WRAPPER ---
 
 def get_db_creds():
-    """Fetches user credentials for the authentication engine"""
+    """Fetches user credentials using Pandas with safety check"""
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
-    df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
-    conn.close()
-    return {'usernames': {r['username']: {'email':r['email'], 'name':r['name'], 'password':r['password']} for _,r in df.iterrows()}}
+    try:
+        # We explicitly use pd here; ensure 'import pandas as pd' is at the top
+        df = pd.read_sql_query("SELECT username, email, name, password FROM users", conn)
+        conn.close()
+        return {'usernames': {r['username']: {'email':r['email'], 'name':r['name'], 'password':r['password']} for _,r in df.iterrows()}}
+    except Exception as e:
+        conn.close()
+        return {'usernames': {}} # Return empty dict if table is missing
 
 # 1. Initialize Authenticator
 if 'authenticator' not in st.session_state:
