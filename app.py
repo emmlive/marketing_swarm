@@ -20,6 +20,25 @@ import streamlit as st
 from fpdf import FPDF
 import fpdf
 
+# ===============================
+# 🔥 FPDF INTERNAL ENCODING PATCH
+# ===============================
+
+import fpdf.fpdf
+
+_original_putpages = fpdf.fpdf.FPDF._putpages
+
+def _patched_putpages(self):
+    # Force-ignore any encoding failures inside FPDF itself
+    pages = self.pages
+    self.pages = {}
+    for k, v in pages.items():
+        if isinstance(v, str):
+            v = v.encode("latin-1", "ignore").decode("latin-1", "ignore")
+        self.pages[k] = v
+    _original_putpages(self)
+
+fpdf.fpdf.FPDF._putpages = _patched_putpages
 
 # --------------------------------------------------
 # 🔐 NUCLEAR ASCII SANITIZER (NO UNICODE SURVIVES)
