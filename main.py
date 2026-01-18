@@ -96,16 +96,32 @@ def get_swarm_agents(inputs):
         )
     }
 
-# --- 4. THE STATEFUL WORKFLOW ---
+# --- 4. THE STATEFUL WORKFLOW (Optimized for SDLC Sync) ---
 class MarketingSwarmFlow(Flow[SwarmState]):
     def __init__(self, inputs):
         super().__init__()
+        # 1. Store inputs for internal logic
         self.inputs = inputs
+        
+        # 2. HYDRATE STATE: 
+        # We manually push the UI data into the State slots we defined
+        self.state.biz_name = inputs.get('biz_name', 'Unknown Brand')
+        self.state.location = inputs.get('city', 'USA')
+        self.state.directives = inputs.get('directives', '')
+        
+        # 3. Initialize agents and toggles
         self.agents = get_swarm_agents(inputs)
-        self.toggles = inputs.get('toggles', {})
+        # We store which agents the user actually toggled 'ON'
+        self.active_swarm = inputs.get('active_swarm', [])
 
     @start()
     def phase_1_discovery(self):
+        """Phase 1: Market Research & Audit"""
+        # We ONLY run the analyst if it's in the active_swarm list
+        if "analyst" in self.active_swarm:
+            # result = self.agents['analyst_crew'].kickoff()
+            # self.state.market_data = result.raw
+            self.state.market_data = f"Analyzing {self.state.biz_name} in {self.state.location}..."
         """Step 1: Filtered Discovery & Visual Forensics"""
         active_tasks = []
         
