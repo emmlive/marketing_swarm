@@ -14,42 +14,42 @@ from main import run_marketing_swarm
 import unicodedata
 
 def export_pdf(content, title):
-    """Folder 06: Final Resilient PDF Engine (Binary Safe)"""
+    """Folder 06: Final Resilient PDF Engine (Force-ASCII)"""
     try:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", 'B', 16)
-        pdf.cell(0, 10, f'Intelligence Brief: {title}', 0, 1, 'C')
+        pdf.cell(0, 10, f"Intelligence Brief: {title}", 0, 1, 'C')
         pdf.set_font("Arial", size=10)
         
-        # 1. Normalize text to break down complex characters
+        # 1. Force conversion to string and normalize
         raw_text = str(content)
+        # NFKD decomposes characters (e.g., turning a 'smart' quote into a normal one)
         normalized = unicodedata.normalize('NFKD', raw_text)
         
-        # 2. Strict ASCII Filter: Keep ONLY standard keyboard characters
-        # This prevents the fpdf.py line 1170 internal crash
-        clean_text = "".join(c for c in normalized if ord(c) < 128)
+        # 2. STRICT ASCII FILTER
+        # We encode to ASCII and IGNORE anything that isn't a standard character.
+        # This is the 'Shield' that prevents the internal fpdf.py crash.
+        ascii_text = normalized.encode('ascii', 'ignore').decode('ascii')
         
-        # 3. Restore basic symbols that were decomposed
-        clean_text = clean_text.replace('\u2022', '*').replace('\u2013', '-').replace('\u2014', '-')
+        # 3. Clean up common formatting characters that might have survived
+        clean_text = ascii_text.replace('\n', '  ').replace('\r', '')
         
+        # 4. Write to PDF
         pdf.multi_cell(0, 7, txt=clean_text)
         
-        # 4. Return as raw bytes
-        # In modern fpdf, dest='S' returns a bytearray/bytes object directly
-        result = pdf.output(dest='S')
-        
-        if isinstance(result, str):
-            return result.encode('latin-1', 'replace')
-        return result
+        # 5. Return RAW BYTES
+        # We do NOT use .encode('latin-1') here because the library 
+        # already handles the byte conversion internally.
+        return pdf.output(dest='S')
         
     except Exception as e:
-        # Emergency Fallback: Return a simple error PDF
-        err_pdf = FPDF()
-        err_pdf.add_page()
-        err_pdf.set_font("Arial", size=12)
-        err_pdf.cell(0, 10, "PDF Export Error: Unsupported characters in report.", 0, 1)
-        return err_pdf.output(dest='S')
+        # Emergency Fallback: If it STILL fails, return an empty PDF with an error message
+        fallback = FPDF()
+        fallback.add_page()
+        fallback.set_font("Arial", size=12)
+        fallback.cell(0, 10, "PDF Error: Character Conflict", 0, 1)
+        return fallback.output(dest='S')
 def export_word(content, title):
     """Standard Word export engine"""
     doc = Document()
