@@ -74,18 +74,20 @@ def get_db_creds():
         return {'usernames': {}}
 
 def init_db_v2():
-    """Forces administrative credentials and initializes schema"""
+    """Forces administrative credentials using the v0.4.x static hashing method"""
     conn = sqlite3.connect('breatheeasy.db', check_same_thread=False)
     c = conn.cursor()
+    
+    # 1. Create User Table
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, email TEXT, name TEXT, password TEXT, 
                   role TEXT, plan TEXT, credits INTEGER, verified INTEGER DEFAULT 0, team_id TEXT)''')
     
-    # NEW HASHING LOGIC: Correct for the latest streamlit-authenticator
-    # This ensures 'admin123' is stored in a format the login box can read
-    hashed_passwords = stauth.Hasher(['admin123']).generate()
-    admin_pw = hashed_passwords[0]
+    # 2. FIXED HASHING: In v0.4.x+, Hasher is a static utility, not a class to instantiate
+    # We call .hash() directly on the class. No brackets, no .generate()
+    admin_pw = stauth.Hasher.hash('admin123')
     
+    # 3. Inject/Refresh Admin
     c.execute("""INSERT OR REPLACE INTO users 
                  (username, email, name, password, role, plan, credits, verified, team_id) 
                  VALUES ('admin', 'admin@tech.ai', 'System Admin', ?, 'admin', 'Unlimited', 9999, 1, 'HQ_001')""", 
@@ -93,6 +95,9 @@ def init_db_v2():
     
     conn.commit()
     conn.close()
+
+# --- MANDATORY EXECUTION ORDER ---
+init_db_v2()
 
 # 1. Initialize the Database and Admin Record
 init_db_v2()
