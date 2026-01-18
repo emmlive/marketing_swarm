@@ -373,38 +373,40 @@ with st.sidebar:
     authenticator.logout('🔒 Sign Out', 'sidebar')
 
 # 4. EXECUTION BRIDGE (Updated for Sync)
+
 if run_btn:
     if not biz_name:
         st.error("Error: Brand Name is required for swarm coordination.")
     else:
-        # NEW: Identify which agents are actually toggled ON in the expander
-        # This creates a list like ['analyst', 'ads', 'seo'] based on the toggles
+        # 1. Identify which agents are actually toggled ON
+        # This fixes the 'Agent not selected' issue by filtering the map
         active_agents = [key for title, key in agent_map if toggles.get(key)]
         
         if not active_agents:
-            st.warning("⚠️ Please toggle at least one Swarm Personnel in the sidebar.")
+            st.warning("⚠️ Warning: No agents selected. Please toggle at least one Swarm Personnel.")
         else:
             with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
-                # Pass the toggled agents to your backend
+                # 2. Pass the active list to your backend main.py
+                # Ensure your backend main.py is set up to receive 'active_swarm'
                 report = run_marketing_swarm({
                     'city': full_loc, 
                     'biz_name': biz_name, 
                     'service': "Omni-Service", 
                     'directives': agent_info,
-                    'active_swarm': active_agents  # <--- CRITICAL SYNC
+                    'active_swarm': active_agents 
                 })
                 
-                # Save to session state so Folder 06 can see it
+                # 3. Securely store results in session state
                 st.session_state.report = report
                 st.session_state.gen = True
                 
-                # Audit Log Entry & Credit Deduction
+                # 4. Final Audit Log and Refresh
                 conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
+                # Log the successful generation for the Admin Tab
                 conn.execute("INSERT INTO master_audit_logs (timestamp, user, action_type, target_biz, location, status) VALUES (?,?,?,?,?,?)", 
-                             (datetime.now().strftime("%Y-%m-%d %H:%M"), user_row['username'], "SWARM_LAUNCH", biz_name, full_loc, "SUCCESS"))
-                conn.commit()
-                conn.close()
+                             (datetime.now().strftime("%Y-%m-%d %H:%M"), user_row['username'], "SWARM_COMPLETE", biz_name, full_loc, "SUCCESS"))
+                conn.commit(); conn.close()
                 
                 status.update(label="🚀 Swarm Intelligence Captured!", state="complete")
                 st.rerun()
