@@ -14,40 +14,52 @@ from main import run_marketing_swarm
 import unicodedata
 from fpdf import FPDF
 
-def force_ascii(text):
-    """Normalize and strip everything to safe ASCII"""
-    if text is None:
+def force_safe_ascii(text):
+    if not text:
         return ""
     text = str(text)
     text = unicodedata.normalize("NFKD", text)
+    text = text.replace("\u200b", "")  # zero-width space
+    text = text.replace("\ufeff", "")  # BOM
     return text.encode("ascii", "ignore").decode("ascii")
 
-def export_pdf(content, title):
+def export_pdf_resilient(content, title):
     try:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", "B", 16)
 
-        safe_title = force_ascii(title)
-        pdf.cell(0, 10, f"Intelligence Brief: {safe_title}", 0, 1, "C")
+        pdf.cell(
+            0, 10,
+            f"Intelligence Brief: {force_safe_ascii(title)}",
+            ln=True,
+            align="C"
+        )
 
         pdf.set_font("Arial", size=10)
 
-        safe_content = force_ascii(content)
-        safe_content = safe_content.replace("\r", "").replace("\n", "  ")
+        safe_text = force_safe_ascii(content)
+        safe_text = safe_text.replace("\r", "").replace("\n", "  ")
 
-        pdf.multi_cell(0, 7, safe_content)
+        # line length guard (FPDF edge case)
+        safe_text = "\n".join(
+            line[:1000] for line in safe_text.split("\n")
+        )
 
-        # IMPORTANT:
-        # FPDF returns a *latin-1 safe string*
-        # Streamlit needs bytes → encode ONCE, at the end
+        pdf.multi_cell(0, 7, safe_text)
+
         return pdf.output(dest="S").encode("latin-1")
 
-    except Exception:
+    except Exception as e:
         fallback = FPDF()
         fallback.add_page()
         fallback.set_font("Arial", size=12)
-        fallback.cell(0, 10, "PDF Error: Character Conflict", 0, 1)
+        fallback.multi_cell(
+            0, 10,
+            "PDF GENERATION FAILED\n\n"
+            "Cause: Unsupported characters were detected.\n"
+            "Please contact support."
+        )
         return fallback.output(dest="S").encode("latin-1")
 
 def export_word(content, title):
