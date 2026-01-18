@@ -206,7 +206,7 @@ class MarketingSwarmFlow(Flow[SwarmState]):
                 expected_output="Local SEO and GEO intelligence report."
             ))
 
-        # --- EXECUTION & MAPPING ---
+       # --- EXECUTION & ROBUST MAPPING ---
         if production_tasks:
             crew = Crew(
                 agents=[t.agent for t in production_tasks],
@@ -216,14 +216,21 @@ class MarketingSwarmFlow(Flow[SwarmState]):
             crew.kickoff()
             
             for task in production_tasks:
+                # Ensure we are capturing the raw string output correctly
                 out = str(task.output.raw)
                 desc = task.description.lower()
                 
-                if "strategy" in desc: self.state.strategist_brief = out
-                elif "multichannel" in desc: self.state.ad_drafts = out
-                elif "seo" in desc: self.state.seo_article = out
-                elif "viral" in desc: self.state.social_plan = out
-                elif "geo" in desc: self.state.geo_intel = out
+                # Broad Keyword Matching: If ANY of these words exist, save to the state
+                if any(word in desc for word in ["strategy", "master", "brief"]): 
+                    self.state.strategist_brief = out
+                elif any(word in desc for word in ["ad suite", "multichannel", "creative", "copy"]): 
+                    self.state.ad_drafts = out
+                elif any(word in desc for word in ["seo", "article", "blog", "content"]): 
+                    self.state.seo_article = out
+                elif any(word in desc for word in ["viral", "social", "calendar", "post"]): 
+                    self.state.social_plan = out
+                elif any(word in desc for word in ["geo", "local", "gmb", "map"]): 
+                    self.state.geo_intel = out
             
         return "execution_complete"
 
