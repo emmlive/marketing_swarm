@@ -636,39 +636,37 @@ if "⚙ Admin" in TAB:
             st.dataframe(audit_df, use_container_width=True)
             conn.close()
 
-        # --- SUB-TAB 2: USER MANAGER (Add/Remove/Tier) ---
+       # --- SUB-TAB 2: USER MANAGER ---
 with admin_sub2:
     st.subheader("Subscriber Management")
-    conn = sqlite3.connect('breatheeasy.db')
-    
-    # Corrected: 'plan' matches your sync_database_schema logic
-    users_df = pd.read_sql("SELECT id, username, name, email, plan, role, credits FROM users", conn)
-    
-    st.dataframe(users_df, use_container_width=True)
-    conn.close() # Always close the connection after the query
+    # ... (Your SELECT and dataframe code is here) ...
 
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("### ➕ Create / Update User")
-                with st.form("add_user_form", clear_on_submit=True):
-                    new_user = st.text_input("Username")
-                    new_name = st.text_input("Full Name")
-                    new_email = st.text_input("Email")
-                    new_tier = st.selectbox("Tier", ["Basic", "Pro", "Enterprise"])
-                    new_credits = st.number_input("Starting Credits", value=10)
-                    submit_user = st.form_submit_button("Sync User Account")
-                    
-                    if submit_user:
-                        conn.execute("""
-                            INSERT INTO users (username, name, email, package, credits, role, verified)
-                            VALUES (?, ?, ?, ?, ?, 'user', 1)
-                            ON CONFLICT(username) DO UPDATE SET 
-                            name=excluded.name, email=excluded.email, package=excluded.package, credits=excluded.credits
-                        """, (new_user, new_name, new_email, new_tier, new_credits))
-                        conn.commit()
-                        st.success(f"User {new_user} updated!")
-                        st.rerun()
-
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### ➕ Create / Update User")
+        with st.form("add_user_form", clear_on_submit=True):
+            new_user = st.text_input("Username")
+            new_name = st.text_input("Full Name")
+            new_email = st.text_input("Email")
+            new_tier = st.selectbox("Tier", ["Basic", "Pro", "Enterprise"])
+            new_credits = st.number_input("Starting Credits", value=10)
+            
+            # This is the button that triggers the code
+            submit_user = st.form_submit_button("Sync User Account")
+            
+            # --- PASTE THE CODE HERE ---
+            if submit_user:
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("""
+                    INSERT INTO users (username, name, email, plan, credits, role, verified)
+                    VALUES (?, ?, ?, ?, ?, 'user', 1)
+                    ON CONFLICT(username) DO UPDATE SET 
+                    name=excluded.name, email=excluded.email, plan=excluded.plan, credits=excluded.credits
+                """, (new_user, new_name, new_email, new_tier, new_credits))
+                conn.commit()
+                conn.close()
+                st.success(f"User {new_user} updated!")
+                st.rerun()
             with col2:
                 st.markdown("### 🗑️ Remove User")
                 user_to_del = st.selectbox("Select Target", users_df['username'].tolist())
