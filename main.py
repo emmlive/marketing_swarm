@@ -214,17 +214,52 @@ class MarketingSwarmFlow(Flow[SwarmState]):
 
     @listen("finalize_branding")
     def add_stakeholder_branding(self):
-        """Phase 3: Injecting Professional Branding & Timestamps"""
+        """Phase 3: Injecting Professional Branding, Timestamps, and Tiered Logos"""
         from datetime import datetime
+        import base64
+        
+        # 1. Capture Current Timestamp
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        # This builds the 'Stakeholder ready' master report
-        branding = f"# {self.state.biz_name} Intelligence Report\n"
-        branding += f"**Date:** {now} | **Location:** {self.state.location}\n"
-        branding += "---\n"
+        # 2. LOGO INJECTION LOGIC
+        package = self.inputs.get('package', 'Basic')
+        custom_logo_file = self.inputs.get('custom_logo') 
+        logo_html = ""
         
-        self.state.full_report = branding + f"\n## Analyst Insights\n{self.state.market_data}"
-        # (This full_report is what the PDF generator will use)
+        # Only allow custom logos for Pro, Enterprise, or Admin
+        if package != "Basic" and custom_logo_file is not None:
+            try:
+                # Read the file object from Streamlit and encode to base64
+                bytes_data = custom_logo_file.getvalue()
+                b64_logo = base64.b64encode(bytes_data).decode()
+                # We use HTML img tag for precise PDF layout control
+                logo_html = f'<div style="text-align: center;"><img src="data:image/png;base64,{b64_logo}" width="200"></div>'
+            except Exception as e:
+                logo_html = ""
+        else:
+            # Branding for Basic plan
+            logo_html = "<div style='text-align: center;'>🛡️ <strong>SYSTEM GENERATED REPORT</strong></div>"
+
+        # 3. CONSTRUCT STAKEHOLDER HEADER
+        header = f"""
+{logo_html}
+# {self.state.biz_name} Intelligence Report
+**Date:** {now} | **Location:** {self.state.location} | **Plan:** {package}
+---
+        """
+        
+        # 4. ASSEMBLE MASTER REPORT FOR PDF
+        # We combine all results into one master string
+        self.state.full_report = f"{header}\n\n" \
+            f"## 🕵️ Market Analysis\n{self.state.market_data}\n\n" \
+            f"## 👔 Executive Strategy\n{self.state.strategist_brief}\n\n" \
+            f"## 🎨 Multichannel Creative\n{self.state.ad_drafts}\n\n" \
+            f"## ✍️ SEO Authority Article\n{self.state.seo_article}\n\n" \
+            f"## 🌐 Website Audit\n{self.state.website_audit}\n\n" \
+            f"## 📍 GEO Intelligence\n{self.state.geo_intel}\n\n" \
+            f"## 📱 Social Roadmap\n{self.state.social_plan}"
+
+        return "branding_complete"
         
         # 1. STRATEGIST (The Lead Architect)
         if "strategist" in self.active_swarm:
