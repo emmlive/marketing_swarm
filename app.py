@@ -323,18 +323,37 @@ def get_geo_data():
         "Texas": ["Austin", "Dallas", "Houston"],
     }
 
-# 3. DYNAMIC SIDEBAR ARCHITECTURE
+# --- 3. DYNAMIC SIDEBAR ARCHITECTURE (Tiered Monetization Update) ---
 with st.sidebar:
     st.image("Logo1.jpeg", width=120)
     st.subheader(f"Welcome, {user_row['name']}")
-    st.metric("Enterprise Credits", user_row['credits'])
+    st.metric(f"{user_row['package']} Credits", user_row['credits'])
     
     st.divider()
+
+    # --- TIER LIMITS CONFIGURATION ---
+    tier_limits = {
+        "Basic": 3,      
+        "Pro": 5,        
+        "Enterprise": 8  
+    }
     
-    # Brand Configuration
+    # Logic: Admin bypasses all limits, others use their package tier
+    current_tier = user_row.get('package', 'Basic')
+    is_admin = user_row.get('role') == 'admin'
+    agent_limit = 8 if is_admin else tier_limits.get(current_tier, 3)
+
+    # 1. BRAND CONFIGURATION
     biz_name = st.text_input("🏢 Brand Name", placeholder="Acme Corp")
     
-    # Dynamic Geography (Sprint 3 requirement)
+    # 2. BRAND LOGO GUARDRAIL (Pro & Enterprise only)
+    custom_logo = None
+    if current_tier == "Basic" and not is_admin:
+        st.info("💡 **Basic Plan:** System branding active. Upgrade to Pro for custom logos.")
+    else:
+        custom_logo = st.file_uploader("📤 Custom Brand Logo (Pro+)", type=['png', 'jpg', 'jpeg'])
+    
+    # 3. GEOGRAPHY
     geo_dict = get_geo_data()
     selected_state = st.selectbox("🎯 Target State", sorted(geo_dict.keys()))
     selected_city = st.selectbox("🏙️ Target City", sorted(geo_dict[selected_state]))
@@ -342,32 +361,53 @@ with st.sidebar:
     
     st.divider()
     
-    # Strategic Directives (Sprint 5 requirement)
+    # 4. STRATEGIC DIRECTIVES
     agent_info = st.text_area("✍️ Strategic Directives", 
                              placeholder="Injected into all agent prompts...",
                              help="Define specific goals like 'luxury focus' or 'emergency speed'.")
     
-    # Swarm Personnel Toggles
-    with st.expander("🤖 Swarm Personnel", expanded=False):
-        # Global definition of agents to be used across tabs
-       # 1. Global definition of agents (Titles and Internal Keys)
+    # 5. SWARM PERSONNEL TOGGLES (With Limit Logic)
+    with st.expander("🤖 Swarm Personnel", expanded=True):
+        st.caption(f"Plan: {current_tier} | Limit: {agent_limit} Agents")
+        
         agent_map = [
             ("🕵️ Analyst", "analyst"), ("📺 Ads", "ads"), ("🎨 Creative", "creative"), 
             ("👔 Strategist", "strategist"), ("📱 Social", "social"), ("📍 GEO", "geo"), 
             ("🌐 Auditor", "audit"), ("✍ SEO", "seo")
         ]
 
-        # 2. CORRECTED SIDEBAR TOGGLES
-        # This maps the Internal Key (k) to the Toggle state, and displays the Title (v)
-        # Old was: {k: st.toggle(v, ...)} -> Swapped
-        # New is:
-        toggles = {key: st.toggle(title, value=True, key=f"tg_{key}") for title, key in agent_map}
+        toggles = {}
+        active_count = 0
+        
+        # Determine how many are currently toggled on
+        for title, key in agent_map:
+            # Logic: Disable toggle if limit reached AND it's not already ON
+            # This allows users to turn things OFF to make room for others
+            is_disabled = False
+            if not is_admin and active_count >= agent_limit and not st.session_state.get(f"tg_{key}"):
+                is_disabled = True
+            
+            # Default first 3 to ON for convenience, others OFF
+            default_val = True if active_count < 3 and key in ['analyst', 'audit', 'seo'] else False
+            
+            toggles[key] = st.toggle(title, value=default_val, disabled=is_disabled, key=f"tg_{key}")
+            
+            if toggles[key]:
+                active_count += 1
+        
+        if not is_admin and active_count >= agent_limit:
+            st.warning(f"Maximum agents ({agent_limit}) reached for {current_tier} plan.")
 
-        st.divider()
+    st.divider()
     
-    # Verification Security Gate (Sprint 2)
+    # 6. VERIFICATION SECURITY GATE
     if user_row['verified'] == 1:
-        run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
+        # Check if they have credits
+        if user_row['credits'] > 0:
+            run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
+        else:
+            st.error("💳 Out of Credits")
+            run_btn = False
     else:
         st.error("🛡️ Verification Required")
         if st.button("🔓 One-Click Verify"):
