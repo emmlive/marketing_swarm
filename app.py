@@ -580,28 +580,31 @@ DEPLOY_GUIDES = {
 
 # --- FOLDER 06: AGENT SEATS - FINAL SYNCED RENDERER ---
 # --- CONSOLIDATED NAVIGATION CONTROL ---
-# This builds the list of tabs ONE time.
 tab_labels = ["📖 Guide", "📊 Intelligence", "📝 Strategy", "🎨 Creative", "🔍 Audit", "👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 
 if user_row.get('role') == 'admin':
     tab_labels.append("⚙ Admin")
 
-# This renders the UI elements ONE time.
 tabs_obj = st.tabs(tab_labels)
-
-# This maps the names to the objects for your 'with TAB' blocks.
 TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
-# --- FOLDER 06: AGENT SEATS - FINAL SYNCED RENDERER ---
-# This loop now has a valid 'tabs_obj' to work with!
+# --- 1. FILL THE GUIDE TAB (Prevents the IndentationError) ---
+with TAB["📖 Guide"]:
+    st.header("📖 Omni-Swarm Operating Manual")
+    st.info("Welcome to the Command Center. Follow the steps in the sidebar to begin.")
+    st.markdown("""
+    - **Step 1:** Enter your Brand and Location.
+    - **Step 2:** Select the Specialized Agents for your mission.
+    - **Step 3:** Click 'Launch Swarm' to generate intelligence.
+    """)
+
+# --- 2. FILL THE AGENT SEATS (The Loop) ---
+# This is now safely separated from the Guide content
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
-        # ... your existing Deployment Guide code ...
-for i, (title, key) in enumerate(agent_map, 1):
-    with tabs_obj[i]:
-        # 1. Deployment Guide (Visual UI)
-        st.markdown(f'''<div class="deploy-guide">
-            <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
+        st.subheader(f"🚀 {title} Intelligence Seat")
+        # ... Your agent content code goes here ...
+        
             {DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}
         </div>''', unsafe_allow_html=True)
 
