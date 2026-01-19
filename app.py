@@ -620,71 +620,76 @@ with TAB["🤝 Team Intel"]:
         st.info("Pipeline is currently empty. Launch a swarm to generate leads.")
     conn.close()
 
-# --- D. Admin God-MODE (Sprint 4 Replacement) ---
+# --- D. Admin God-MODE (Sprint 4 Finalized) ---
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
         st.header("⚙️ System Forensics & User Control")
         
-        # Inner Tabs for better organization
+        # All sub-tabs defined at the same level
         admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
 
         # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
             st.subheader("Global Activity Audit")
             conn = sqlite3.connect('breatheeasy.db')
-            audit_df = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
-            st.dataframe(audit_df, use_container_width=True)
+            try:
+                audit_df = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
+                st.dataframe(audit_df, use_container_width=True)
+            except:
+                st.info("No audit logs found yet. Run your first swarm to see data.")
             conn.close()
 
-    # --- SUB-TAB 2: USER MANAGER ---
-with admin_sub2:
-    st.subheader("Subscriber Management")
-    conn = sqlite3.connect('breatheeasy.db')
-    
-    # 1. Fetch data safely
-    try:
-        users_df = pd.read_sql("SELECT id, username, name, email, plan, role, credits FROM users", conn)
-        st.dataframe(users_df, use_container_width=True)
-    except Exception as e:
-        st.error(f"Database Read Error: {e}")
-        users_df = pd.DataFrame(columns=['username']) # Fallback empty dataframe
+        # --- SUB-TAB 2: USER MANAGER ---
+        with admin_sub2:
+            st.subheader("Subscriber Management")
+            conn = sqlite3.connect('breatheeasy.db')
+            # Fixed: Using 'plan' to match your schema
+            users_df = pd.read_sql("SELECT id, username, name, email, plan, role, credits FROM users", conn)
+            st.dataframe(users_df, use_container_width=True)
 
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### ➕ Create / Update User")
-        # ... (Your Form code for adding users) ...
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("### ➕ Sync User Account")
+                with st.form("admin_user_form", clear_on_submit=True):
+                    u_name = st.text_input("Username")
+                    u_full = st.text_input("Full Name")
+                    u_tier = st.selectbox("Plan", ["Basic", "Pro", "Enterprise", "Unlimited"])
+                    u_creds = st.number_input("Credits", value=10)
+                    if st.form_submit_button("Update/Create"):
+                        conn.execute("""
+                            INSERT INTO users (username, name, plan, credits, role, verified)
+                            VALUES (?, ?, ?, ?, 'user', 1)
+                            ON CONFLICT(username) DO UPDATE SET 
+                            name=excluded.name, plan=excluded.plan, credits=excluded.credits
+                        """, (u_name, u_full, u_tier, u_creds))
+                        conn.commit()
+                        st.success(f"User {u_name} synced!")
+                        st.rerun()
 
-    with col2:
-        st.markdown("### 🗑️ Remove User")
-        # 2. Ensure users_df exists and has data before creating selectbox
-        if not users_df.empty:
-            user_list = users_df['username'].tolist()
-            user_to_del = st.selectbox("Select Target Account", user_list, key="del_user_sel")
-            
-            if st.button("🔴 Delete Account Permanently", use_container_width=True):
-                if user_to_del != user_row['username']:
-                    conn.execute("DELETE FROM users WHERE username = ?", (user_to_del,))
-                    conn.commit()
-                    st.warning(f"Purged: {user_to_del}")
-                    st.rerun()
-                else:
-                    st.error("Admin cannot delete themselves.")
-        else:
-            st.info("No users found to delete.")
-            
-    conn.close()
-        # --- SUB-TAB 3: PASSWORD MANAGEMENT ---
+            with col2:
+                st.markdown("### 🗑️ Remove User")
+                u_del = st.selectbox("Select Account", users_df['username'].tolist(), key="admin_del_sel")
+                if st.button("🔴 Permanently Delete User"):
+                    if u_del != user_row['username']:
+                        conn.execute("DELETE FROM users WHERE username = ?", (u_del,))
+                        conn.commit()
+                        st.warning(f"Purged: {u_del}")
+                        st.rerun()
+                    else:
+                        st.error("Admin cannot delete themselves.")
+            conn.close()
+
+        # --- SUB-TAB 3: SECURITY ---
         with admin_sub3:
-            st.subheader("Credential Management")
-            target_p = st.selectbox("Target User", users_df['username'].tolist(), key="p_mgr")
-            new_p = st.text_input("Set New Password", type="password")
+            st.subheader("Credential Overrides")
+            conn = sqlite3.connect('breatheeasy.db')
+            target_p = st.selectbox("Reset Password For:", users_df['username'].tolist(), key="p_mgr")
+            new_p = st.text_input("New Secure Password", type="password")
             
-            if st.button("🛠️ Reset & Hash Password"):
-                # Automatically hashes for the streamlit-authenticator logic
+            if st.button("🛠️ Reset & Hash Credentials"):
+                # Automatically hashes for the streamlit-authenticator
                 hashed_p = stauth.Hasher([new_p]).generate()[0]
-                conn = sqlite3.connect('breatheeasy.db')
                 conn.execute("UPDATE users SET password = ? WHERE username = ?", (hashed_p, target_p))
                 conn.commit()
-                conn.close()
-                st.success(f"Password reset successful for {target_p}!")
+                st.success(f"Password reset for {target_p}!")
+            conn.close()
