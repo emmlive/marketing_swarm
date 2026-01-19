@@ -669,9 +669,33 @@ with TAB["🤝 Team Intel"]:
     conn.close()
 
 # --- D. Admin God-MODE (Sprint 4 Finalized) ---
-# --- TAB DEFINITION (Place this before the Admin logic) ---
-# 1. Define the base tabs all users see
-main_tabs = ["📊 Intelligence", "📝 Strategy", "🎨 Creative", "🔍 Audit"]
+# --- TAB DEFINITION (Place this before your content blocks) ---
+
+# 1. Define ALL tabs used in your app logic
+# This list must include every tab name you reference in your 'with TAB' blocks
+main_tabs = [
+    "📖 Guide", 
+    "📊 Intelligence", 
+    "📝 Strategy", 
+    "🎨 Creative", 
+    "🔍 Audit", 
+    "👁️ Vision", 
+    "🎬 Veo Studio", 
+    "🤝 Team Intel"
+]
+
+# 2. Dynamically add Admin tab ONLY for users with the 'admin' role
+if user_row.get('role') == 'admin':
+    main_tabs.append("⚙ Admin")
+
+# 3. Create the actual Tab objects
+tabs_obj = st.tabs(main_tabs)
+
+# 4. Map the names to the objects (The Switchboard)
+TAB = {name: tabs_obj[i] for i, name in enumerate(main_tabs)}
+
+# --- 5. FILL CONTENT ---
+# Now your existing code like 'with TAB["🤝 Team Intel"]:' will work perfectly.
 
 # 2. Dynamically add Admin tab ONLY for admins
 if user_row.get('role') == 'admin':
