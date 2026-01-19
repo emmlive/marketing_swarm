@@ -603,17 +603,16 @@ for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
         st.subheader(f"🚀 {title} Intelligence Seat")
         
-        # 1. Deployment Guide (FIXED: Added the opening markdown tag)
+        # 1. Deployment Guide
         st.markdown(f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB;">
             <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
             {DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}
         </div>''', unsafe_allow_html=True)
 
-        st.write("") # Visual spacer
+        st.write("") 
 
         # 2. Check if the report has been generated
         if st.session_state.get('gen') and st.session_state.get('report'):
-            # Fetch data from the report dictionary
             agent_content = st.session_state.report.get(key)
             
             if agent_content:
@@ -624,26 +623,22 @@ for i, (title, key) in enumerate(agent_map, 1):
                     height=450, 
                     key=f"editor_{key}"
                 )
-                
-                # Add your Export Buttons (Word/PDF) here if needed
-                
-            else:
-                st.warning(f"⚠️ {title} was not selected for this deployment. Toggle it in the sidebar and re-launch.")
-        else:
-            st.info(f"✨ The {title} seat is ready for deployment. Launch the swarm from the sidebar.")
 
-                # EXPORT ENGINE
+                # --- EXPORT ENGINE (Inside the content block) ---
                 c1, c2 = st.columns(2)
                 with c1:
                     st.download_button("📄 Word Brief", export_word(edited, title), f"{biz_name}_{key}.docx", key=f"btn_w_{key}")
                 with c2:
                     st.download_button("📕 PDF Report", export_pdf(edited, title), f"{biz_name}_{key}.pdf", key=f"btn_p_{key}")
+            
             else:
-                # This triggers if the agent was not selected in the sidebar
+                # Triggers if the agent exists but wasn't chosen in this run
                 st.warning(f"⚠️ {title} was not selected for this deployment. Toggle it in the sidebar and re-launch.")
+        
         else:
+            # Triggers if the 'Launch' button hasn't been clicked yet
             st.info(f"✨ The {title} seat is ready for deployment. Launch the swarm from the sidebar.")
-
+            
 # --- C. TEAM INTEL KANBAN (SPRINT 4 POWER UPDATE) ---
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Team Pipeline")
