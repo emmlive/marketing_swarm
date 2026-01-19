@@ -14,51 +14,49 @@ import sqlite3
 import pandas as pd
 # ... other imports ...
 
-# --- DATABASE MIGRATION LOGIC (Add this here) ---
-def init_db_v2():
+# --- 1. DATABASE SYNC & MIGRATION (Place at Top of app.py) ---
+def sync_database_schema():
+    """Ensures the DB exists and all SaaS columns are present."""
     conn = sqlite3.connect('breatheeasy.db')
-    c = conn.cursor()
+    cursor = conn.cursor()
     
-    # 1. Ensure the table has EVERY column mentioned in your INSERT statement
-    c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  username TEXT UNIQUE,
-                  email TEXT,
-                  name TEXT,
-                  password TEXT,
-                  role TEXT,
-                  plan TEXT,      -- Make sure this is 'plan' not 'package'
-                  credits INTEGER,
-                  verified INTEGER,
-                  team_id TEXT)''') # Added team_id
-
-    # 2. Add columns if the table already existed without them (Migration)
-    columns_to_add = [
-        ("role", "TEXT"),
-        ("plan", "TEXT"),
-        ("credits", "INTEGER"),
-        ("verified", "INTEGER"),
-        ("team_id", "TEXT")
+    # Create table if it's a fresh install
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            name TEXT,
+            email TEXT,
+            password TEXT,
+            plan TEXT DEFAULT 'Basic',
+            role TEXT DEFAULT 'user',
+            credits INTEGER DEFAULT 10,
+            verified INTEGER DEFAULT 0,
+            team_id TEXT DEFAULT 'HQ_001'
+        )
+    """)
+    
+    # MIGRATION: Add columns to existing DB if they are missing
+    # This prevents the 'OperationalError' you saw earlier
+    migrations = [
+        ("plan", "TEXT DEFAULT 'Basic'"),
+        ("role", "TEXT DEFAULT 'user'"),
+        ("credits", "INTEGER DEFAULT 10"),
+        ("team_id", "TEXT DEFAULT 'HQ_001'"),
+        ("verified", "INTEGER DEFAULT 0")
     ]
     
-    for col_name, col_type in columns_to_add:
+    for col_name, col_type in migrations:
         try:
-            c.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+            cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
         except sqlite3.OperationalError:
             pass # Column already exists
-
-    # 3. Now the INSERT will work because the schema matches
-    admin_pw = stauth.Hasher(['admin123']).generate()[0] # Example password
-    c.execute("""INSERT OR REPLACE INTO users 
-                 (username, email, name, password, role, plan, credits, verified, team_id)
-                 VALUES ('admin', 'admin@tech.ai', 'System Admin', ?, 'admin', 'Unlimited', 9999, 1, 'HQ_001')""",
-              (admin_pw,))
-    
+            
     conn.commit()
     conn.close()
 
-# Execute the upgrade immediately on script load
-upgrade_database()
+# TRIGGER SYNC
+sync_database_schema()
 
 # --- REST OF YOUR APP.PY CODE FOLLOWS ---
 
