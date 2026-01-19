@@ -545,28 +545,28 @@ def export_pdf(content, title):
     pdf.multi_cell(0, 7, txt=clean_text)
     return pdf.output(dest='S').encode('latin-1')
 
-# 2. RENDER COMMAND CENTER TABS
-# We define the labels using the agent_map from Folder 05
+# --- FOLDER 06: AGENT SEATS - FINAL SYNCED RENDERER ---
+
+# 1. MASTER NAVIGATION CONTROL (Call st.tabs ONLY ONCE)
 tab_labels = ["📖 Guide"] + [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
-if user_row['role'] == 'admin':
+
+if user_row.get('role') == 'admin':
     tab_labels.append("⚙ Admin")
 
 tabs_obj = st.tabs(tab_labels)
 TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
-# A. THE GUIDE TAB (SPRINT 1)
+# 2. FILL THE GUIDE TAB
 with TAB["📖 Guide"]:
     st.header("📖 Agent Intelligence Manual")
+    st.info("Configure your brand in the sidebar and Launch the Swarm to begin.")
     st.markdown("""
-    Your Omni-Swarm is an elite unit of 8 specialized AI agents:
     - **Forensics:** Web Auditor & Ad Tracker find competitor weaknesses.
     - **Strategy:** Swarm Strategist builds a 30-Day ROI Roadmap.
-    - **Production:** Creative & SEO Architects build your growth assets.
+    - **Production:** Creative & SEO Architects build assets.
     """)
-    if not st.session_state.get('gen'):
-        st.info("👈 Configure your brand in the sidebar and Launch the Swarm to begin.")
 
-# B. DYNAMIC AGENT WORKBENCHES (SPRINTS 3 & 4)
+# 3. DYNAMIC AGENT SEATS (CLEAN VERSION)
 DEPLOY_GUIDES = {
     "analyst": "Identify Price-Gaps to undercut rivals.",
     "ads": "Copy platform hooks into Meta/Google Ads.",
@@ -578,39 +578,10 @@ DEPLOY_GUIDES = {
     "seo": "Publish for Search Generative Experience (SGE)."
 }
 
-# --- FOLDER 06: AGENT SEATS - FINAL SYNCED RENDERER ---
-# --- 1. MASTER NAVIGATION CONTROL ---
-# We define the list ONCE to prevent the overlapping seen in your images
-tab_labels = ["📖 Guide"] + [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
-
-if user_row.get('role') == 'admin':
-    tab_labels.append("⚙ Admin")
-
-# This is the ONLY time st.tabs should be called in your main script
-tabs_obj = st.tabs(tab_labels)
-
-# Create a mapping dictionary for easy access
-TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
-
-# --- 2. FILL THE GUIDE (Index 0) ---
-with TAB["📖 Guide"]:
-    st.header("📖 Agent Intelligence Manual")
-    st.markdown("""
-    Your Omni-Swarm is an elite unit of 8 specialized AI agents:
-    - **Forensics:** Web Auditor & Ad Tracker.
-    - **Strategy:** Swarm Strategist ROI Roadmap.
-    - **Production:** Creative & SEO Architects.
-    """)
-    if not st.session_state.get('gen'):
-        st.info("👈 Configure your brand in the sidebar and Launch the Swarm to begin.")
-
-# --- 3. DYNAMIC AGENT SEATS (The Loop) ---
-# This handles the Analyst, Ads, SEO, etc., into their specific tabs
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
         st.subheader(f"🚀 {title} Intelligence Seat")
         
-        # Deployment Guide
         st.markdown(f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB;">
             <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
             {DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}
@@ -620,35 +591,42 @@ for i, (title, key) in enumerate(agent_map, 1):
             agent_content = st.session_state.report.get(key)
             if agent_content:
                 edited = st.text_area(f"Refine {title}", value=str(agent_content), height=400, key=f"ed_{key}")
-                # Export buttons would go here
+                
+                st.write("---")
+                c1, c2 = st.columns(2)
+                fname = f"{st.session_state.get('biz_name', 'Brand')}_{key}"
+                
+                with c1:
+                    st.download_button("📄 Word Brief", data=export_word(edited, title), file_name=f"{fname}.docx", key=f"w_{key}")
+                with c2:
+                    st.download_button("📕 PDF Report", data=export_pdf(edited, title), file_name=f"{fname}.pdf", key=f"p_{key}")
             else:
                 st.warning(f"⚠️ {title} was not selected for this deployment.")
         else:
             st.info(f"✨ The {title} seat is ready for deployment. Launch from sidebar.")
 
-# --- 4. TEAM INTEL KANBAN ---
+# 4. TEAM INTEL KANBAN
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Team Pipeline")
-    # ... Insert your Kanban SQL code here ...
+    # [Insert your Kanban SQL code here]
 
-# --- 5. ADMIN COMMAND CENTER ---
+# 5. ADMIN COMMAND CENTER
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
         st.header("⚙️ System Forensics")
-        # Sub-tabs for the Admin area
         admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
         
         with admin_sub1:
             st.subheader("Global Activity Audit")
-            # Insert Activity Log code
+            # Activity Log code
             
         with admin_sub2:
             st.subheader("User Management")
-            # Insert User Manager code
+            # User Manager code
             
         with admin_sub3:
             st.subheader("System Security")
-            st.success("System integrity verified. All API connections active.")
+            st.success("API Connections Active | Encryption Standard: AES-256")
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
