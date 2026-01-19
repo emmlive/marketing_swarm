@@ -16,11 +16,11 @@ import pandas as pd
 
 # --- 1. DATABASE SYNC & MIGRATION (Place at Top of app.py) ---
 def sync_database_schema():
-    """Ensures the DB exists and all SaaS columns are present."""
+    """Ensures the DB exists and all SaaS tables/columns are present."""
     conn = sqlite3.connect('breatheeasy.db')
     cursor = conn.cursor()
     
-    # Create table if it's a fresh install
+    # 1. USER TABLE (Existing)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,24 +36,37 @@ def sync_database_schema():
         )
     """)
     
-    # MIGRATION: Add columns to existing DB if they are missing
-    # This prevents the 'OperationalError' you saw earlier
+    # 2. LEADS TABLE (New - For Team Intel Kanban)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            city TEXT,
+            service TEXT,
+            status TEXT DEFAULT 'Discovery',
+            team_id TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # 3. MIGRATIONS (Ensures existing DBs get the new columns without crashing)
     migrations = [
-        ("plan", "TEXT DEFAULT 'Basic'"),
-        ("role", "TEXT DEFAULT 'user'"),
-        ("credits", "INTEGER DEFAULT 10"),
-        ("team_id", "TEXT DEFAULT 'HQ_001'"),
-        ("verified", "INTEGER DEFAULT 0")
+        ("users", "plan", "TEXT DEFAULT 'Basic'"),
+        ("users", "role", "TEXT DEFAULT 'user'"),
+        ("users", "team_id", "TEXT DEFAULT 'HQ_001'"),
+        ("leads", "team_id", "TEXT") # Ensure leads table has team tracking
     ]
     
-    for col_name, col_type in migrations:
+    for table, col_name, col_type in migrations:
         try:
-            cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
         except sqlite3.OperationalError:
             pass # Column already exists
             
     conn.commit()
     conn.close()
+
+# Keep this call right under the function definition
+sync_database_schema()
 
 # TRIGGER SYNC
 sync_database_schema()
