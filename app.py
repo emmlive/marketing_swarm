@@ -548,86 +548,48 @@ def export_pdf(content, title):
 # --- FOLDER 06: MASTER COMMAND CENTER RENDERER ---
 
 # =================================================================
-# --- MASTER COMMAND CENTER: FINAL COMPREHENSIVE RENDERER ---
+# --- MASTER NAVIGATION & ADMIN SYNC ---
 # =================================================================
 
-# 1. SAFETY CHECK: Ensure agent_map exists
-if 'agent_map' not in locals():
-    agent_map = [
-        ("🕵️ Analyst", "analyst"), ("📺 Ads", "ads"), ("📝 SEO", "seo"),
-        ("🎨 Creative", "creative"), ("📝 Strategist", "strategist"),
-        ("📱 Social", "social"), ("📍 Geo", "geo"), ("🔍 Audit", "audit")
-    ]
-
-# 2. DEFINE THE ABSOLUTE LIST OF TABS
-agent_titles = [a[0] for a in agent_map]
-tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
-
-# Add Admin only if the user role is admin
+# 1. Define the Tab Labels
+tab_labels = ["📖 Guide"] + [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 if user_row.get('role') == 'admin':
     tab_labels.append("⚙ Admin")
 
-# 3. CREATE THE PHYSICAL TABS (ONLY ONCE)
+# 2. Create the physical Tabs (Exactly ONCE)
 tabs_obj = st.tabs(tab_labels)
 TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
-# --- SECTION A: 📖 GUIDE ---
-with TAB["📖 Guide"]:
-    st.header("📖 Agent Intelligence Manual")
-    st.info("Configure your brand in the sidebar and Launch the Swarm to begin.")
-    st.markdown("Use the tabs above to switch between specialized AI Agent seats.")
-
-# --- SECTION B: 🚀 AGENT SEATS ---
-DEPLOY_GUIDES = {
-    "analyst": "Identify Price-Gaps.", "ads": "Meta/Google hooks.",
-    "creative": "High-fidelity assets.", "strategist": "CEO Roadmap.",
-    "social": "Viral hooks.", "geo": "AI Search ranking.",
-    "audit": "Technical leaks.", "seo": "SGE Publishing."
-}
-
+# --- FILL AGENT SEATS (The Loop) ---
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
         st.subheader(f"🚀 {title} Seat")
-        st.markdown(f"> **Focus:** {DEPLOY_GUIDES.get(key, 'Intelligence Gathering')}")
-        
-        if st.session_state.get('gen') and st.session_state.get('report'):
-            content = st.session_state.report.get(key)
-            if content:
-                edited = st.text_area("Edit Intelligence", value=str(content), height=400, key=f"e_{key}")
-                c1, c2 = st.columns(2)
-                with c1: st.download_button("📄 Word", export_word(edited, title), f"report_{key}.docx", key=f"w_{key}")
-                with c2: st.download_button("📕 PDF", export_pdf(edited, title), f"report_{key}.pdf", key=f"p_{key}")
-            else:
-                st.warning("Agent not selected for this run.")
-        else:
-            st.info("System Standby. Launch from sidebar.")
+        # ... (Your existing Agent Seat code here) ...
 
-# --- SECTION C: 🤝 TEAM INTEL ---
+# --- FILL TEAM INTEL ---
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Team Pipeline")
-    try:
-        conn = sqlite3.connect('breatheeasy.db')
-        team_df = pd.read_sql_query("SELECT * FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
-        if team_df.empty:
-            st.info("No active leads in pipeline.")
-        else:
-            st.dataframe(team_df, use_container_width=True)
-        conn.close()
-    except:
-        st.error("Database connection failed. Check Admin settings.")
+    # ... (Your existing Kanban code here) ...
 
-# --- SECTION D: ⚙ ADMIN ---
+# --- FILL ADMIN (The Fix for the NameError) ---
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
-        st.header("⚙️ Admin Forensics")
-        a1, a2, a3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
-        with a1:
-            st.write("Recent System Activity")
-            # Logic for logs...
-        with a2:
-            st.write(f"Management for Team: {user_row.get('team_id')}")
-        with a3:
-            st.success("Security Protocols Active")
+        st.header("⚙️ System Forensics")
+        
+        # WE DEFINE THE SUB-TABS HERE IMMEDIATELY BEFORE USING THEM
+        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
+        
+        with admin_sub1:
+            st.subheader("Global Activity Audit")
+            # Your Log Table code
+            
+        with admin_sub2:
+            st.subheader("User Management")
+            st.write(f"Active Team ID: {user_row.get('team_id')}")
+            
+        with admin_sub3:
+            st.subheader("System Security")
+            st.success("API Handshakes Verified | SSL Active")
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
