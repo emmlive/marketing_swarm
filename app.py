@@ -637,11 +637,15 @@ if "⚙ Admin" in TAB:
             conn.close()
 
         # --- SUB-TAB 2: USER MANAGER (Add/Remove/Tier) ---
-        with admin_sub2:
-            st.subheader("Subscriber Management")
-            conn = sqlite3.connect('breatheeasy.db')
-            users_df = pd.read_sql("SELECT id, username, name, email, package, role, credits FROM users", conn)
-            st.dataframe(users_df, use_container_width=True)
+with admin_sub2:
+    st.subheader("Subscriber Management")
+    conn = sqlite3.connect('breatheeasy.db')
+    
+    # Corrected: 'plan' matches your sync_database_schema logic
+    users_df = pd.read_sql("SELECT id, username, name, email, plan, role, credits FROM users", conn)
+    
+    st.dataframe(users_df, use_container_width=True)
+    conn.close() # Always close the connection after the query
 
             col1, col2 = st.columns(2)
             with col1:
