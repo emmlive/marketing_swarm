@@ -621,6 +621,19 @@ with TAB["🤝 Team Intel"]:
     conn.close()
 
 # --- D. Admin God-MODE (Sprint 4 Finalized) ---
+# --- TAB DEFINITION (Place this before the Admin logic) ---
+# 1. Define the base tabs all users see
+main_tabs = ["📊 Intelligence", "📝 Strategy", "🎨 Creative", "🔍 Audit"]
+
+# 2. Dynamically add Admin tab ONLY for admins
+if user_row.get('role') == 'admin':
+    main_tabs.append("⚙ Admin")
+
+# 3. Create the Tab objects and map them to the TAB dictionary
+tabs = st.tabs(main_tabs)
+TAB = dict(zip(main_tabs, tabs))
+
+# --- D. Admin God-MODE (Paste your updated logic here) ---
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
         st.header("⚙️ System Forensics & User Control")
@@ -643,7 +656,7 @@ if "⚙ Admin" in TAB:
         with admin_sub2:
             st.subheader("Subscriber Management")
             conn = sqlite3.connect('breatheeasy.db')
-            # Fixed: Using 'plan' to match your schema
+            # Using 'plan' to match your schema
             users_df = pd.read_sql("SELECT id, username, name, email, plan, role, credits FROM users", conn)
             st.dataframe(users_df, use_container_width=True)
 
@@ -687,7 +700,6 @@ if "⚙ Admin" in TAB:
             new_p = st.text_input("New Secure Password", type="password")
             
             if st.button("🛠️ Reset & Hash Credentials"):
-                # Automatically hashes for the streamlit-authenticator
                 hashed_p = stauth.Hasher([new_p]).generate()[0]
                 conn.execute("UPDATE users SET password = ? WHERE username = ?", (hashed_p, target_p))
                 conn.commit()
