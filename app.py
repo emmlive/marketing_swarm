@@ -669,11 +669,11 @@ with TAB["🤝 Team Intel"]:
     conn.close()
 
 # --- D. Admin God-MODE (Sprint 4 Finalized) ---
-# --- TAB DEFINITION (Place this before your content blocks) ---
+# --- CONSOLIDATED NAVIGATION CONTROL (Master Sync) ---
+# We define the list here ONCE. 
+# Do not use .append() inside loops to avoid duplicates.
 
-# 1. Define ALL tabs used in your app logic
-# This list must include every tab name you reference in your 'with TAB' blocks
-main_tabs = [
+tab_labels = [
     "📖 Guide", 
     "📊 Intelligence", 
     "📝 Strategy", 
@@ -683,6 +683,16 @@ main_tabs = [
     "🎬 Veo Studio", 
     "🤝 Team Intel"
 ]
+
+# Only add Admin if the user is authorized
+if user_row.get('role') == 'admin':
+    tab_labels.append("⚙ Admin")
+
+# Create the physical tabs in the UI (only call this ONCE)
+tabs_obj = st.tabs(tab_labels)
+
+# Create the dictionary mapping so your 'with TAB' blocks work
+TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
 # 2. Dynamically add Admin tab ONLY for users with the 'admin' role
 if user_row.get('role') == 'admin':
