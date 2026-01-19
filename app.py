@@ -419,55 +419,44 @@ with st.sidebar:
     authenticator.logout('🔒 Sign Out', 'sidebar')
 
 # --- 4. EXECUTION BRIDGE (Final SDLC Sync) ---
+# --- Find this section at the bottom of your sidebar in app.py ---
+
 if run_btn:
     if not biz_name:
-        st.error("🚨 Error: Brand Name is required to initiate swarm coordination.")
+        st.error("🚨 Please enter a Brand Name before launching.")
     else:
-        # 1. AGENT SELECTION FILTER
-        # This extracts only the keys where the toggle is True
-        # It creates a list like ['analyst', 'seo', 'audit']
-        active_agents = [k for k, v in toggles.items() if v] 
-        
-        if not active_agents:
-            st.warning("⚠️ Warning: No agents selected. Please toggle at least one Swarm Personnel.")
-        else:
-            # 2. COORDINATED EXECUTION
-            # The 'with st.status' block creates a professional loading experience
-            with st.status("🛠️ Coordinating Swarm Agents...", expanded=True) as status:
-                st.write(f"📡 Dispatching agents for **{biz_name}** in **{full_loc}**...")
-                
-                # PASS DATA TO BACKEND (main.py)
-                # We send the active_swarm list so the engine knows what to run
-                report = run_marketing_swarm({
-                    'city': full_loc, 
-                    'biz_name': biz_name, 
-                    'service': "Omni-Service", 
-                    'directives': agent_info,
-                    'active_swarm': active_agents 
-                })
-                
-                # 3. STATE PERSISTENCE
-                st.session_state.report = report
-                st.session_state.gen = True
-                
-                # 4. DATABASE UPDATES (Audit & Credits)
-                conn = sqlite3.connect('breatheeasy.db')
-                # Deduct 1 credit for the successful launch
-                conn.execute("UPDATE users SET credits = credits - 1 WHERE username = ?", (user_row['username'],))
-                # Log the launch in the master audit table for the Admin Tab
-                conn.execute("""
-                    INSERT INTO master_audit_logs (timestamp, user, action_type, target_biz, location, status) 
-                    VALUES (?,?,?,?,?,?)""", 
-                    (datetime.now().strftime("%Y-%m-%d %H:%M"), user_row['username'], "SWARM_LAUNCH", biz_name, full_loc, "SUCCESS")
-                )
-                conn.commit()
-                conn.close()
-                
-                status.update(label="🚀 Swarm Intelligence Captured!", state="complete", expanded=False)
-                
-                # 5. REFRESH UI
-                st.rerun()
+        # 1. FILTER ACTIVE AGENTS 
+        # This converts your toggles into a list of keys: ['analyst', 'seo', etc.]
+        active_agents = [k for k, v in toggles.items() if v]
 
+        # 2. SHOW LOADING STATE
+        with st.status("🚀 Initializing Swarm Intelligence...", expanded=True) as status:
+            st.write(f"📡 Dispatching {len(active_agents)} agents for {biz_name}...")
+            
+            # 3. THE BRIDGE TO THE ENGINE (Paste your code here)
+            # This calls the function in main.py and waits for the dictionary result
+            report = run_marketing_swarm({
+                'city': full_loc, 
+                'biz_name': biz_name, 
+                'active_swarm': active_agents,
+                'package': current_tier,
+                'custom_logo': custom_logo, 
+                'directives': agent_info
+            })
+
+            # 4. SAVE TO SESSION STATE
+            # This makes the data available for the Tabs to display
+            st.session_state.report = report
+            st.session_state.gen = True
+            
+            # 5. DEDUCT CREDITS & LOG (SDLC Security)
+            # You can add your database update logic here later
+            
+            status.update(label="✅ Swarm Coordination Complete!", state="complete", expanded=False)
+
+        # 6. REFRESH UI
+        # This forces the page to reload so the new data shows up in the Tabs
+        st.rerun()
 # --- FOLDER 06: OMNI-SWARM_SPRINTS - THE INTELLIGENCE HUB ---
 
 # 1. DEFINE EXPORT UTILITIES (SPRINT 3)
