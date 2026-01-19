@@ -732,23 +732,33 @@ tabs = st.tabs(main_tabs)
 TAB = dict(zip(main_tabs, tabs))
 
 # --- D. Admin God-MODE (Paste your updated logic here) ---
+# ... (Previous code: Sidebar, Execution Bridge, Navigation Control) ...
+
+# 1. THE AGENT SEATS (The loop we just confirmed)
+for i, (title, key) in enumerate(agent_map, 1):
+    with tabs_obj[i]:
+        # ... (Agent content code) ...
+
+# 2. THE ADMIN CONTENT (Paste your block here!)
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
         st.header("⚙️ System Forensics & User Control")
-        
-        # All sub-tabs defined at the same level
+        # Go straight into your sub-tabs (Logs, User Manager, etc.)
         admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
-
-        # --- SUB-TAB 1: ACTIVITY AUDIT ---
+        
+     # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
             st.subheader("Global Activity Audit")
             conn = sqlite3.connect('breatheeasy.db')
             try:
+                # Fetch the most recent 50 logs for the dashboard
                 audit_df = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
                 st.dataframe(audit_df, use_container_width=True)
             except:
+                # This helps if the table hasn't been created yet
                 st.info("No audit logs found yet. Run your first swarm to see data.")
-            conn.close()
+            finally:
+                conn.close()
 
         # --- SUB-TAB 2: USER MANAGER ---
         with admin_sub2:
