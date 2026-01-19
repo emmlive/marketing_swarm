@@ -636,50 +636,44 @@ if "⚙ Admin" in TAB:
             st.dataframe(audit_df, use_container_width=True)
             conn.close()
 
-       # --- SUB-TAB 2: USER MANAGER ---
+    # --- SUB-TAB 2: USER MANAGER ---
 with admin_sub2:
     st.subheader("Subscriber Management")
-    # ... (Your SELECT and dataframe code is here) ...
+    conn = sqlite3.connect('breatheeasy.db')
+    
+    # 1. Fetch data safely
+    try:
+        users_df = pd.read_sql("SELECT id, username, name, email, plan, role, credits FROM users", conn)
+        st.dataframe(users_df, use_container_width=True)
+    except Exception as e:
+        st.error(f"Database Read Error: {e}")
+        users_df = pd.DataFrame(columns=['username']) # Fallback empty dataframe
 
     col1, col2 = st.columns(2)
+    
     with col1:
         st.markdown("### ➕ Create / Update User")
-        with st.form("add_user_form", clear_on_submit=True):
-            new_user = st.text_input("Username")
-            new_name = st.text_input("Full Name")
-            new_email = st.text_input("Email")
-            new_tier = st.selectbox("Tier", ["Basic", "Pro", "Enterprise"])
-            new_credits = st.number_input("Starting Credits", value=10)
-            
-            # This is the button that triggers the code
-            submit_user = st.form_submit_button("Sync User Account")
-            
-            # --- PASTE THE CODE HERE ---
-            if submit_user:
-                conn = sqlite3.connect('breatheeasy.db')
-                conn.execute("""
-                    INSERT INTO users (username, name, email, plan, credits, role, verified)
-                    VALUES (?, ?, ?, ?, ?, 'user', 1)
-                    ON CONFLICT(username) DO UPDATE SET 
-                    name=excluded.name, email=excluded.email, plan=excluded.plan, credits=excluded.credits
-                """, (new_user, new_name, new_email, new_tier, new_credits))
-                conn.commit()
-                conn.close()
-                st.success(f"User {new_user} updated!")
-                st.rerun()
-            with col2:
-                st.markdown("### 🗑️ Remove User")
-                user_to_del = st.selectbox("Select Target", users_df['username'].tolist())
-                if st.button("🔴 Delete Account Permanently", use_container_width=True):
-                    if user_to_del != user_row['username']:
-                        conn.execute("DELETE FROM users WHERE username = ?", (user_to_del,))
-                        conn.commit()
-                        st.warning(f"Purged: {user_to_del}")
-                        st.rerun()
-                    else:
-                        st.error("Admin cannot delete themselves.")
-            conn.close()
+        # ... (Your Form code for adding users) ...
 
+    with col2:
+        st.markdown("### 🗑️ Remove User")
+        # 2. Ensure users_df exists and has data before creating selectbox
+        if not users_df.empty:
+            user_list = users_df['username'].tolist()
+            user_to_del = st.selectbox("Select Target Account", user_list, key="del_user_sel")
+            
+            if st.button("🔴 Delete Account Permanently", use_container_width=True):
+                if user_to_del != user_row['username']:
+                    conn.execute("DELETE FROM users WHERE username = ?", (user_to_del,))
+                    conn.commit()
+                    st.warning(f"Purged: {user_to_del}")
+                    st.rerun()
+                else:
+                    st.error("Admin cannot delete themselves.")
+        else:
+            st.info("No users found to delete.")
+            
+    conn.close()
         # --- SUB-TAB 3: PASSWORD MANAGEMENT ---
         with admin_sub3:
             st.subheader("Credential Management")
