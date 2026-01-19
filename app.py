@@ -9,6 +9,51 @@ from fpdf import FPDF
 from docx import Document
 from main import run_marketing_swarm 
 
+import streamlit as st
+import sqlite3
+import pandas as pd
+# ... other imports ...
+
+# --- DATABASE MIGRATION LOGIC (Add this here) ---
+def upgrade_database():
+    conn = sqlite3.connect('breatheeasy.db')
+    cursor = conn.cursor()
+    
+    # Ensure the table exists first (Safety check)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            name TEXT,
+            email TEXT,
+            password TEXT,
+            package TEXT DEFAULT 'Basic',
+            role TEXT DEFAULT 'user',
+            credits INTEGER DEFAULT 10,
+            verified INTEGER DEFAULT 0
+        )
+    """)
+    
+    # Add 'package' column if it doesn't exist (Migration)
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN package TEXT DEFAULT 'Basic'")
+    except sqlite3.OperationalError:
+        pass 
+        
+    # Add 'role' column if it doesn't exist (Migration)
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
+    except sqlite3.OperationalError:
+        pass 
+
+    conn.commit()
+    conn.close()
+
+# Execute the upgrade immediately on script load
+upgrade_database()
+
+# --- REST OF YOUR APP.PY CODE FOLLOWS ---
+
 # --- SECTION #0: GLOBAL HELPERS ---
 # =========================
 # PDF SAFETY & DEBUG LAYER
