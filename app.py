@@ -576,11 +576,25 @@ with TAB["📖 Guide"]:
 # ----------------------------------------------------------------
 # 3. FILL: DYNAMIC AGENT SEATS (Analyst, Ads, SEO, etc.)
 # ----------------------------------------------------------------
+# --- B. DYNAMIC AGENT WORKBENCH CONFIG ---
+# Define this dictionary BEFORE the loop starts
+DEPLOY_GUIDES = {
+    "analyst": "Identify Price-Gaps to undercut rivals.",
+    "ads": "Copy platform hooks into Meta/Google Ads.",
+    "creative": "Use these prompts for high-fidelity assets.",
+    "strategist": "Your 30-day CEO-level execution checklist.",
+    "social": "Deploy viral hooks based on the local schedule.",
+    "geo": "Update citations for AI search ranking.",
+    "audit": "Patch technical leaks to increase speed.",
+    "seo": "Publish for Search Generative Experience (SGE)."
+}
+
+# --- 3. DYNAMIC AGENT SEATS (The Loop) ---
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
         st.subheader(f"🚀 {title} Intelligence Seat")
         
-        # Deployment Guide Box
+        # This line will no longer crash because DEPLOY_GUIDES is defined above
         st.markdown(f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB;">
             <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
             {DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}
@@ -591,6 +605,7 @@ for i, (title, key) in enumerate(agent_map, 1):
             if agent_content:
                 edited = st.text_area(f"Refine {title}", value=str(agent_content), height=400, key=f"ed_{key}")
                 
+                # Export Engine
                 st.write("---")
                 c1, c2 = st.columns(2)
                 fname = f"{st.session_state.get('biz_name', 'Brand')}_{key}"
