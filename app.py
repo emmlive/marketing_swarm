@@ -602,22 +602,70 @@ for i, (title, key) in enumerate(agent_map, 1):
         else:
             st.info(f"✨ The {title} seat is ready for deployment. Launch the swarm from the sidebar.")
 
-# C. TEAM INTEL KANBAN (SPRINT 4)
+# --- C. TEAM INTEL KANBAN (SPRINT 4 POWER UPDATE) ---
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Team Pipeline")
-    conn = sqlite3.connect('breatheeasy.db')
-    team_df = pd.read_sql_query("SELECT city, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
     
+    # Use a sidebar-style metric to show team velocity
+    conn = sqlite3.connect('breatheeasy.db')
+    
+    # 1. FETCH TEAM DATA
+    try:
+        team_df = pd.read_sql_query(
+            "SELECT id, city, service, status FROM leads WHERE team_id = ?", 
+            conn, params=(user_row['team_id'],)
+        )
+    except:
+        # Fallback if table doesn't exist yet
+        st.error("Lead tracking table not initialized. Visit Admin tab to sync schema.")
+        team_df = pd.DataFrame()
+
+    # 2. QUICK ADD (Optional: Manually inject a lead)
+    with st.expander("➕ Manual Pipeline Entry"):
+        with st.form("manual_lead"):
+            c1, c2 = st.columns(2)
+            l_city = c1.text_input("City/Location")
+            l_serv = c2.text_input("Service Category")
+            if st.form_submit_button("Inject to Team"):
+                conn.execute("INSERT INTO leads (city, service, status, team_id) VALUES (?, ?, 'Discovery', ?)",
+                             (l_city, l_serv, user_row['team_id']))
+                conn.commit()
+                st.rerun()
+
+    # 3. KANBAN RENDERER
     if not team_df.empty:
         stages = ["Discovery", "Execution", "ROI Verified"]
         cols = st.columns(3)
+        
         for i, stage in enumerate(stages):
             with cols[i]:
-                st.markdown(f'<div style="text-align:center; font-weight:bold; color:#2563EB;">{stage.upper()}</div>', unsafe_allow_html=True)
-                for _, lead in team_df[team_df['status'] == stage].iterrows():
-                    st.markdown(f'<div class="kanban-card"><b>{lead["city"]}</b><br>{lead["service"]}</div>', unsafe_allow_html=True)
+                st.markdown(f'''
+                    <div style="background-color:#F3F4F6; padding:10px; border-radius:10px; border-bottom:3px solid #2563EB;">
+                        <h4 style="text-align:center; color:#2563EB; margin:0;">{stage.upper()}</h4>
+                    </div>
+                ''', unsafe_allow_html=True)
+                
+                # Filter leads for this stage
+                stage_leads = team_df[team_df['status'] == stage]
+                
+                for _, lead in stage_leads.iterrows():
+                    with st.container():
+                        st.markdown(f'''
+                            <div style="background-color:white; border:1px solid #E5E7EB; padding:10px; border-radius:5px; margin-top:10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
+                                <small style="color:#6B7280;">LOC:</small> <b>{lead["city"]}</b><br>
+                                <small style="color:#6B7280;">SVC:</small> {lead["service"]}
+                            </div>
+                        ''', unsafe_allow_html=True)
+                        
+                        # 4. STAGE ADVANCER (Sprint 4 Control)
+                        if stage != "ROI Verified":
+                            if st.button(f"Move to {stages[i+1]} ➡️", key=f"move_{lead['id']}"):
+                                conn.execute("UPDATE leads SET status = ? WHERE id = ?", (stages[i+1], lead['id']))
+                                conn.commit()
+                                st.rerun()
     else:
-        st.info("Pipeline is currently empty. Launch a swarm to generate leads.")
+        st.info("Pipeline is currently empty. Launch a swarm or use the Manual Entry above.")
+    
     conn.close()
 
 # --- D. Admin God-MODE (Sprint 4 Finalized) ---
