@@ -579,7 +579,24 @@ DEPLOY_GUIDES = {
 }
 
 # --- FOLDER 06: AGENT SEATS - FINAL SYNCED RENDERER ---
+# --- CONSOLIDATED NAVIGATION CONTROL ---
+# This builds the list of tabs ONE time.
+tab_labels = ["📖 Guide", "📊 Intelligence", "📝 Strategy", "🎨 Creative", "🔍 Audit", "👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 
+if user_row.get('role') == 'admin':
+    tab_labels.append("⚙ Admin")
+
+# This renders the UI elements ONE time.
+tabs_obj = st.tabs(tab_labels)
+
+# This maps the names to the objects for your 'with TAB' blocks.
+TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
+
+# --- FOLDER 06: AGENT SEATS - FINAL SYNCED RENDERER ---
+# This loop now has a valid 'tabs_obj' to work with!
+for i, (title, key) in enumerate(agent_map, 1):
+    with tabs_obj[i]:
+        # ... your existing Deployment Guide code ...
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
         # 1. Deployment Guide (Visual UI)
@@ -682,20 +699,6 @@ with TAB["🤝 Team Intel"]:
     conn.close()
 
 # --- D. Admin God-MODE (Sprint 4 Finalized) ---
-# --- CONSOLIDATED NAVIGATION CONTROL (Master Sync) ---
-# We define the list here ONCE. 
-# Do not use .append() inside loops to avoid duplicates.
-
-tab_labels = [
-    "📖 Guide", 
-    "📊 Intelligence", 
-    "📝 Strategy", 
-    "🎨 Creative", 
-    "🔍 Audit", 
-    "👁️ Vision", 
-    "🎬 Veo Studio", 
-    "🤝 Team Intel"
-]
 
 # Only add Admin if the user is authorized
 if user_row.get('role') == 'admin':
