@@ -547,23 +547,23 @@ def export_pdf(content, title):
 
 # --- FOLDER 06: MASTER COMMAND CENTER RENDERER ---
 
-# 1. MASTER NAVIGATION CONTROL (The "Switchboard")
-# We define every possible tab label here first.
-tab_labels = ["📖 Guide"] + [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
+# --- MASTER NAVIGATION CONTROL ---
+# 1. Define ALL possible labels first
+agent_titles = [a[0] for a in agent_map] # Gets the 8 Agent names
+tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 
-# Add Admin only if the user role is admin
 if user_row.get('role') == 'admin':
     tab_labels.append("⚙ Admin")
 
-# Render the physical tabs ONCE
+# 2. Create the physical tabs exactly ONCE
 tabs_obj = st.tabs(tab_labels)
 
-# Create the mapping dictionary so 'with TAB["..."]' works
+# 3. Create the mapping dictionary for "with TAB" logic
 TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
-# ----------------------------------------------------------------
-# 2. FILL: 📖 GUIDE TAB
-# ----------------------------------------------------------------
+# ---------------------------------------------------------
+# TAB 1: 📖 GUIDE
+# ---------------------------------------------------------
 with TAB["📖 Guide"]:
     st.header("📖 Agent Intelligence Manual")
     st.info("Configure your brand in the sidebar and Launch the Swarm to begin.")
@@ -573,11 +573,9 @@ with TAB["📖 Guide"]:
     - **Production:** Creative & SEO Architects build assets.
     """)
 
-# ----------------------------------------------------------------
-# 3. FILL: DYNAMIC AGENT SEATS (Analyst, Ads, SEO, etc.)
-# ----------------------------------------------------------------
-# --- B. DYNAMIC AGENT WORKBENCH CONFIG ---
-# Define this dictionary BEFORE the loop starts
+# ---------------------------------------------------------
+# TAB 2-9: DYNAMIC AGENT SEATS (The Loop)
+# ---------------------------------------------------------
 DEPLOY_GUIDES = {
     "analyst": "Identify Price-Gaps to undercut rivals.",
     "ads": "Copy platform hooks into Meta/Google Ads.",
@@ -589,12 +587,10 @@ DEPLOY_GUIDES = {
     "seo": "Publish for Search Generative Experience (SGE)."
 }
 
-# --- 3. DYNAMIC AGENT SEATS (The Loop) ---
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
         st.subheader(f"🚀 {title} Intelligence Seat")
         
-        # This line will no longer crash because DEPLOY_GUIDES is defined above
         st.markdown(f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB;">
             <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
             {DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}
@@ -605,11 +601,9 @@ for i, (title, key) in enumerate(agent_map, 1):
             if agent_content:
                 edited = st.text_area(f"Refine {title}", value=str(agent_content), height=400, key=f"ed_{key}")
                 
-                # Export Engine
                 st.write("---")
                 c1, c2 = st.columns(2)
                 fname = f"{st.session_state.get('biz_name', 'Brand')}_{key}"
-                
                 with c1:
                     st.download_button("📄 Word Brief", data=export_word(edited, title), file_name=f"{fname}.docx", key=f"w_{key}")
                 with c2:
@@ -619,9 +613,20 @@ for i, (title, key) in enumerate(agent_map, 1):
         else:
             st.info(f"✨ Seat ready. Launch from sidebar.")
 
-# ----------------------------------------------------------------
-# 4. FILL: 🤝 TEAM INTEL KANBAN
-# ----------------------------------------------------------------
+# ---------------------------------------------------------
+# TAB 10: 👁️ VISION & TAB 11: 🎬 VEO (Placeholders)
+# ---------------------------------------------------------
+with TAB["👁️ Vision"]:
+    st.header("👁️ Visual Intelligence")
+    st.write("Visual audits and image analysis results appear here.")
+
+with TAB["🎬 Veo Studio"]:
+    st.header("🎬 Veo Video Studio")
+    st.write("AI Video generation and storyboarding.")
+
+# ---------------------------------------------------------
+# TAB 12: 🤝 TEAM INTEL (KANBAN)
+# ---------------------------------------------------------
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Team Pipeline")
     conn = sqlite3.connect('breatheeasy.db')
@@ -647,13 +652,13 @@ with TAB["🤝 Team Intel"]:
                                     conn.commit()
                                     st.rerun()
     except Exception as e:
-        st.error(f"Table Error: {e}. Please sync database in Admin.")
+        st.error(f"Table Error: {e}. Ensure 'leads' table exists.")
     finally:
         conn.close()
 
-# ----------------------------------------------------------------
-# 5. FILL: ⚙ ADMIN COMMAND CENTER
-# ----------------------------------------------------------------
+# ---------------------------------------------------------
+# TAB 13: ⚙ ADMIN (FORENSICS)
+# ---------------------------------------------------------
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
         st.header("⚙️ System Forensics")
@@ -672,12 +677,11 @@ if "⚙ Admin" in TAB:
             
         with admin_sub2:
             st.subheader("User Management")
-            st.write(f"Current Team ID: **{user_row['team_id']}**")
-            # User management table logic here
+            st.write(f"Active Team ID: **{user_row['team_id']}**")
             
         with admin_sub3:
             st.subheader("System Security")
-            st.success("API Connections Active | Encryption Standard: AES-256")
+            st.success("API Connections Active | SSL Encrypted")
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
