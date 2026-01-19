@@ -8,7 +8,7 @@ from io import BytesIO
 from fpdf import FPDF
 from docx import Document
 from main import run_marketing_swarm 
-
+from fpdf import FPDF
 import streamlit as st
 import sqlite3
 import pandas as pd
