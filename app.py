@@ -599,19 +599,21 @@ with TAB["📖 Guide"]:
     """)
 
 # --- 2. FILL THE AGENT SEATS (The Loop) ---
-# This is now safely separated from the Guide content
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
         st.subheader(f"🚀 {title} Intelligence Seat")
-        # ... Your agent content code goes here ...
         
+        # 1. Deployment Guide (FIXED: Added the opening markdown tag)
+        st.markdown(f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB;">
+            <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
             {DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}
         </div>''', unsafe_allow_html=True)
 
+        st.write("") # Visual spacer
+
         # 2. Check if the report has been generated
         if st.session_state.get('gen') and st.session_state.get('report'):
-            # FORCE FETCH: Get data from the report dictionary
-            # We use .get(key) to match the sidebar's toggle key ('analyst', 'ads', etc.)
+            # Fetch data from the report dictionary
             agent_content = st.session_state.report.get(key)
             
             if agent_content:
@@ -622,6 +624,13 @@ for i, (title, key) in enumerate(agent_map, 1):
                     height=450, 
                     key=f"editor_{key}"
                 )
+                
+                # Add your Export Buttons (Word/PDF) here if needed
+                
+            else:
+                st.warning(f"⚠️ {title} was not selected for this deployment. Toggle it in the sidebar and re-launch.")
+        else:
+            st.info(f"✨ The {title} seat is ready for deployment. Launch the swarm from the sidebar.")
 
                 # EXPORT ENGINE
                 c1, c2 = st.columns(2)
