@@ -598,12 +598,36 @@ with TAB["📖 Guide"]:
     - **Step 3:** Click 'Launch Swarm' to generate intelligence.
     """)
 
-# --- 2. FILL THE AGENT SEATS (The Loop) ---
+# --- 1. CONSOLIDATED NAVIGATION CONTROL ---
+# Define the labels exactly once to prevent tab duplication
+tab_labels = ["📖 Guide", "📊 Intelligence", "📝 Strategy", "🎨 Creative", "🔍 Audit", "👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
+
+if user_row.get('role') == 'admin':
+    tab_labels.append("⚙ Admin")
+
+# Create the physical tabs exactly once
+tabs_obj = st.tabs(tab_labels)
+
+# Map names to objects for 'with TAB["Name"]' blocks
+TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
+
+# --- 2. FILL THE GUIDE TAB ---
+with TAB["📖 Guide"]:
+    st.header("📖 Omni-Swarm Operating Manual")
+    st.info("Welcome to the Command Center. Follow the steps in the sidebar to begin.")
+    st.markdown("""
+    - **Step 1:** Enter your Brand and Location in the sidebar.
+    - **Step 2:** Select the Specialized Agents for your mission.
+    - **Step 3:** Click 'Launch Swarm' to generate intelligence.
+    """)
+
+# --- 3. AGENT SEATS LOOP ---
+# Starts at index 1 to skip the Guide (index 0)
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
         st.subheader(f"🚀 {title} Intelligence Seat")
         
-        # 1. Deployment Guide
+        # Deployment Guide
         st.markdown(f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB;">
             <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
             {DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}
@@ -611,147 +635,67 @@ for i, (title, key) in enumerate(agent_map, 1):
 
         st.write("") 
 
-        # 2. Check if the report has been generated
         if st.session_state.get('gen') and st.session_state.get('report'):
             agent_content = st.session_state.report.get(key)
             
             if agent_content:
                 # INTERACTIVE WORKBENCH
-                edited = st.text_area(
-                    f"Refine {title} Intelligence", 
-                    value=str(agent_content), 
-                    height=450, 
-                    key=f"editor_{key}"
-                )
+                edited = st.text_area(f"Refine {title} Intel", value=str(agent_content), height=450, key=f"editor_{key}")
 
-                # --- EXPORT ENGINE (Inside the content block) ---
+                # EXPORT ENGINE
                 c1, c2 = st.columns(2)
                 with c1:
                     st.download_button("📄 Word Brief", export_word(edited, title), f"{biz_name}_{key}.docx", key=f"btn_w_{key}")
                 with c2:
                     st.download_button("📕 PDF Report", export_pdf(edited, title), f"{biz_name}_{key}.pdf", key=f"btn_p_{key}")
-            
             else:
-                # Triggers if the agent exists but wasn't chosen in this run
-                st.warning(f"⚠️ {title} was not selected for this deployment. Toggle it in the sidebar and re-launch.")
-        
+                st.warning(f"⚠️ {title} was not selected for this deployment.")
         else:
-            # Triggers if the 'Launch' button hasn't been clicked yet
-            st.info(f"✨ The {title} seat is ready for deployment. Launch the swarm from the sidebar.")
-            
-# --- C. TEAM INTEL KANBAN (SPRINT 4 POWER UPDATE) ---
+            st.info(f"✨ The {title} seat is ready for deployment. Launch from sidebar.")
+
+# --- 4. TEAM INTEL KANBAN ---
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Team Pipeline")
-    
-    # Use a sidebar-style metric to show team velocity
     conn = sqlite3.connect('breatheeasy.db')
-    
-    # 1. FETCH TEAM DATA
     try:
-        team_df = pd.read_sql_query(
-            "SELECT id, city, service, status FROM leads WHERE team_id = ?", 
-            conn, params=(user_row['team_id'],)
-        )
+        team_df = pd.read_sql_query("SELECT id, city, service, status FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
     except:
-        # Fallback if table doesn't exist yet
-        st.error("Lead tracking table not initialized. Visit Admin tab to sync schema.")
+        st.error("Lead table not found. Sync schema in Admin.")
         team_df = pd.DataFrame()
 
-    # 2. QUICK ADD (Optional: Manually inject a lead)
     with st.expander("➕ Manual Pipeline Entry"):
         with st.form("manual_lead"):
             c1, c2 = st.columns(2)
-            l_city = c1.text_input("City/Location")
-            l_serv = c2.text_input("Service Category")
+            l_city, l_serv = c1.text_input("City"), c2.text_input("Service")
             if st.form_submit_button("Inject to Team"):
-                conn.execute("INSERT INTO leads (city, service, status, team_id) VALUES (?, ?, 'Discovery', ?)",
-                             (l_city, l_serv, user_row['team_id']))
-                conn.commit()
-                st.rerun()
+                conn.execute("INSERT INTO leads (city, service, status, team_id) VALUES (?, ?, 'Discovery', ?)", (l_city, l_serv, user_row['team_id']))
+                conn.commit(); st.rerun()
 
-    # 3. KANBAN RENDERER
     if not team_df.empty:
         stages = ["Discovery", "Execution", "ROI Verified"]
         cols = st.columns(3)
-        
-        for i, stage in enumerate(stages):
-            with cols[i]:
-                st.markdown(f'''
-                    <div style="background-color:#F3F4F6; padding:10px; border-radius:10px; border-bottom:3px solid #2563EB;">
-                        <h4 style="text-align:center; color:#2563EB; margin:0;">{stage.upper()}</h4>
-                    </div>
-                ''', unsafe_allow_html=True)
-                
-                # Filter leads for this stage
-                stage_leads = team_df[team_df['status'] == stage]
-                
-                for _, lead in stage_leads.iterrows():
-                    with st.container():
-                        st.markdown(f'''
-                            <div style="background-color:white; border:1px solid #E5E7EB; padding:10px; border-radius:5px; margin-top:10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
-                                <small style="color:#6B7280;">LOC:</small> <b>{lead["city"]}</b><br>
-                                <small style="color:#6B7280;">SVC:</small> {lead["service"]}
-                            </div>
-                        ''', unsafe_allow_html=True)
-                        
-                        # 4. STAGE ADVANCER (Sprint 4 Control)
-                        if stage != "ROI Verified":
-                            if st.button(f"Move to {stages[i+1]} ➡️", key=f"move_{lead['id']}"):
-                                conn.execute("UPDATE leads SET status = ? WHERE id = ?", (stages[i+1], lead['id']))
-                                conn.commit()
-                                st.rerun()
-    else:
-        st.info("Pipeline is currently empty. Launch a swarm or use the Manual Entry above.")
-    
+        for idx, stage in enumerate(stages):
+            with cols[idx]:
+                st.markdown(f'<div style="background-color:#F3F4F6; padding:10px; border-radius:10px;"><h4 style="text-align:center;">{stage}</h4></div>', unsafe_allow_html=True)
+                for _, lead in team_df[team_df['status'] == stage].iterrows():
+                    st.info(f"📍 {lead['city']} | {lead['service']}")
+                    if stage != "ROI Verified":
+                        if st.button(f"Advance ➡️", key=f"mv_{lead['id']}"):
+                            conn.execute("UPDATE leads SET status = ? WHERE id = ?", (stages[idx+1], lead['id']))
+                            conn.commit(); st.rerun()
     conn.close()
 
-# --- D. Admin God-MODE (Sprint 4 Finalized) ---
-
-# Only add Admin if the user is authorized
-if user_row.get('role') == 'admin':
-    tab_labels.append("⚙ Admin")
-
-# Create the physical tabs in the UI (only call this ONCE)
-tabs_obj = st.tabs(tab_labels)
-
-# Create the dictionary mapping so your 'with TAB' blocks work
-TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
-
-# 2. Dynamically add Admin tab ONLY for users with the 'admin' role
-if user_row.get('role') == 'admin':
-    main_tabs.append("⚙ Admin")
-
-# 3. Create the actual Tab objects
-tabs_obj = st.tabs(main_tabs)
-
-# 4. Map the names to the objects (The Switchboard)
-TAB = {name: tabs_obj[i] for i, name in enumerate(main_tabs)}
-
-# --- 5. FILL CONTENT ---
-# Now your existing code like 'with TAB["🤝 Team Intel"]:' will work perfectly.
-
-# 2. Dynamically add Admin tab ONLY for admins
-if user_row.get('role') == 'admin':
-    main_tabs.append("⚙ Admin")
-
-# 3. Create the Tab objects and map them to the TAB dictionary
-tabs = st.tabs(main_tabs)
-TAB = dict(zip(main_tabs, tabs))
-
-# --- D. Admin God-MODE (Paste your updated logic here) ---
-# ... (Previous code: Sidebar, Execution Bridge, Navigation Control) ...
-
-# 1. THE AGENT SEATS (The loop we just confirmed)
-for i, (title, key) in enumerate(agent_map, 1):
-    with tabs_obj[i]:
-        # ... (Agent content code) ...
-
-# 2. THE ADMIN CONTENT (Paste your block here!)
+# --- 5. ADMIN CONTENT ---
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
-        st.header("⚙️ System Forensics & User Control")
-        # Go straight into your sub-tabs (Logs, User Manager, etc.)
-        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
+        st.header("⚙️ System Forensics")
+        admin_sub1, admin_sub2 = st.tabs(["📊 Activity Logs", "👥 User Manager"])
+        with admin_sub1:
+            conn = sqlite3.connect('breatheeasy.db')
+            try:
+                st.dataframe(pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn), use_container_width=True)
+            except: st.info("No logs yet.")
+            conn.close()
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
