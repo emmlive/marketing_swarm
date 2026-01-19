@@ -583,12 +583,25 @@ with TAB["📖 Guide"]:
 # ----------------------------------------------------------------
 # SECTION B: DYNAMIC AGENT WORKBENCHES (The 8 Agents)
 # ----------------------------------------------------------------
-# We start the loop at index 1 to skip the Guide tab
+# MUST be defined before the loop below
+DEPLOY_GUIDES = {
+    "analyst": "Identify Price-Gaps to undercut rivals.",
+    "ads": "Copy platform hooks into Meta/Google Ads.",
+    "creative": "Use these prompts for high-fidelity assets.",
+    "strategist": "Your 30-day CEO-level execution checklist.",
+    "social": "Deploy viral hooks based on the local schedule.",
+    "geo": "Update citations for AI search ranking.",
+    "audit": "Patch technical leaks to increase speed.",
+    "seo": "Publish for Search Generative Experience (SGE)."
+}
+
+# --- 3. DYNAMIC AGENT SEATS (The Loop) ---
+# This handles the Analyst, Ads, SEO, etc.
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
         st.subheader(f"🚀 {title} Intelligence Seat")
         
-        # Intel Briefing Box
+        # This will now work because DEPLOY_GUIDES is defined above
         st.markdown(f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB;">
             <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
             {DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}
@@ -599,10 +612,11 @@ for i, (title, key) in enumerate(agent_map, 1):
             if agent_content:
                 edited = st.text_area(f"Refine {title}", value=str(agent_content), height=400, key=f"ed_{key}")
                 
-                # Export Buttons
+                # Export Engine
                 st.write("---")
                 c1, c2 = st.columns(2)
                 fname = f"{st.session_state.get('biz_name', 'Brand')}_{key}"
+                
                 with c1:
                     st.download_button("📄 Word Brief", data=export_word(edited, title), file_name=f"{fname}.docx", key=f"w_{key}")
                 with c2:
@@ -610,7 +624,7 @@ for i, (title, key) in enumerate(agent_map, 1):
             else:
                 st.warning(f"⚠️ {title} was not selected for this deployment.")
         else:
-            st.info(f"✨ Seat ready. Launch from sidebar to fill this workspace.")
+            st.info(f"✨ Seat ready. Launch from sidebar.")
 
 # ----------------------------------------------------------------
 # SECTION C: UTILITY WORKSPACES (Vision & Veo)
