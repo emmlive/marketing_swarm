@@ -564,12 +564,75 @@ with TAB["🤝 Team Intel"]:
         st.info("Pipeline is currently empty. Launch a swarm to generate leads.")
     conn.close()
 
-# D. ADMIN GOD-MODE (SPRINT 4)
+# --- D. Admin God-MODE (Sprint 4 Replacement) ---
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
-        st.header("⚙️ System Forensics")
-        conn = sqlite3.connect('breatheeasy.db')
-        st.subheader("Global Activity Audit")
-        audit_df = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
-        st.dataframe(audit_df, use_container_width=True)
-        conn.close()
+        st.header("⚙️ System Forensics & User Control")
+        
+        # Inner Tabs for better organization
+        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
+
+        # --- SUB-TAB 1: ACTIVITY AUDIT ---
+        with admin_sub1:
+            st.subheader("Global Activity Audit")
+            conn = sqlite3.connect('breatheeasy.db')
+            audit_df = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
+            st.dataframe(audit_df, use_container_width=True)
+            conn.close()
+
+        # --- SUB-TAB 2: USER MANAGER (Add/Remove/Tier) ---
+        with admin_sub2:
+            st.subheader("Subscriber Management")
+            conn = sqlite3.connect('breatheeasy.db')
+            users_df = pd.read_sql("SELECT id, username, name, email, package, role, credits FROM users", conn)
+            st.dataframe(users_df, use_container_width=True)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("### ➕ Create / Update User")
+                with st.form("add_user_form", clear_on_submit=True):
+                    new_user = st.text_input("Username")
+                    new_name = st.text_input("Full Name")
+                    new_email = st.text_input("Email")
+                    new_tier = st.selectbox("Tier", ["Basic", "Pro", "Enterprise"])
+                    new_credits = st.number_input("Starting Credits", value=10)
+                    submit_user = st.form_submit_button("Sync User Account")
+                    
+                    if submit_user:
+                        conn.execute("""
+                            INSERT INTO users (username, name, email, package, credits, role, verified)
+                            VALUES (?, ?, ?, ?, ?, 'user', 1)
+                            ON CONFLICT(username) DO UPDATE SET 
+                            name=excluded.name, email=excluded.email, package=excluded.package, credits=excluded.credits
+                        """, (new_user, new_name, new_email, new_tier, new_credits))
+                        conn.commit()
+                        st.success(f"User {new_user} updated!")
+                        st.rerun()
+
+            with col2:
+                st.markdown("### 🗑️ Remove User")
+                user_to_del = st.selectbox("Select Target", users_df['username'].tolist())
+                if st.button("🔴 Delete Account Permanently", use_container_width=True):
+                    if user_to_del != user_row['username']:
+                        conn.execute("DELETE FROM users WHERE username = ?", (user_to_del,))
+                        conn.commit()
+                        st.warning(f"Purged: {user_to_del}")
+                        st.rerun()
+                    else:
+                        st.error("Admin cannot delete themselves.")
+            conn.close()
+
+        # --- SUB-TAB 3: PASSWORD MANAGEMENT ---
+        with admin_sub3:
+            st.subheader("Credential Management")
+            target_p = st.selectbox("Target User", users_df['username'].tolist(), key="p_mgr")
+            new_p = st.text_input("Set New Password", type="password")
+            
+            if st.button("🛠️ Reset & Hash Password"):
+                # Automatically hashes for the streamlit-authenticator logic
+                hashed_p = stauth.Hasher([new_p]).generate()[0]
+                conn = sqlite3.connect('breatheeasy.db')
+                conn.execute("UPDATE users SET password = ? WHERE username = ?", (hashed_p, target_p))
+                conn.commit()
+                conn.close()
+                st.success(f"Password reset successful for {target_p}!")
