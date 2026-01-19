@@ -374,24 +374,29 @@ def get_geo_data():
         "Texas": ["Austin", "Dallas", "Houston"],
     }
 
-# --- 3. DYNAMIC SIDEBAR ARCHITECTURE (Tiered Monetization Update) ---
+# --- 3. DYNAMIC SIDEBAR ARCHITECTURE (Safe Tiered Update) ---
 with st.sidebar:
     st.image("Logo1.jpeg", width=120)
     st.subheader(f"Welcome, {user_row['name']}")
-    st.metric(f"{user_row['package']} Credits", user_row['credits'])
     
+    # 0. SAFE DATA RETRIEVAL (Prevents KeyErrors)
+    # We use .get() so if 'package' is missing but 'plan' exists (or vice versa), it won't crash
+    current_tier = user_row.get('plan', user_row.get('package', 'Basic'))
+    current_credits = user_row.get('credits', 0)
+    is_admin = user_row.get('role') == 'admin'
+
+    st.metric(f"{current_tier} Plan", f"{current_credits} Credits")
     st.divider()
 
     # --- TIER LIMITS CONFIGURATION ---
     tier_limits = {
         "Basic": 3,      
         "Pro": 5,        
-        "Enterprise": 8  
+        "Enterprise": 8,
+        "Unlimited": 8   # Admin fallback
     }
     
-    # Logic: Admin bypasses all limits, others use their package tier
-    current_tier = user_row.get('package', 'Basic')
-    is_admin = user_row.get('role') == 'admin'
+    # Logic: Admin bypasses all limits, others use their plan tier
     agent_limit = 8 if is_admin else tier_limits.get(current_tier, 3)
 
     # 1. BRAND CONFIGURATION
@@ -419,7 +424,7 @@ with st.sidebar:
     
     # 5. SWARM PERSONNEL TOGGLES (With Limit Logic)
     with st.expander("🤖 Swarm Personnel", expanded=True):
-        st.caption(f"Plan: {current_tier} | Limit: {agent_limit} Agents")
+        st.caption(f"Status: {current_tier} | Max: {agent_limit} Agents")
         
         agent_map = [
             ("🕵️ Analyst", "analyst"), ("📺 Ads", "ads"), ("🎨 Creative", "creative"), 
@@ -430,31 +435,31 @@ with st.sidebar:
         toggles = {}
         active_count = 0
         
-        # Determine how many are currently toggled on
+        # Determine how many are currently toggled on to calculate limits
+        for title, key in agent_map:
+            # Check if this specific agent is already in session state
+            is_on = st.session_state.get(f"tg_{key}", False)
+            if is_on: active_count += 1
+
         for title, key in agent_map:
             # Logic: Disable toggle if limit reached AND it's not already ON
-            # This allows users to turn things OFF to make room for others
             is_disabled = False
             if not is_admin and active_count >= agent_limit and not st.session_state.get(f"tg_{key}"):
                 is_disabled = True
             
-            # Default first 3 to ON for convenience, others OFF
-            default_val = True if active_count < 3 and key in ['analyst', 'audit', 'seo'] else False
+            # Default values for first launch
+            default_val = True if key in ['analyst', 'audit', 'seo'] and active_count < 3 else False
             
             toggles[key] = st.toggle(title, value=default_val, disabled=is_disabled, key=f"tg_{key}")
-            
-            if toggles[key]:
-                active_count += 1
         
         if not is_admin and active_count >= agent_limit:
-            st.warning(f"Maximum agents ({agent_limit}) reached for {current_tier} plan.")
+            st.warning(f"Agent limit reached for {current_tier} plan.")
 
     st.divider()
     
-    # 6. VERIFICATION SECURITY GATE
-    if user_row['verified'] == 1:
-        # Check if they have credits
-        if user_row['credits'] > 0:
+    # 6. VERIFICATION SECURITY GATE (Simplified)
+    if user_row.get('verified') == 1:
+        if current_credits > 0:
             run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
         else:
             st.error("💳 Out of Credits")
@@ -468,7 +473,7 @@ with st.sidebar:
         run_btn = False
 
     authenticator.logout('🔒 Sign Out', 'sidebar')
-
+    
 # --- 4. EXECUTION BRIDGE (Final SDLC Sync) ---
 # --- Find this section at the bottom of your sidebar in app.py ---
 
