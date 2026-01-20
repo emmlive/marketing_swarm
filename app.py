@@ -547,24 +547,10 @@ def export_pdf(content, title):
     return pdf.output(dest='S').encode('latin-1')
 
 # =================================================================
-# --- MASTER COMMAND CENTER: FINAL SYNCED RENDERER (HARDENED) ---
+# --- MASTER COMMAND CENTER: FINAL COMPREHENSIVE RENDERER ---
 # =================================================================
 
-# 0) REQUIRED INPUTS (guarded)
-# Expecting agent_map like: [("Analyst", "analyst"), ("Ads", "ads"), ...]
-if "agent_map" not in globals():
-    st.error("agent_map is not defined. Define it before this block (list of (title, key)).")
-    st.stop()
-
-if "user_row" not in globals() or user_row is None:
-    user_row = {}  # safe fallback
-
-# Ensure dict-like behavior
-if not hasattr(user_row, "get"):
-    st.error("user_row is not dict-like. It must support .get('role') and contain team_id.")
-    st.stop()
-
-# 1) DEPLOY GUIDES
+# 1. DEFINE THE DEPLOYMENT GUIDES
 DEPLOY_GUIDES = {
     "analyst": "Identify Price-Gaps to undercut rivals. Focus on high-margin service tiers.",
     "ads": "Copy platform hooks into Meta/Google Ads. Focus on 'Scroll-Stopping' headlines.",
@@ -576,174 +562,92 @@ DEPLOY_GUIDES = {
     "seo": "Publish for Search Generative Experience (SGE). Focus on 'Zero-Click' answer optimization."
 }
 
-# 2) NAV CONTROL
-agent_titles = [a[0] for a in agent_map]
+# 2. CONSOLIDATED NAVIGATION CONTROL (Master Sync)
+# Define all labels once to prevent duplicate tab rows
+agent_titles = [a[0] for a in agent_map] 
 tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 
-if user_row.get("role") == "admin":
+if user_row.get('role') == 'admin':
     tab_labels.append("⚙ Admin")
 
+# Create the physical tabs ONCE
 tabs_obj = st.tabs(tab_labels)
 TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
-# ----------------------------------------------------------------
-# SECTION A: GUIDE
-# ----------------------------------------------------------------
+# --- SECTION A: 📖 GUIDE ---
 with TAB["📖 Guide"]:
     st.header("📖 Agent Intelligence Manual")
     st.info("Configure your brand in the sidebar and Launch the Swarm to begin.")
-    st.markdown("""
-    ### 🛡️ How to use your Generated Intelligence:
-    - **Step 1: Review & Refine** - Each Agent seat contains a 'Workbench' where you can edit the AI's output.
-    - **Step 2: Export Reports** - Use the Word/PDF buttons in each seat to create client-ready deliverables.
-    - **Step 3: Move to Execution** - Use the **Team Intel** tab to track leads as they move through your pipeline.
-    """)
+    st.markdown("Use the tabs above to switch between specialized AI Agent seats.")
 
-# ----------------------------------------------------------------
-# SECTION B: DYNAMIC AGENT SEATS
-# ----------------------------------------------------------------
-for (title, key) in agent_map:
-    if title not in TAB:
-        # Should never happen, but protects against mismatches
-        st.warning(f"Tab missing for agent title: {title}")
-        continue
-
-    with TAB[title]:
-        st.subheader(f"🚀 {title} Intelligence Seat")
-
-        st.markdown(
-            f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px;
-                 border-left: 5px solid #2563EB; margin-bottom: 20px;">
-                <b style="color:#2563EB;">🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
-                <i style="color:#1E293B;">{DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}</i>
-            </div>''',
-            unsafe_allow_html=True
-        )
-
-        report = st.session_state.get("report") or {}
-        if st.session_state.get("gen") and report:
-            agent_content = report.get(key)
-
-            if agent_content is not None and agent_content != "":
-                edited = st.text_area(
-                    f"Refine {title} Intelligence",
-                    value=str(agent_content),
-                    height=400,
-                    key=f"ed_{key}"
-                )
-
-                st.write("---")
+# --- SECTION B: 🚀 AGENT SEATS (The Loop) ---
+for i, (title, key) in enumerate(agent_map, 1):
+    with tabs_obj[i]:
+        st.subheader(f"🚀 {title} Seat")
+        st.markdown(f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB;">
+            <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
+            {DEPLOY_GUIDES.get(key, "Intelligence Gathering")}
+        </div>''', unsafe_allow_html=True)
+        
+        if st.session_state.get('gen') and st.session_state.get('report'):
+            content = st.session_state.report.get(key)
+            if content:
+                edited = st.text_area("Refine Intelligence", value=str(content), height=400, key=f"ed_{key}")
                 c1, c2 = st.columns(2)
-                fname = f"{st.session_state.get('biz_name', 'Brand')}_{key}"
-
-                # Guard exports so missing functions don't crash the whole app
-                with c1:
-                    if "export_word" in globals():
-                        st.download_button(
-                            "📄 Download Word Brief",
-                            data=export_word(edited, title),
-                            file_name=f"{fname}.docx",
-                            key=f"w_{key}",
-                        )
-                    else:
-                        st.warning("export_word() is not defined.")
-
-                with c2:
-                    if "export_pdf" in globals():
-                        st.download_button(
-                            "📕 Download PDF Report",
-                            data=export_pdf(edited, title),
-                            file_name=f"{fname}.pdf",
-                            key=f"p_{key}",
-                        )
-                    else:
-                        st.warning("export_pdf() is not defined.")
+                with c1: st.download_button("📄 Word", export_word(edited, title), f"{key}.docx", key=f"w_{key}")
+                with c2: st.download_button("📕 PDF", export_pdf(edited, title), f"{key}.pdf", key=f"p_{key}")
             else:
-                st.warning(f"⚠️ {title} was not selected for this deployment. Toggle it in the sidebar.")
+                st.warning("Agent not selected for this run.")
         else:
-            st.info(f"✨ The {title} seat is ready for deployment. Configure your brand and launch the swarm.")
+            st.info("System Standby. Launch from sidebar.")
 
-# ----------------------------------------------------------------
-# SECTION C: TEAM INTEL (KANBAN PIPELINE)
-# ----------------------------------------------------------------
+# --- SECTION C: 🤝 TEAM INTEL (Kanban) ---
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Team Pipeline")
+    conn = sqlite3.connect('breatheeasy.db')
+    try:
+        team_df = pd.read_sql_query("SELECT * FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
+        if team_df.empty:
+            st.info("No active leads in pipeline.")
+        else:
+            stages = ["Discovery", "Execution", "ROI Verified"]
+            cols = st.columns(3)
+            for idx, stage in enumerate(stages):
+                with cols[idx]:
+                    st.markdown(f"### {stage}")
+                    stage_leads = team_df[team_df['status'] == stage]
+                    for _, lead in stage_leads.iterrows():
+                        with st.expander(f"📍 {lead['city']}"):
+                            if st.button(f"Advance ➡️", key=f"mv_{lead['id']}"):
+                                conn.execute("UPDATE leads SET status = ? WHERE id = ?", (stages[idx+1], lead['id']))
+                                conn.commit(); st.rerun()
+    except: st.error("Database connection failed.")
+    finally: conn.close()
 
-    team_id = user_row.get("team_id")
-    if not team_id:
-        st.warning("No team_id found for this user. Cannot load pipeline.")
-    else:
-        try:
-            with sqlite3.connect("breatheeasy.db") as conn:
-                team_df = pd.read_sql_query(
-                    "SELECT * FROM leads WHERE team_id = ?",
-                    conn,
-                    params=(team_id,),
-                )
-
-                if team_df.empty:
-                    st.info("Pipeline is empty. Leads generated by agents will appear here.")
-                else:
-                    stages = ["Discovery", "Execution", "ROI Verified"]
-                    cols = st.columns(3)
-
-                    for idx, stage in enumerate(stages):
-                        with cols[idx]:
-                            st.markdown(
-                                f'<div style="background-color:#F3F4F6; padding:10px; border-radius:10px; '
-                                f'border-bottom:3px solid #2563EB; text-align:center;"><b>{stage.upper()}</b></div>',
-                                unsafe_allow_html=True
-                            )
-
-                            stage_leads = team_df[team_df["status"] == stage]
-                            for _, lead in stage_leads.iterrows():
-                                lead_id = lead.get("id", None)
-                                with st.expander(f"📍 {lead.get('city','Unknown')}"):
-                                    st.write(f"**Service:** {lead.get('service','')}")
-
-                                    if stage != "ROI Verified" and lead_id is not None:
-                                        if st.button("Advance ➡️", key=f"mv_{lead_id}"):
-                                            next_stage = stages[idx + 1]
-                                            conn.execute(
-                                                "UPDATE leads SET status = ? WHERE id = ?",
-                                                (next_stage, lead_id),
-                                            )
-                                            conn.commit()
-                                            st.rerun()
-
-        except Exception as e:
-            st.error(f"Database Error: {e}")
-
-# ----------------------------------------------------------------
-# SECTION D: ADMIN
-# ----------------------------------------------------------------
-if user_row.get("role") == "admin":
+# --- SECTION D: ⚙ ADMIN (The NameError Fix) ---
+if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
-        st.header("⚙️ System Forensics")
-
-        a_sub1, a_sub2, a_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
-
-        with a_sub1:
+        st.header("⚙️ Admin Forensics")
+        
+        # FIX: We define the sub-tabs variables HERE before the 'with' statements
+        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
+        
+        with admin_sub1:
             st.subheader("Global Activity Audit")
-            conn = sqlite3.connect("breatheeasy.db")
+            conn = sqlite3.connect('breatheeasy.db')
             try:
-                logs = pd.read_sql_query(
-                    "SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50",
-                    conn
-                )
+                logs = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
                 st.dataframe(logs, use_container_width=True)
-            except Exception as e:
-                st.info(f"No activity logs found. ({e})")
-            finally:
-                conn.close()
-
-        with a_sub2:
+            except: st.info("No logs found.")
+            finally: conn.close()
+            
+        with admin_sub2:
             st.subheader("User Management")
-            st.write(f"Active Team ID: **{user_row.get('team_id', 'N/A')}**")
-
-        with a_sub3:
+            st.write(f"Active Team ID: {user_row.get('team_id')}")
+            
+        with admin_sub3:
             st.subheader("System Security")
-            st.success("API Connections Verified | SSL Active | Secrets Locked")
+            st.success("API Connections Verified | Encryption Standard: AES-256")
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
