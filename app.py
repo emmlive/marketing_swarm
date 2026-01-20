@@ -741,16 +741,17 @@ if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
         st.header("⚙️ Admin Forensics")
 
-        a_sub1, a_sub2, a_sub3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
+        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
 
-        with a_sub1:
+        with admin_sub1:
             st.subheader("Global Activity Audit")
 
-        with a_sub2:
+        with admin_sub2:
             st.subheader("User Management")
 
-        with a_sub3:
+        with admin_sub3:
             st.subheader("System Security")
+            st.success("Security Protocols Active")
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
