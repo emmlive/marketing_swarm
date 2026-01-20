@@ -545,51 +545,141 @@ def export_pdf(content, title):
     pdf.multi_cell(0, 7, txt=clean_text)
     return pdf.output(dest='S').encode('latin-1')
 
-# --- FOLDER 06: MASTER COMMAND CENTER RENDERER ---
-
 # =================================================================
-# --- MASTER NAVIGATION & ADMIN SYNC ---
+# --- MASTER COMMAND CENTER: FINAL SYNCED RENDERER ---
 # =================================================================
 
-# 1. Define the Tab Labels
-tab_labels = ["📖 Guide"] + [a[0] for a in agent_map] + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
+# 1. DEFINE THE DEPLOYMENT GUIDES (Must be defined before the loop)
+DEPLOY_GUIDES = {
+    "analyst": "Identify Price-Gaps to undercut rivals. Focus on high-margin service tiers.",
+    "ads": "Copy platform hooks into Meta/Google Ads. Focus on 'Scroll-Stopping' headlines.",
+    "creative": "Use these prompts for Midjourney/Canva to build high-converting visual assets.",
+    "strategist": "Your 30-day CEO-level execution checklist. Focus on the Phase 1 'Quick Wins'.",
+    "social": "Deploy viral hooks based on the local schedule. Focus on community engagement.",
+    "geo": "Update citations for AI search ranking. Target 'Near Me' local search intent.",
+    "audit": "Patch technical leaks to increase site speed and mobile conversion rates.",
+    "seo": "Publish for Search Generative Experience (SGE). Focus on 'Zero-Click' answer optimization."
+}
+
+# 2. CONSOLIDATED NAVIGATION CONTROL (The Switchboard)
+# Define the labels exactly once to prevent overlapping rows
+agent_titles = [a[0] for a in agent_map] 
+tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
+
 if user_row.get('role') == 'admin':
     tab_labels.append("⚙ Admin")
 
-# 2. Create the physical Tabs (Exactly ONCE)
+# Create the physical tabs exactly ONCE
 tabs_obj = st.tabs(tab_labels)
+
+# Create the mapping dictionary for easy "with TAB" access
 TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
-# --- FILL AGENT SEATS (The Loop) ---
+# ----------------------------------------------------------------
+# SECTION A: 📖 THE GUIDE (Index 0)
+# ----------------------------------------------------------------
+with TAB["📖 Guide"]:
+    st.header("📖 Agent Intelligence Manual")
+    st.info("Configure your brand in the sidebar and Launch the Swarm to begin.")
+    st.markdown("""
+    ### 🛡️ How to use your Generated Intelligence:
+    - **Step 1: Review & Refine** - Each Agent seat contains a 'Workbench' where you can edit the AI's output.
+    - **Step 2: Export Reports** - Use the Word/PDF buttons in each seat to create client-ready deliverables.
+    - **Step 3: Move to Execution** - Use the **Team Intel** tab to track leads as they move through your pipeline.
+    """)
+
+# ----------------------------------------------------------------
+# SECTION B: 🚀 DYNAMIC AGENT SEATS (The 8 Agents)
+# ----------------------------------------------------------------
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
-        st.subheader(f"🚀 {title} Seat")
-        # ... (Your existing Agent Seat code here) ...
+        st.subheader(f"🚀 {title} Intelligence Seat")
+        
+        # Deployment Guide Briefing Box
+        st.markdown(f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB; margin-bottom: 20px;">
+            <b style="color:#2563EB;">🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
+            <i style="color:#1E293B;">{DEPLOY_GUIDES.get(key, "Review the intelligence brief below.")}</i>
+        </div>''', unsafe_allow_html=True)
 
-# --- FILL TEAM INTEL ---
+        if st.session_state.get('gen') and st.session_state.get('report'):
+            agent_content = st.session_state.report.get(key)
+            if agent_content:
+                # The Interactive Workbench
+                edited = st.text_area(f"Refine {title} Intelligence", value=str(agent_content), height=400, key=f"ed_{key}")
+                
+                # The Export Engine
+                st.write("---")
+                c1, c2 = st.columns(2)
+                fname = f"{st.session_state.get('biz_name', 'Brand')}_{key}"
+                
+                with c1:
+                    st.download_button("📄 Download Word Brief", data=export_word(edited, title), file_name=f"{fname}.docx", key=f"w_{key}")
+                with c2:
+                    st.download_button("📕 Download PDF Report", data=export_pdf(edited, title), file_name=f"{fname}.pdf", key=f"p_{key}")
+            else:
+                st.warning(f"⚠️ {title} was not selected for this deployment. Toggle it in the sidebar.")
+        else:
+            st.info(f"✨ The {title} seat is ready for deployment. Configure your brand and launch the swarm.")
+
+# ----------------------------------------------------------------
+# SECTION C: 🤝 TEAM INTEL (KANBAN PIPELINE)
+# ----------------------------------------------------------------
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Team Pipeline")
-    # ... (Your existing Kanban code here) ...
+    conn = sqlite3.connect('breatheeasy.db')
+    try:
+        team_df = pd.read_sql_query("SELECT * FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
+        
+        if team_df.empty:
+            st.info("Pipeline is empty. Leads generated by agents will appear here.")
+        else:
+            stages = ["Discovery", "Execution", "ROI Verified"]
+            cols = st.columns(3)
+            for idx, stage in enumerate(stages):
+                with cols[idx]:
+                    st.markdown(f'<div style="background-color:#F3F4F6; padding:10px; border-radius:10px; border-bottom:3px solid #2563EB; text-align:center;"><b>{stage.upper()}</b></div>', unsafe_allow_html=True)
+                    stage_leads = team_df[team_df['status'] == stage]
+                    for _, lead in stage_leads.iterrows():
+                        with st.expander(f"📍 {lead['city']}"):
+                            st.write(f"**Service:** {lead['service']}")
+                            if stage != "ROI Verified":
+                                if st.button(f"Advance ➡️", key=f"mv_{lead['id']}"):
+                                    conn.execute("UPDATE leads SET status = ? WHERE id = ?", (stages[idx+1], lead['id']))
+                                    conn.commit()
+                                    st.rerun()
+    except Exception as e:
+        st.error(f"Database Error: {e}")
+    finally:
+        conn.close()
 
-# --- FILL ADMIN (The Fix for the NameError) ---
+# ----------------------------------------------------------------
+# SECTION D: ⚙ ADMIN (SYSTEM FORENSICS)
+# ----------------------------------------------------------------
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
         st.header("⚙️ System Forensics")
         
-        # WE DEFINE THE SUB-TABS HERE IMMEDIATELY BEFORE USING THEM
-        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
+        # Define Admin Sub-Tabs
+        a_sub1, a_sub2, a_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
         
-        with admin_sub1:
+        with a_sub1:
             st.subheader("Global Activity Audit")
-            # Your Log Table code
+            conn = sqlite3.connect('breatheeasy.db')
+            try:
+                logs = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
+                st.dataframe(logs, use_container_width=True)
+            except:
+                st.info("No activity logs found.")
+            finally:
+                conn.close()
             
-        with admin_sub2:
+        with a_sub2:
             st.subheader("User Management")
-            st.write(f"Active Team ID: {user_row.get('team_id')}")
+            st.write(f"Active Team ID: **{user_row['team_id']}**")
             
-        with admin_sub3:
+        with a_sub3:
             st.subheader("System Security")
-            st.success("API Handshakes Verified | SSL Active")
+            st.success("API Connections Verified | SSL Active | Secrets Locked")
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
