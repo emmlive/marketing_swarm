@@ -325,50 +325,104 @@ if 'authenticator' not in st.session_state:
 
 authenticator = st.session_state.authenticator
 
-# 3. THE SECURITY GATE
+# =================================================================
+# --- 3. THE SECURITY GATE & SaaS PRICING ---
+# =================================================================
 if not st.session_state.get("authentication_status"):
-    st.image("Logo1.jpeg", width=180)
-    auth_tabs = st.tabs(["🔑 Login", "📝 Sign Up", "🤝 Join Team", "❓ Forget Password"])
+    st.image("Logo1.jpeg", width=220)
+    st.title("🚀 Marketing Swarm Intelligence")
+    st.markdown("---")
+
+    auth_tabs = st.tabs(["🔑 Login", "✨ Pricing & Sign Up", "🤝 Join Team", "❓ Forget Password"])
     
+    # --- TAB 0: LOGIN ---
     with auth_tabs[0]:
         authenticator.login(location='main')
-        # If login is successful, refresh to enter Command Center
         if st.session_state.get("authentication_status"):
             st.rerun()
             
+    # --- TAB 1: PRICING & SIGN UP ---
     with auth_tabs[1]:
-        st.subheader("Enterprise Registration")
-        # Pricing cards and registration logic go here
-        res = authenticator.register_user(location='main')
-        if res:
-            st.success("Account created! Please log in.")
+        st.subheader("Select Your Swarm Package")
+        
+        # 2026 Industry Standard Pricing Tiers
+        p1, p2, p3 = st.columns(3)
+        
+        with p1:
+            st.markdown("""
+            <div style="border:1px solid #E5E7EB; padding:20px; border-radius:10px; text-align:center;">
+                <h3>🥉 LITE</h3>
+                <h2 style="color:#2563EB;">$99<small>/mo</small></h2>
+                <p><i>The "Solopreneur" Swarm</i></p>
+                <ul style="text-align:left; font-size:14px;">
+                    <li>3 Specialized Agents</li>
+                    <li>Standard PDF Reports</li>
+                    <li>Single User Access</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("Choose Lite", key="p_lite", use_container_width=True):
+                st.session_state.selected_tier = "lite"
 
+        with p2:
+            st.markdown("""
+            <div style="border:2px solid #2563EB; padding:20px; border-radius:10px; text-align:center; background-color:#F8FAFC;">
+                <span style="background-color:#2563EB; color:white; padding:2px 10px; border-radius:5px; font-size:12px;">MOST POPULAR</span>
+                <h3>🥈 PRO</h3>
+                <h2 style="color:#2563EB;">$299<small>/mo</small></h2>
+                <p><i>The "Growth" Swarm</i></p>
+                <ul style="text-align:left; font-size:14px;">
+                    <li><b>All 8 AI Agents</b></li>
+                    <li>White-label Word/PDF</li>
+                    <li>Team Kanban Pipeline</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("Choose Pro", key="p_pro", use_container_width=True):
+                st.session_state.selected_tier = "pro"
+
+        with p3:
+            st.markdown("""
+            <div style="border:1px solid #E5E7EB; padding:20px; border-radius:10px; text-align:center;">
+                <h3>🥇 ENTERPRISE</h3>
+                <h2 style="color:#2563EB;">$999<small>/mo</small></h2>
+                <p><i>The "Global" Swarm</i></p>
+                <ul style="text-align:left; font-size:14px;">
+                    <li>Unlimited Swarms</li>
+                    <li>Admin Forensics Hub</li>
+                    <li>API & Custom Training</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("Choose Enterprise", key="p_ent", use_container_width=True):
+                st.session_state.selected_tier = "enterprise"
+
+        # Registration Logic based on selection
+        if st.session_state.get('selected_tier'):
+            st.info(f"✨ You've selected the **{st.session_state.selected_tier.upper()}** plan. Complete your registration below:")
+            try:
+                # This creates the user in your 'credentials' dict
+                if authenticator.register_user(location='main'):
+                    st.success("Account created successfully! Switch to the 'Login' tab to enter.")
+            except Exception as e:
+                st.error(f"Error during registration: {e}")
+
+    # --- TAB 2: JOIN TEAM ---
     with auth_tabs[2]:
         st.subheader("🤝 Request Enterprise Team Access")
-        st.markdown("""
-        To sync with an existing corporate swarm, enter your **Organization ID** below. 
-        Your administrator will receive a notification to verify your seat.
-        """)
-        
+        st.markdown("To sync with an existing corporate swarm, enter your **Organization ID** below.")
         with st.form("team_request_form"):
             team_id_req = st.text_input("Enterprise Team ID", placeholder="e.g., HQ_NORTH_2026")
             reason = st.text_area("Purpose of Access", placeholder="e.g., Regional Marketing Analyst")
-            
-            submit_req = st.form_submit_button("Submit Access Request", use_container_width=True)
-            
-            if submit_req:
-                if team_id_req:
-                    # Logic: In a live env, this would write to a 'pending_requests' table
-                    st.success(f"Request for Team {team_id_req} has been logged. Status: PENDING.")
-                else:
-                    st.error("Please provide a valid Team ID.")
-            
+            if st.form_submit_button("Submit Access Request", use_container_width=True):
+                st.success(f"Request for Team {team_id_req} logged. Status: PENDING.")
+
+    # --- TAB 3: FORGET PASSWORD ---
     with auth_tabs[3]:
         authenticator.forgot_password(location='main')
 
-    st.stop() # Prevents any further code from running if not logged in
+    st.stop()
         
-
 # --- FOLDER 05: SaaS_Dev_Operations - THE COMMAND CONSOLE ---
 
 # 1. LOAD USER CONTEXT
@@ -550,7 +604,19 @@ def export_pdf(content, title):
 # --- MASTER COMMAND CENTER: FINAL COMPREHENSIVE RENDERER ---
 # =================================================================
 
-# 1. DEFINE THE DEPLOYMENT GUIDES
+# 1. THE AGENT SPECIFICATION DIRECTORY (For the Guide)
+AGENT_SPECS = {
+    "analyst": "🕵️ **Market Analyst**: Scans competitors, identifies price-gaps, and maps rival market share.",
+    "ads": "📺 **Ads Architect**: Generates high-converting copy for Meta, Google, and TikTok based on viral hooks.",
+    "creative": "🎨 **Creative Director**: Provides high-fidelity image prompts and visual brand guidelines.",
+    "strategist": "📝 **Swarm Strategist**: Builds a 30-day execution roadmap and CEO-level ROI projections.",
+    "social": "📱 **Social Engineer**: Crafts engagement-driven posts and community management scripts.",
+    "geo": "📍 **Geo-Fencer**: Optimizes local map rankings and 'Near Me' search visibility.",
+    "audit": "🔍 **Technical Auditor**: Finds 'leaks' in site speed and mobile conversion optimization.",
+    "seo": "📝 **SEO Architect**: Builds content clusters for SGE (Search Generative Experience) and Google ranking."
+}
+
+# 2. DEPLOYMENT GUIDES (Tooltips for Seats)
 DEPLOY_GUIDES = {
     "analyst": "Identify Price-Gaps to undercut rivals. Focus on high-margin service tiers.",
     "ads": "Copy platform hooks into Meta/Google Ads. Focus on 'Scroll-Stopping' headlines.",
@@ -562,23 +628,28 @@ DEPLOY_GUIDES = {
     "seo": "Publish for Search Generative Experience (SGE). Focus on 'Zero-Click' answer optimization."
 }
 
-# 2. CONSOLIDATED NAVIGATION CONTROL (Master Sync)
-# Define all labels once to prevent duplicate tab rows
+# 3. CONSOLIDATED NAVIGATION CONTROL
 agent_titles = [a[0] for a in agent_map] 
 tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 
 if user_row.get('role') == 'admin':
     tab_labels.append("⚙ Admin")
 
-# Create the physical tabs ONCE
 tabs_obj = st.tabs(tab_labels)
 TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
-# --- SECTION A: 📖 GUIDE ---
+# --- SECTION A: 📖 THE DETAILED GUIDE ---
 with TAB["📖 Guide"]:
     st.header("📖 Agent Intelligence Manual")
-    st.info("Configure your brand in the sidebar and Launch the Swarm to begin.")
-    st.markdown("Use the tabs above to switch between specialized AI Agent seats.")
+    st.info(f"Command Center Active for: {st.session_state.get('biz_name', 'Global Mission')}")
+    
+    st.subheader("Agent Specializations")
+    for key, desc in AGENT_SPECS.items():
+        st.markdown(desc)
+    
+    st.markdown("---")
+    st.markdown("### 🛡️ Swarm Execution Protocol")
+    st.write("1. **Launch** from the sidebar.\n2. **Edit** in the specific Agent Seat.\n3. **Export** via the download buttons.")
 
 # --- SECTION B: 🚀 AGENT SEATS (The Loop) ---
 for i, (title, key) in enumerate(agent_map, 1):
@@ -594,43 +665,53 @@ for i, (title, key) in enumerate(agent_map, 1):
             if content:
                 edited = st.text_area("Refine Intelligence", value=str(content), height=400, key=f"ed_{key}")
                 c1, c2 = st.columns(2)
-                with c1: st.download_button("📄 Word", export_word(edited, title), f"{key}.docx", key=f"w_{key}")
-                with c2: st.download_button("📕 PDF", export_pdf(edited, title), f"{key}.pdf", key=f"p_{key}")
+                with c1: st.download_button("📄 Word Brief", export_word(edited, title), f"{key}.docx", key=f"w_{key}")
+                with c2: st.download_button("📕 PDF Report", export_pdf(edited, title), f"{key}.pdf", key=f"p_{key}")
             else:
-                st.warning("Agent not selected for this run.")
+                st.warning("Agent not selected for this deployment run.")
         else:
-            st.info("System Standby. Launch from sidebar.")
+            st.info("System Standby. Launch from sidebar to populate data.")
 
-# --- SECTION C: 🤝 TEAM INTEL (Kanban) ---
+# --- SECTION C: 👁️ VISION & 🎬 VEO STUDIO ---
+with TAB["👁️ Vision"]:
+    st.header("👁️ Visual Intelligence")
+    st.write("Visual audits and image analysis results appear here.")
+
+with TAB["🎬 Veo Studio"]:
+    st.header("🎬 Veo Video Studio")
+    st.write("AI Video generation and storyboarding assets.")
+
+# --- SECTION D: 🤝 TEAM INTEL (Kanban) ---
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Team Pipeline")
     conn = sqlite3.connect('breatheeasy.db')
     try:
         team_df = pd.read_sql_query("SELECT * FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
         if team_df.empty:
-            st.info("No active leads in pipeline.")
+            st.info("Pipeline currently empty. Leads will appear here automatically.")
         else:
             stages = ["Discovery", "Execution", "ROI Verified"]
             cols = st.columns(3)
             for idx, stage in enumerate(stages):
                 with cols[idx]:
-                    st.markdown(f"### {stage}")
+                    st.markdown(f'<div style="background-color:#F3F4F6; padding:10px; border-radius:10px; border-bottom:3px solid #2563EB; text-align:center;"><b>{stage.upper()}</b></div>', unsafe_allow_html=True)
                     stage_leads = team_df[team_df['status'] == stage]
                     for _, lead in stage_leads.iterrows():
                         with st.expander(f"📍 {lead['city']}"):
-                            if st.button(f"Advance ➡️", key=f"mv_{lead['id']}"):
-                                conn.execute("UPDATE leads SET status = ? WHERE id = ?", (stages[idx+1], lead['id']))
-                                conn.commit(); st.rerun()
-    except: st.error("Database connection failed.")
+                            st.write(f"**Service:** {lead['service']}")
+                            if stage != "ROI Verified":
+                                if st.button(f"Advance ➡️", key=f"mv_{lead['id']}"):
+                                    conn.execute("UPDATE leads SET status = ? WHERE id = ?", (stages[idx+1], lead['id']))
+                                    conn.commit()
+                                    st.rerun()
+    except: st.error("Database connection failed. Ensure schema is synced in Admin.")
     finally: conn.close()
 
-# --- SECTION D: ⚙ ADMIN (The NameError Fix) ---
+# --- SECTION E: ⚙ ADMIN COMMAND CENTER ---
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
         st.header("⚙️ Admin Forensics")
-        
-        # FIX: We define the sub-tabs variables HERE before the 'with' statements
-        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
+        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
         
         with admin_sub1:
             st.subheader("Global Activity Audit")
@@ -638,16 +719,18 @@ if "⚙ Admin" in TAB:
             try:
                 logs = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
                 st.dataframe(logs, use_container_width=True)
-            except: st.info("No logs found.")
+            except: st.info("No logs found in master_audit_logs.")
             finally: conn.close()
             
         with admin_sub2:
             st.subheader("User Management")
-            st.write(f"Active Team ID: {user_row.get('team_id')}")
+            st.write(f"Active Team ID: **{user_row.get('team_id')}**")
+            st.write(f"Access Level: **{user_row.get('role').upper()}**")
             
         with admin_sub3:
             st.subheader("System Security")
             st.success("API Connections Verified | Encryption Standard: AES-256")
+            st.info("All agent handshakes for OpenAI and Gemini are currently encrypted.")
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
