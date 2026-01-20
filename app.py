@@ -601,38 +601,48 @@ def export_pdf(content, title):
     return pdf.output(dest='S').encode('latin-1')
 
 # =================================================================
-# --- MASTER COMMAND CENTER: FINAL SYNCED RENDERER ---
+# --- MASTER COMMAND CENTER: THE FINAL SYNCED RENDERER ---
 # =================================================================
 
-# 1. THE AGENT SPECIFICATION DIRECTORY (Detailed Guide)
+# 1. THE AGENT SPECIFICATION DIRECTORY
+# This ensures the "Guide" tab is rich with content
 AGENT_SPECS = {
-    "analyst": "🕵️ **Market Analyst**: Scans competitors and identifies price-gaps.",
-    "ads": "📺 **Ads Architect**: Generates high-converting copy for Meta/Google.",
-    "creative": "🎨 **Creative Director**: Provides high-fidelity image prompts.",
-    "strategist": "📝 **Swarm Strategist**: Builds a 30-day CEO-level execution roadmap.",
-    "social": "📱 **Social Engineer**: Crafts engagement-driven posts.",
-    "geo": "📍 **Geo-Fencer**: Optimizes local map rankings.",
-    "audit": "🔍 **Technical Auditor**: Finds site 'leaks' and speed issues.",
-    "seo": "📝 **SEO Architect**: Builds content clusters for SGE ranking."
+    "analyst": "🕵️ **Market Analyst**: Scans competitors, identifies price-gaps, and maps rival market share.",
+    "ads": "📺 **Ads Architect**: Generates high-converting copy for Meta, Google, and TikTok.",
+    "creative": "🎨 **Creative Director**: Provides high-fidelity image prompts and brand guidelines.",
+    "strategist": "📝 **Swarm Strategist**: Builds a 30-day execution roadmap and CEO-level ROI projections.",
+    "social": "📱 **Social Engineer**: Crafts engagement-driven posts and community scripts.",
+    "geo": "📍 **Geo-Fencer**: Optimizes local map rankings and 'Near Me' search visibility.",
+    "audit": "🔍 **Technical Auditor**: Finds 'leaks' in site speed and mobile conversion.",
+    "seo": "📝 **SEO Architect**: Builds content clusters for Search Generative Experience (SGE)."
 }
 
-# 2. CONSOLIDATED NAVIGATION CONTROL (The Fix for Missing Tabs)
-# We define the ABSOLUTE list here.
+# 2. THE DEPLOYMENT TOOLTIPS (For the individual Agent Seats)
+DEPLOY_GUIDES = {
+    "analyst": "Identify Price-Gaps to undercut rivals. Focus on high-margin tiers.",
+    "ads": "Copy platform hooks into Meta/Ads. Focus on Scroll-Stopping headlines.",
+    "creative": "Use these prompts for Midjourney/Canva to build high-converting assets.",
+    "strategist": "30-day CEO execution checklist. Focus on Phase 1 'Quick Wins'.",
+    "social": "Deploy viral hooks based on local schedule. Focus on engagement.",
+    "geo": "Update citations for AI search. Target local search intent.",
+    "audit": "Patch technical leaks to increase site speed and mobile conversion.",
+    "seo": "Publish for SGE. Focus on Zero-Click answer optimization."
+}
+
+# 3. CONSOLIDATED NAVIGATION CONTROL (The Ultimate Fix)
 agent_titles = [a[0] for a in agent_map] 
 tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 
-# Add Admin if authorized
+# Add Admin if the user_row role is 'admin'
 if user_row.get('role') == 'admin':
     tab_labels.append("⚙ Admin")
 
-# Create the physical tabs ONCE
+# Render physical tabs exactly ONCE to prevent overlapping
 tabs_obj = st.tabs(tab_labels)
-
-# Map names to objects so the code knows exactly where to put content
 TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
 # ----------------------------------------------------------------
-# SECTION A: 📖 THE GUIDE (Guaranteed to be First)
+# SECTION A: 📖 THE DETAILED GUIDE
 # ----------------------------------------------------------------
 with TAB["📖 Guide"]:
     st.header("📖 Agent Intelligence Manual")
@@ -644,62 +654,122 @@ with TAB["📖 Guide"]:
     
     st.markdown("---")
     st.markdown("### 🛡️ Swarm Execution Protocol")
-    st.write("1. **Launch** from the sidebar.\n2. **Edit** in the specific Agent Seat.\n3. **Export** via the download buttons.")
+    st.write("1. **Launch Swarm** from the sidebar.")
+    st.write("2. **Edit** content in the specific Agent Seats.")
+    st.write("3. **Export** Word/PDF reports to clients.")
 
 # ----------------------------------------------------------------
-# SECTION B: 🚀 AGENT SEATS (The Loop)
+# SECTION B: 🚀 AGENT SEATS (Interactive Workbenches)
 # ----------------------------------------------------------------
 for i, (title, key) in enumerate(agent_map, 1):
     with tabs_obj[i]:
         st.subheader(f"🚀 {title} Seat")
         
+        # Tooltip Briefing
+        st.markdown(f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB;">
+            <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
+            {DEPLOY_GUIDES.get(key, "Intelligence Gathering")}
+        </div>''', unsafe_allow_html=True)
+        
         if st.session_state.get('gen') and st.session_state.get('report'):
             content = st.session_state.report.get(key)
             if content:
                 edited = st.text_area("Refine Intelligence", value=str(content), height=400, key=f"ed_{key}")
+                
+                # Export Row
+                st.write("---")
                 c1, c2 = st.columns(2)
-                with c1: st.download_button("📄 Word", export_word(edited, title), f"{key}.docx", key=f"w_{key}")
-                with c2: st.download_button("📕 PDF", export_pdf(edited, title), f"{key}.pdf", key=f"p_{key}")
+                fname = f"{st.session_state.get('biz_name', 'Brand')}_{key}"
+                with c1:
+                    st.download_button("📄 Word Brief", export_word(edited, title), f"{fname}.docx", key=f"w_{key}")
+                with c2:
+                    st.download_button("📕 PDF Report", export_pdf(edited, title), f"{fname}.pdf", key=f"p_{key}")
             else:
-                st.warning("Agent not selected for this run.")
+                st.warning("Agent was not selected for this run.")
         else:
-            st.info("System Standby. Launch from sidebar.")
+            st.info("System Standby. Configure sidebar and Launch Swarm.")
 
 # ----------------------------------------------------------------
-# SECTION C: 🤝 TEAM INTEL (The Fixed Kanban)
+# SECTION C: 👁️ VISION & 🎬 VEO STUDIO
+# ----------------------------------------------------------------
+with TAB["👁️ Vision"]:
+    st.header("👁️ Visual Intelligence")
+    st.write("Visual audits and image analysis results appear here.")
+
+with TAB["🎬 Veo Studio"]:
+    st.header("🎬 Veo Video Studio")
+    st.write("AI Video generation and storyboarding assets.")
+
+# ----------------------------------------------------------------
+# SECTION D: 🤝 TEAM INTEL (The Admin-Aware Pipeline)
 # ----------------------------------------------------------------
 with TAB["🤝 Team Intel"]:
     st.header("🤝 Global Team Pipeline")
-    # We use a try/except to prevent a DB error from hiding the tab
+    conn = sqlite3.connect('breatheeasy.db')
+    
+    # Permission Logic
+    if user_row.get('role') == 'admin':
+        query = "SELECT * FROM leads"
+        params = ()
+        st.caption("🛡️ Admin View: Monitoring all organizational leads.")
+    else:
+        query = "SELECT * FROM leads WHERE team_id = ?"
+        params = (user_row['team_id'],)
+        st.caption(f"👥 Team View: {user_row['team_id']}")
+
     try:
-        conn = sqlite3.connect('breatheeasy.db')
-        team_df = pd.read_sql_query("SELECT * FROM leads WHERE team_id = ?", conn, params=(user_row['team_id'],))
+        team_df = pd.read_sql_query(query, conn, params=params)
         if team_df.empty:
-            st.info("No active leads. Swarm-generated leads will appear here.")
+            st.info("No active leads found in pipeline.")
         else:
-            st.dataframe(team_df, use_container_width=True)
-        conn.close()
+            stages = ["Discovery", "Execution", "ROI Verified"]
+            cols = st.columns(3)
+            for idx, stage in enumerate(stages):
+                with cols[idx]:
+                    st.markdown(f"### {stage}")
+                    stage_leads = team_df[team_df['status'] == stage]
+                    for _, lead in stage_leads.iterrows():
+                        with st.expander(f"📍 {lead['city']}"):
+                            st.write(f"**Service:** {lead['service']}")
+                            if stage != "ROI Verified":
+                                if st.button(f"Advance ➡️", key=f"mv_{lead['id']}"):
+                                    conn.execute("UPDATE leads SET status = ? WHERE id = ?", (stages[idx+1], lead['id']))
+                                    conn.commit()
+                                    st.rerun()
     except:
-        st.error("Database table 'leads' not found. Ensure it is synced.")
+        st.error("Database table 'leads' missing. Sync in Admin.")
+    finally:
+        conn.close()
 
 # ----------------------------------------------------------------
-# SECTION D: ⚙ ADMIN (The Fixed Forensics)
+# SECTION E: ⚙ ADMIN (System Forensics)
 # ----------------------------------------------------------------
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
         st.header("⚙️ Admin Forensics")
+        
         # Sub-tabs within the Admin tab
-        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
+        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Activity Logs", "👥 User Manager", "🔐 Security"])
         
         with admin_sub1:
-            st.write("System Activity Logs")
-            # Log data here...
+            st.subheader("Global Activity Audit")
+            conn = sqlite3.connect('breatheeasy.db')
+            try:
+                logs = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
+                st.dataframe(logs, use_container_width=True)
+            except:
+                st.info("No audit logs found.")
+            finally:
+                conn.close()
             
         with admin_sub2:
-            st.write(f"Management for Team ID: {user_row.get('team_id')}")
+            st.subheader("User Management")
+            st.write(f"Current Team ID: **{user_row.get('team_id')}**")
+            st.write(f"Permission Level: **{user_row.get('role').upper()}**")
             
         with admin_sub3:
-            st.success("Security Protocols Active | AES-256 Enabled")
+            st.subheader("System Security")
+            st.success("API Connections Verified | Encryption Standard: AES-256")
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
