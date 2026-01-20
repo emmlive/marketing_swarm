@@ -740,6 +740,7 @@ with TAB["🤝 Team Intel"]:
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
         st.header("⚙️ Admin Forensics")
+
         a_sub1, a_sub2, a_sub3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
 
         with a_sub1:
@@ -747,11 +748,9 @@ if "⚙ Admin" in TAB:
 
         with a_sub2:
             st.subheader("User Management")
-            st.write(f"Active Team: {user_row.get('team_id')}")
 
         with a_sub3:
             st.subheader("System Security")
-            st.success("API Connections Active | Encryption: AES-256")
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
