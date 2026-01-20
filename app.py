@@ -717,7 +717,7 @@ with TAB["🤝 Team Intel"]:
 # ----------------------------------------------------------------
 # SECTION D: ADMIN
 # ----------------------------------------------------------------
-if "⚙ Admin" in TAB:
+if user_row.get("role") == "admin":
     with TAB["⚙ Admin"]:
         st.header("⚙️ System Forensics")
 
@@ -725,15 +725,17 @@ if "⚙ Admin" in TAB:
 
         with a_sub1:
             st.subheader("Global Activity Audit")
+            conn = sqlite3.connect("breatheeasy.db")
             try:
-                with sqlite3.connect("breatheeasy.db") as conn:
-                    logs = pd.read_sql_query(
-                        "SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50",
-                        conn
-                    )
+                logs = pd.read_sql_query(
+                    "SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50",
+                    conn
+                )
                 st.dataframe(logs, use_container_width=True)
-            except Exception:
-                st.info("No activity logs found.")
+            except Exception as e:
+                st.info(f"No activity logs found. ({e})")
+            finally:
+                conn.close()
 
         with a_sub2:
             st.subheader("User Management")
