@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import unicodedata
 import sqlite3
 from io import BytesIO
@@ -26,6 +27,7 @@ st.set_page_config(page_title="Marketing Swarm Intelligence", layout="wide")
 # ============================================================
 DB_PATH = "breatheeasy.db"
 
+
 def ensure_column(conn: sqlite3.Connection, table: str, col: str, col_def: str):
     """Adds a column if it doesn't exist."""
     cur = conn.cursor()
@@ -33,6 +35,7 @@ def ensure_column(conn: sqlite3.Connection, table: str, col: str, col_def: str):
     cols = {row[1] for row in cur.fetchall()}
     if col not in cols:
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")
+
 
 def init_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -101,13 +104,15 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 init_db()
 
 
 # ============================================================
-# 2) FPDF HARDENING (KEEP YOUR PATCH)
+# 2) FPDF HARDENING
 # ============================================================
 _original_putpages = fpdf.fpdf.FPDF._putpages
+
 
 def _patched_putpages(self):
     pages = self.pages
@@ -118,7 +123,9 @@ def _patched_putpages(self):
         self.pages[k] = v
     _original_putpages(self)
 
+
 fpdf.fpdf.FPDF._putpages = _patched_putpages
+
 
 def nuclear_ascii(text):
     if text is None:
@@ -134,6 +141,7 @@ def nuclear_ascii(text):
     text = text.encode("ascii", "ignore").decode("ascii")
     text = re.sub(r"[^\x20-\x7E\n]", "", text)
     return text
+
 
 def export_pdf(content, title):
     try:
@@ -156,8 +164,12 @@ def export_pdf(content, title):
         fallback = FPDF()
         fallback.add_page()
         fallback.set_font("Arial", size=12)
-        fallback.multi_cell(0, 10, "PDF GENERATION FAILED\n\nContent was sanitized.\nError was handled safely.")
+        fallback.multi_cell(
+            0, 10,
+            "PDF GENERATION FAILED\n\nContent was sanitized.\nError was handled safely."
+        )
         return fallback.output(dest="S").encode("latin-1")
+
 
 def export_word(content, title):
     doc = Document()
@@ -188,8 +200,8 @@ def get_db_creds():
     finally:
         conn.close()
 
+
 if "authenticator" not in st.session_state:
-    # Requires Streamlit secrets cookie keys
     st.session_state.authenticator = stauth.Authenticate(
         get_db_creds(),
         st.secrets["cookie"]["name"],
@@ -198,6 +210,7 @@ if "authenticator" not in st.session_state:
     )
 
 authenticator = st.session_state.authenticator
+
 
 if not st.session_state.get("authentication_status"):
     st.image("Logo1.jpeg", width=220)
@@ -315,6 +328,7 @@ def get_geo_data():
         "Texas": ["Austin", "Dallas", "Houston"],
     }
 
+
 with st.sidebar:
     st.success("Authenticated")
     st.image("Logo1.jpeg", width=120)
@@ -396,36 +410,90 @@ with st.sidebar:
 
 
 # ============================================================
-# 6) RUN SWARM
+# 6) RUN SWARM (BATCHED TO AVOID 429 RATE LIMIT)
 # ============================================================
+def run_swarm_in_batches(base_payload: dict, agents: list[str], batch_size: int = 3, pause_sec: int = 20, max_retries: int = 2):
+    """
+    Runs the swarm in batches to avoid Gemini 429 RESOURCE_EXHAUSTED errors.
+    Merges partial reports into a single dict.
+    """
+    final_report: dict = {}
+    total = len(agents)
+
+    for start in range(0, total, batch_size):
+        batch = agents[start:start + batch_size]
+        st.write(f"🧩 Running batch {start+1}-{start+len(batch)} of {total}: {batch}")
+
+        attempt = 0
+        while True:
+            try:
+                payload = dict(base_payload)
+                payload["active_swarm"] = batch
+                partial = run_marketing_swarm(payload) or {}
+                final_report.update(partial)
+                break
+            except Exception as e:
+                msg = str(e)
+                is_429 = ("429" in msg) or ("RESOURCE_EXHAUSTED" in msg)
+                attempt += 1
+
+                if is_429 and attempt <= max_retries:
+                    wait = pause_sec * attempt
+                    st.warning(f"⚠️ Rate limited (429). Waiting {wait}s then retrying this batch...")
+                    time.sleep(wait)
+                    continue
+
+                # non-429 or too many retries
+                raise
+
+        if start + batch_size < total:
+            st.info(f"🧊 Cooling down {pause_sec}s before next batch...")
+            time.sleep(pause_sec)
+
+    return final_report
+
+
 if run_btn:
     if not biz_name:
         st.error("🚨 Please enter a Brand Name before launching.")
     else:
         active_agents = [k for k, v in toggles.items() if v]
 
+        base_payload = {
+            "city": full_loc,
+            "biz_name": biz_name,
+            "package": current_tier,
+            "custom_logo": custom_logo,
+            "directives": agent_info
+        }
+
         with st.status("🚀 Initializing Swarm Intelligence...", expanded=True) as status:
-            st.write(f"📡 Dispatching {len(active_agents)} agents for {biz_name}...")
+            st.write(f"📡 Preparing {len(active_agents)} agents for {biz_name} (batched)...")
 
-            report = run_marketing_swarm({
-                "city": full_loc,
-                "biz_name": biz_name,
-                "active_swarm": active_agents,
-                "package": current_tier,
-                "custom_logo": custom_logo,
-                "directives": agent_info
-            })
+            try:
+                report = run_swarm_in_batches(
+                    base_payload=base_payload,
+                    agents=active_agents,
+                    batch_size=3,      # adjust to 2-4 depending on your quota
+                    pause_sec=20,      # adjust to 10-30 depending on your quota
+                    max_retries=2
+                )
 
-            st.session_state.report = report
-            st.session_state.gen = True
+                st.session_state.report = report
+                st.session_state.gen = True
 
-            status.update(label="✅ Swarm Coordination Complete!", state="complete", expanded=False)
+                status.update(label="✅ Swarm Coordination Complete!", state="complete", expanded=False)
+                st.rerun()
 
-        st.rerun()
+            except Exception as e:
+                st.session_state.report = {}
+                st.session_state.gen = False
+                status.update(label="❌ Swarm failed", state="error", expanded=True)
+                st.error(f"Swarm Error: {e}")
 
 
 # ============================================================
-# 7) DASHBOARD: TABS (ONE AND ONLY ONE)
+# 7) DASHBOARD: TABS
 # ============================================================
 AGENT_SPECS = {
     "analyst": "🕵️ **Market Analyst**: Scans competitors and identifies price-gaps.",
@@ -449,6 +517,7 @@ DEPLOY_GUIDES = {
     "seo": "Publish for SGE and optimize for zero-click answers."
 }
 
+
 def show_deploy_guide(title: str, key: str):
     st.markdown(
         f"""
@@ -461,6 +530,7 @@ def show_deploy_guide(title: str, key: str):
         unsafe_allow_html=True
     )
 
+
 def render_guide():
     st.header("📖 Agent Intelligence Manual")
     st.info(f"Command Center Active for: {st.session_state.get('biz_name', 'Global Mission')}")
@@ -470,6 +540,7 @@ def render_guide():
     st.markdown("---")
     st.markdown("### 🛡️ Swarm Execution Protocol")
     st.write("1) Launch from the sidebar\n2) Edit inside the Agent Seat\n3) Export using Word/PDF buttons")
+
 
 def render_agent_seat(title: str, key: str):
     st.subheader(f"🚀 {title} Seat")
@@ -490,13 +561,16 @@ def render_agent_seat(title: str, key: str):
     else:
         st.info("System Standby. Launch from sidebar.")
 
+
 def render_vision():
     st.header("👁️ Visual Intelligence")
     st.write("Visual audits and image analysis results appear here.")
 
+
 def render_veo():
     st.header("🎬 Veo Video Studio")
     st.write("AI video generation assets appear here.")
+
 
 def render_team_intel():
     st.header("🤝 Global Team Pipeline")
@@ -517,6 +591,7 @@ def render_team_intel():
             st.dataframe(team_df, use_container_width=True)
     except Exception as e:
         st.error(f"Team Intel Error: {e}")
+
 
 def render_admin():
     st.header("⚙️ Admin Forensics")
