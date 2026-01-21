@@ -689,7 +689,6 @@ def show_deploy_guide(title: str, key: str):
         """,
         unsafe_allow_html=True
     )
-
 def render_guide():
     st.header("📖 Agent Intelligence Manual")
     st.info(f"Command Center Active for: {st.session_state.get('biz_name', 'Global Mission')}")
@@ -701,6 +700,7 @@ def render_guide():
     st.markdown("---")
     st.markdown("### 🛡️ Swarm Execution Protocol")
     st.write("1) Launch from the sidebar\n2) Edit inside the Agent Seat\n3) Export using Word/PDF buttons")
+
 
 def render_agent_seat(title: str, key: str):
     st.success(f"✅ {title} loaded")
@@ -731,15 +731,42 @@ def render_agent_seat(title: str, key: str):
     else:
         st.info("System Standby. Launch from sidebar.")
 
+
 def render_vision():
     st.success("✅ Vision loaded")
     st.header("👁️ Visual Intelligence")
     st.write("Visual audits and image analysis results appear here.")
 
+
 def render_veo():
     st.success("✅ Veo Studio loaded")
     st.header("🎬 Veo Video Studio")
     st.write("AI video generation assets appear here.")
+
+
+def render_team_intel():
+    st.success("✅ Team Intel loaded")
+    st.header("🤝 Global Team Pipeline")
+
+    try:
+        with sqlite3.connect("breatheeasy.db") as conn:
+            if is_admin:
+                query, params = "SELECT * FROM leads", ()
+            else:
+                team_id = user_row.get("team_id")
+                query, params = "SELECT * FROM leads WHERE team_id = ?", (team_id,)
+
+            team_df = pd.read_sql_query(query, conn, params=params)
+
+        if team_df.empty:
+            st.info("Pipeline currently empty.")
+        else:
+            st.dataframe(team_df, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Team Intel Error: {e}")
+        st.info("Check that breatheeasy.db exists and contains a `leads` table.")
+
 
 def render_admin():
     st.success("✅ Admin loaded")
@@ -804,7 +831,6 @@ def render_admin():
 
             with col2:
                 st.markdown("### 🗑️ Remove User")
-
                 if users_df.empty:
                     st.info("No users found.")
                 else:
@@ -826,6 +852,11 @@ def render_admin():
     with admin_sub3:
         st.subheader("Credential Overrides")
 
+        # Requires: import streamlit_authenticator as stauth
+        if "stauth" not in globals():
+            st.warning("stauth not found. Add: `import streamlit_authenticator as stauth` to enable password resets.")
+            return
+
         try:
             with sqlite3.connect("breatheeasy.db") as conn:
                 users_list_df = pd.read_sql_query("SELECT username FROM users", conn)
@@ -841,7 +872,6 @@ def render_admin():
                 if not new_p:
                     st.error("Enter a new password first.")
                 else:
-                    # requires: import streamlit_authenticator as stauth
                     hashed_p = stauth.Hasher([new_p]).generate()[0]
                     with sqlite3.connect("breatheeasy.db") as conn:
                         conn.execute(
@@ -853,8 +883,7 @@ def render_admin():
 
         except Exception as e:
             st.error(f"Security Tab Error: {e}")
-
-
+            
 # -----------------------------
 # 8) Render content into tabs (and allow sidebar fallback)
 # -----------------------------
