@@ -605,11 +605,11 @@ import sqlite3
 import pandas as pd
 
 # =================================================================
-# --- MASTER COMMAND CENTER: CLEAN SYNCED RENDERER ---
+# --- MASTER COMMAND CENTER: CLEAN SYNCED RENDERER (FINAL) ---
 # =================================================================
 
 # -----------------------------
-# 1) Agent Specs + Tooltips
+# Agent Specs + Tooltips
 # -----------------------------
 AGENT_SPECS = {
     "analyst": "🕵️ **Market Analyst**: Scans competitors and identifies price-gaps.",
@@ -634,24 +634,25 @@ DEPLOY_GUIDES = {
 }
 
 # -----------------------------
-# 2) Safety guards
+# Safety guards
 # -----------------------------
 if "agent_map" not in globals() or not agent_map:
     st.error("agent_map is missing or empty. Define agent_map before rendering this dashboard.")
     st.stop()
 
-if "user_row" not in globals() or user_row is None or not hasattr(user_row, "get"):
-    user_row = {}
+# user_row is a pandas Series in your app; .get works, but we normalize carefully
+role_val = None
+try:
+    role_val = user_row.get("role")
+except Exception:
+    role_val = None
 
-# -----------------------------
-# 3) Role normalization
-# -----------------------------
-current_role = (user_row.get("role") or st.session_state.get("role") or "user")
+current_role = (role_val or st.session_state.get("role") or "user")
 current_role = str(current_role).strip().lower()
 is_admin = current_role in {"admin", "system admin", "system_admin", "superadmin"}
 
 # -----------------------------
-# 4) Build tab labels
+# Build tab labels
 # -----------------------------
 agent_titles = [a[0] for a in agent_map]
 tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
@@ -659,24 +660,7 @@ if is_admin:
     tab_labels.append("⚙ Admin")
 
 # -----------------------------
-# 5) Sidebar fallback navigation
-#    This works even if tabs are blocked by browser/CSS.
-# -----------------------------
-st.sidebar.markdown("### Navigation")
-nav_choice = st.sidebar.selectbox("Go to tab", tab_labels, index=0)
-st.sidebar.info("Tip: If tabs aren’t clickable, use this dropdown to navigate.")
-
-# -----------------------------
-# 6) Create real Streamlit tabs (once)
-# -----------------------------
-tabs_obj = st.tabs(tab_labels)
-TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
-
-# Debug marker to prove this is the real tabs container
-st.caption(f"DEBUG role={current_role} | is_admin={is_admin} | tabs={tab_labels}")
-
-# -----------------------------
-# 7) Helpers
+# Helpers
 # -----------------------------
 def show_deploy_guide(title: str, key: str):
     st.markdown(
@@ -689,6 +673,7 @@ def show_deploy_guide(title: str, key: str):
         """,
         unsafe_allow_html=True
     )
+
 def render_guide():
     st.header("📖 Agent Intelligence Manual")
     st.info(f"Command Center Active for: {st.session_state.get('biz_name', 'Global Mission')}")
@@ -701,61 +686,54 @@ def render_guide():
     st.markdown("### 🛡️ Swarm Execution Protocol")
     st.write("1) Launch from the sidebar\n2) Edit inside the Agent Seat\n3) Export using Word/PDF buttons")
 
-
 def render_agent_seat(title: str, key: str):
-    st.success(f"✅ {title} loaded")
     st.subheader(f"🚀 {title} Seat")
     show_deploy_guide(title, key)
 
     report = st.session_state.get("report") or {}
     if st.session_state.get("gen") and report:
         content = report.get(key)
-
         if content:
             edited = st.text_area("Refine Intel", value=str(content), height=400, key=f"ed_{key}")
             c1, c2 = st.columns(2)
 
             with c1:
-                if "export_word" in globals():
-                    st.download_button("📄 Download Word", export_word(edited, title), f"{key}.docx", key=f"w_{key}")
-                else:
-                    st.warning("export_word() is not defined.")
+                st.download_button(
+                    "📄 Download Word",
+                    export_word(edited, title),
+                    file_name=f"{key}.docx",
+                    key=f"w_{key}"
+                )
 
             with c2:
-                if "export_pdf" in globals():
-                    st.download_button("📕 Download PDF", export_pdf(edited, title), f"{key}.pdf", key=f"p_{key}")
-                else:
-                    st.warning("export_pdf() is not defined.")
+                st.download_button(
+                    "📕 Download PDF",
+                    export_pdf(edited, title),
+                    file_name=f"{key}.pdf",
+                    key=f"p_{key}"
+                )
         else:
             st.warning("Agent not selected for this run.")
     else:
         st.info("System Standby. Launch from sidebar.")
 
-
 def render_vision():
-    st.success("✅ Vision loaded")
     st.header("👁️ Visual Intelligence")
     st.write("Visual audits and image analysis results appear here.")
 
-
 def render_veo():
-    st.success("✅ Veo Studio loaded")
     st.header("🎬 Veo Video Studio")
     st.write("AI video generation assets appear here.")
 
-
 def render_team_intel():
-    st.success("✅ Team Intel loaded")
     st.header("🤝 Global Team Pipeline")
-
     try:
         with sqlite3.connect("breatheeasy.db") as conn:
             if is_admin:
                 query, params = "SELECT * FROM leads", ()
             else:
-                team_id = user_row.get("team_id")
+                team_id = user_row.get("team_id") if hasattr(user_row, "get") else None
                 query, params = "SELECT * FROM leads WHERE team_id = ?", (team_id,)
-
             team_df = pd.read_sql_query(query, conn, params=params)
 
         if team_df.empty:
@@ -765,16 +743,12 @@ def render_team_intel():
 
     except Exception as e:
         st.error(f"Team Intel Error: {e}")
-        st.info("Check that breatheeasy.db exists and contains a `leads` table.")
-
 
 def render_admin():
-    st.success("✅ Admin loaded")
     st.header("⚙️ Admin Forensics")
 
     admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
 
-    # --- SUB-TAB 1: ACTIVITY AUDIT ---
     with admin_sub1:
         st.subheader("Global Activity Audit")
         try:
@@ -787,75 +761,20 @@ def render_admin():
         except Exception as e:
             st.info(f"No audit logs found yet (or table missing). Details: {e}")
 
-    # --- SUB-TAB 2: USER MANAGER ---
     with admin_sub2:
         st.subheader("Subscriber Management")
-
         try:
             with sqlite3.connect("breatheeasy.db") as conn:
                 users_df = pd.read_sql_query(
                     "SELECT id, username, name, email, plan, role, credits FROM users",
                     conn
                 )
-
             st.dataframe(users_df, use_container_width=True)
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown("### ➕ Sync User Account")
-                with st.form("admin_user_form", clear_on_submit=True):
-                    u_name = st.text_input("Username")
-                    u_full = st.text_input("Full Name")
-                    u_email = st.text_input("Email", value="")
-                    u_tier = st.selectbox("Plan", ["Basic", "Pro", "Enterprise", "Unlimited"])
-                    u_creds = st.number_input("Credits", value=10, min_value=0)
-
-                    if st.form_submit_button("Update/Create"):
-                        if not u_name:
-                            st.error("Username is required.")
-                        else:
-                            with sqlite3.connect("breatheeasy.db") as conn:
-                                conn.execute("""
-                                    INSERT INTO users (username, name, email, plan, credits, role, verified)
-                                    VALUES (?, ?, ?, ?, ?, 'user', 1)
-                                    ON CONFLICT(username) DO UPDATE SET
-                                        name=excluded.name,
-                                        email=excluded.email,
-                                        plan=excluded.plan,
-                                        credits=excluded.credits
-                                """, (u_name, u_full, u_email, u_tier, int(u_creds)))
-                                conn.commit()
-                            st.success(f"User {u_name} synced!")
-                            st.rerun()
-
-            with col2:
-                st.markdown("### 🗑️ Remove User")
-                if users_df.empty:
-                    st.info("No users found.")
-                else:
-                    u_del = st.selectbox("Select Account", users_df["username"].tolist(), key="admin_del_sel")
-                    if st.button("🔴 Permanently Delete User"):
-                        if u_del == user_row.get("username"):
-                            st.error("Admin cannot delete themselves.")
-                        else:
-                            with sqlite3.connect("breatheeasy.db") as conn:
-                                conn.execute("DELETE FROM users WHERE username = ?", (u_del,))
-                                conn.commit()
-                            st.warning(f"Purged: {u_del}")
-                            st.rerun()
-
         except Exception as e:
             st.error(f"User Manager Error: {e}")
 
-    # --- SUB-TAB 3: SECURITY ---
     with admin_sub3:
         st.subheader("Credential Overrides")
-
-        # Requires: import streamlit_authenticator as stauth
-        if "stauth" not in globals():
-            st.warning("stauth not found. Add: `import streamlit_authenticator as stauth` to enable password resets.")
-            return
 
         try:
             with sqlite3.connect("breatheeasy.db") as conn:
@@ -872,7 +791,8 @@ def render_admin():
                 if not new_p:
                     st.error("Enter a new password first.")
                 else:
-                    hashed_p = stauth.Hasher([new_p]).generate()[0]
+                    # ✅ consistent with your earlier usage
+                    hashed_p = stauth.Hasher.hash(new_p)
                     with sqlite3.connect("breatheeasy.db") as conn:
                         conn.execute(
                             "UPDATE users SET password = ? WHERE username = ?",
@@ -883,41 +803,13 @@ def render_admin():
 
         except Exception as e:
             st.error(f"Security Tab Error: {e}")
-            
+
 # -----------------------------
-# 8) Render content into tabs (and allow sidebar fallback)
+# Create tabs ONCE and render ONCE (NO DUPLICATION)
 # -----------------------------
-def render_selected_page(name: str):
-    if name == "📖 Guide":
-        render_guide()
-        return
+tabs_obj = st.tabs(tab_labels)
+TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
-    for (title, key) in agent_map:
-        if name == title:
-            render_agent_seat(title, key)
-            return
-
-    if name == "👁️ Vision":
-        render_vision()
-        return
-
-    if name == "🎬 Veo Studio":
-        render_veo()
-        return
-
-    if name == "🤝 Team Intel":
-        render_team_intel()
-        return
-
-    if name == "⚙ Admin":
-        if is_admin:
-            render_admin()
-        else:
-            st.error("Not authorized.")
-        return
-
-
-# Render everything into actual tabs
 with TAB["📖 Guide"]:
     render_guide()
 
@@ -940,9 +832,3 @@ if "⚙ Admin" in TAB:
             render_admin()
         else:
             st.error("Not authorized.")
-
-
-# Sidebar fallback: show the selected page prominently (optional UX)
-st.markdown("---")
-st.subheader(f"📌 Quick View: {nav_choice}")
-render_selected_page(nav_choice)
