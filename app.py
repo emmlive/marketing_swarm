@@ -741,67 +741,128 @@ def render_veo():
     st.header("🎬 Veo Video Studio")
     st.write("AI video generation assets appear here.")
 
-def render_team_intel():
-    st.success("✅ Team Intel loaded")
-    st.header("🤝 Global Team Pipeline")
-
-    try:
-        with sqlite3.connect("breatheeasy.db") as conn:
-            if is_admin:
-                query, params = "SELECT * FROM leads", ()
-            else:
-                team_id = user_row.get("team_id")
-                query, params = "SELECT * FROM leads WHERE team_id = ?", (team_id,)
-
-            team_df = pd.read_sql_query(query, conn, params=params)
-
-        if team_df.empty:
-            st.info("Pipeline currently empty.")
-        else:
-            st.dataframe(team_df, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"Team Intel Error: {e}")
-        st.info("If this is a fresh deploy, ensure the SQLite DB exists and the `leads` table is created.")
-
 def render_admin():
     st.success("✅ Admin loaded")
     st.header("⚙️ Admin Forensics")
 
     admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
 
+    # --- SUB-TAB 1: ACTIVITY AUDIT ---
     with admin_sub1:
         st.subheader("Global Activity Audit")
         try:
             with sqlite3.connect("breatheeasy.db") as conn:
-                logs = pd.read_sql_query(
+                audit_df = pd.read_sql_query(
                     "SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50",
                     conn
                 )
-            st.dataframe(logs, use_container_width=True)
+            st.dataframe(audit_df, use_container_width=True)
         except Exception as e:
-            st.warning(f"No logs available (or table missing). Details: {e}")
+            st.info(f"No audit logs found yet (or table missing). Details: {e}")
 
+    # --- SUB-TAB 2: USER MANAGER ---
     with admin_sub2:
-        st.subheader("User Management")
-        st.write(f"Role: **{current_role}**")
-        st.write(f"Team ID: **{user_row.get('team_id', 'N/A')}**")
+        st.subheader("Subscriber Management")
 
+        try:
+            with sqlite3.connect("breatheeasy.db") as conn:
+                users_df = pd.read_sql_query(
+                    "SELECT id, username, name, email, plan, role, credits FROM users",
+                    conn
+                )
+
+            st.dataframe(users_df, use_container_width=True)
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("### ➕ Sync User Account")
+                with st.form("admin_user_form", clear_on_submit=True):
+                    u_name = st.text_input("Username")
+                    u_full = st.text_input("Full Name")
+                    u_email = st.text_input("Email", value="")
+                    u_tier = st.selectbox("Plan", ["Basic", "Pro", "Enterprise", "Unlimited"])
+                    u_creds = st.number_input("Credits", value=10, min_value=0)
+
+                    if st.form_submit_button("Update/Create"):
+                        if not u_name:
+                            st.error("Username is required.")
+                        else:
+                            with sqlite3.connect("breatheeasy.db") as conn:
+                                conn.execute("""
+                                    INSERT INTO users (username, name, email, plan, credits, role, verified)
+                                    VALUES (?, ?, ?, ?, ?, 'user', 1)
+                                    ON CONFLICT(username) DO UPDATE SET
+                                        name=excluded.name,
+                                        email=excluded.email,
+                                        plan=excluded.plan,
+                                        credits=excluded.credits
+                                """, (u_name, u_full, u_email, u_tier, int(u_creds)))
+                                conn.commit()
+                            st.success(f"User {u_name} synced!")
+                            st.rerun()
+
+            with col2:
+                st.markdown("### 🗑️ Remove User")
+
+                if users_df.empty:
+                    st.info("No users found.")
+                else:
+                    u_del = st.selectbox("Select Account", users_df["username"].tolist(), key="admin_del_sel")
+                    if st.button("🔴 Permanently Delete User"):
+                        if u_del == user_row.get("username"):
+                            st.error("Admin cannot delete themselves.")
+                        else:
+                            with sqlite3.connect("breatheeasy.db") as conn:
+                                conn.execute("DELETE FROM users WHERE username = ?", (u_del,))
+                                conn.commit()
+                            st.warning(f"Purged: {u_del}")
+                            st.rerun()
+
+        except Exception as e:
+            st.error(f"User Manager Error: {e}")
+
+    # --- SUB-TAB 3: SECURITY ---
     with admin_sub3:
-        st.subheader("System Security")
-        st.success("API Connections Active | Encryption: AES-256")
+        st.subheader("Credential Overrides")
+
+        try:
+            with sqlite3.connect("breatheeasy.db") as conn:
+                users_list_df = pd.read_sql_query("SELECT username FROM users", conn)
+
+            if users_list_df.empty:
+                st.info("No users available to reset.")
+                return
+
+            target_p = st.selectbox("Reset Password For:", users_list_df["username"].tolist(), key="p_mgr")
+            new_p = st.text_input("New Secure Password", type="password")
+
+            if st.button("🛠️ Reset & Hash Credentials"):
+                if not new_p:
+                    st.error("Enter a new password first.")
+                else:
+                    # requires: import streamlit_authenticator as stauth
+                    hashed_p = stauth.Hasher([new_p]).generate()[0]
+                    with sqlite3.connect("breatheeasy.db") as conn:
+                        conn.execute(
+                            "UPDATE users SET password = ? WHERE username = ?",
+                            (hashed_p, target_p)
+                        )
+                        conn.commit()
+                    st.success(f"Password reset for {target_p}!")
+
+        except Exception as e:
+            st.error(f"Security Tab Error: {e}")
+
 
 # -----------------------------
 # 8) Render content into tabs (and allow sidebar fallback)
 # -----------------------------
-# Always render into the tab containers, but also auto-scroll the user by showing
-# the selected page at the top if they choose from sidebar.
 def render_selected_page(name: str):
     if name == "📖 Guide":
         render_guide()
         return
 
-    # Agent seats
     for (title, key) in agent_map:
         if name == title:
             render_agent_seat(title, key)
@@ -825,6 +886,7 @@ def render_selected_page(name: str):
         else:
             st.error("Not authorized.")
         return
+
 
 # Render everything into actual tabs
 with TAB["📖 Guide"]:
@@ -850,75 +912,8 @@ if "⚙ Admin" in TAB:
         else:
             st.error("Not authorized.")
 
+
 # Sidebar fallback: show the selected page prominently (optional UX)
 st.markdown("---")
 st.subheader(f"📌 Quick View: {nav_choice}")
 render_selected_page(nav_choice)
-        
-     # --- SUB-TAB 1: ACTIVITY AUDIT ---
-        with admin_sub1:
-            st.subheader("Global Activity Audit")
-            conn = sqlite3.connect('breatheeasy.db')
-            try:
-                # Fetch the most recent 50 logs for the dashboard
-                audit_df = pd.read_sql_query("SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50", conn)
-                st.dataframe(audit_df, use_container_width=True)
-            except:
-                # This helps if the table hasn't been created yet
-                st.info("No audit logs found yet. Run your first swarm to see data.")
-            finally:
-                conn.close()
-
-        # --- SUB-TAB 2: USER MANAGER ---
-        with admin_sub2:
-            st.subheader("Subscriber Management")
-            conn = sqlite3.connect('breatheeasy.db')
-            # Using 'plan' to match your schema
-            users_df = pd.read_sql("SELECT id, username, name, email, plan, role, credits FROM users", conn)
-            st.dataframe(users_df, use_container_width=True)
-
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("### ➕ Sync User Account")
-                with st.form("admin_user_form", clear_on_submit=True):
-                    u_name = st.text_input("Username")
-                    u_full = st.text_input("Full Name")
-                    u_tier = st.selectbox("Plan", ["Basic", "Pro", "Enterprise", "Unlimited"])
-                    u_creds = st.number_input("Credits", value=10)
-                    if st.form_submit_button("Update/Create"):
-                        conn.execute("""
-                            INSERT INTO users (username, name, plan, credits, role, verified)
-                            VALUES (?, ?, ?, ?, 'user', 1)
-                            ON CONFLICT(username) DO UPDATE SET 
-                            name=excluded.name, plan=excluded.plan, credits=excluded.credits
-                        """, (u_name, u_full, u_tier, u_creds))
-                        conn.commit()
-                        st.success(f"User {u_name} synced!")
-                        st.rerun()
-
-            with col2:
-                st.markdown("### 🗑️ Remove User")
-                u_del = st.selectbox("Select Account", users_df['username'].tolist(), key="admin_del_sel")
-                if st.button("🔴 Permanently Delete User"):
-                    if u_del != user_row['username']:
-                        conn.execute("DELETE FROM users WHERE username = ?", (u_del,))
-                        conn.commit()
-                        st.warning(f"Purged: {u_del}")
-                        st.rerun()
-                    else:
-                        st.error("Admin cannot delete themselves.")
-            conn.close()
-
-        # --- SUB-TAB 3: SECURITY ---
-        with admin_sub3:
-            st.subheader("Credential Overrides")
-            conn = sqlite3.connect('breatheeasy.db')
-            target_p = st.selectbox("Reset Password For:", users_df['username'].tolist(), key="p_mgr")
-            new_p = st.text_input("New Secure Password", type="password")
-            
-            if st.button("🛠️ Reset & Hash Credentials"):
-                hashed_p = stauth.Hasher([new_p]).generate()[0]
-                conn.execute("UPDATE users SET password = ? WHERE username = ?", (hashed_p, target_p))
-                conn.commit()
-                st.success(f"Password reset for {target_p}!")
-            conn.close()
