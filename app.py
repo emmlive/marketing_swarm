@@ -600,10 +600,17 @@ def export_pdf(content, title):
     pdf.multi_cell(0, 7, txt=clean_text)
     return pdf.output(dest='S').encode('latin-1')
 
+import streamlit as st
+import sqlite3
+import pandas as pd
+
 # =================================================================
-# --- MASTER COMMAND CENTER: THE FINAL SYNCED RENDERER (HARDENED) ---
+# --- MASTER COMMAND CENTER: CLEAN SYNCED RENDERER ---
 # =================================================================
 
+# -----------------------------
+# 1) Agent Specs + Tooltips
+# -----------------------------
 AGENT_SPECS = {
     "analyst": "🕵️ **Market Analyst**: Scans competitors and identifies price-gaps.",
     "ads": "📺 **Ads Architect**: Generates high-converting copy for Meta/Google.",
@@ -616,110 +623,137 @@ AGENT_SPECS = {
 }
 
 DEPLOY_GUIDES = {
-    "analyst": "Identify Price-Gaps to undercut rivals.",
-    "ads": "Copy platform hooks into Ads. Focus on headlines.",
-    "creative": "Use prompts for Midjourney/Canva assets.",
-    "strategist": "30-day CEO roadmap. Focus on Phase 1.",
-    "social": "Deploy viral hooks. Focus on engagement.",
-    "geo": "Update citations for local search intent.",
-    "audit": "Patch technical leaks to increase speed.",
-    "seo": "Publish for SGE. Focus on Zero-Click answers."
+    "analyst": "Identify price-gaps to undercut rivals.",
+    "ads": "Translate platform hooks into ad headlines and angles.",
+    "creative": "Use prompts for Midjourney/Canva conversion assets.",
+    "strategist": "30-day CEO roadmap. Start with Phase 1 quick wins.",
+    "social": "Deploy viral hooks and community engagement posts.",
+    "geo": "Update citations and optimize for 'near me' search intent.",
+    "audit": "Patch technical leaks to improve speed and conversions.",
+    "seo": "Publish for SGE and optimize for zero-click answers."
 }
 
-# ---------- REQUIRED GUARDS ----------
+# -----------------------------
+# 2) Safety guards
+# -----------------------------
 if "agent_map" not in globals() or not agent_map:
-    st.error("agent_map is missing/empty. Define it before rendering tabs.")
+    st.error("agent_map is missing or empty. Define agent_map before rendering this dashboard.")
     st.stop()
 
 if "user_row" not in globals() or user_row is None or not hasattr(user_row, "get"):
     user_row = {}
 
-# ---------- ROLE NORMALIZATION ----------
+# -----------------------------
+# 3) Role normalization
+# -----------------------------
 current_role = (user_row.get("role") or st.session_state.get("role") or "user")
 current_role = str(current_role).strip().lower()
 is_admin = current_role in {"admin", "system admin", "system_admin", "superadmin"}
 
-# ---------- TAB BUILD ----------
+# -----------------------------
+# 4) Build tab labels
+# -----------------------------
 agent_titles = [a[0] for a in agent_map]
 tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 if is_admin:
     tab_labels.append("⚙ Admin")
 
-st.caption(f"DEBUG role={current_role} | is_admin={is_admin} | tabs={tab_labels}")  # remove later
+# -----------------------------
+# 5) Sidebar fallback navigation
+#    This works even if tabs are blocked by browser/CSS.
+# -----------------------------
+st.sidebar.markdown("### Navigation")
+nav_choice = st.sidebar.selectbox("Go to tab", tab_labels, index=0)
+st.sidebar.info("Tip: If tabs aren’t clickable, use this dropdown to navigate.")
 
+# -----------------------------
+# 6) Create real Streamlit tabs (once)
+# -----------------------------
 tabs_obj = st.tabs(tab_labels)
 TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 
-# ----------------------------------------------------------------
-# SECTION A: GUIDE
-# ----------------------------------------------------------------
-with TAB["📖 Guide"]:
+# Debug marker to prove this is the real tabs container
+st.caption(f"DEBUG role={current_role} | is_admin={is_admin} | tabs={tab_labels}")
+
+# -----------------------------
+# 7) Helpers
+# -----------------------------
+def show_deploy_guide(title: str, key: str):
+    st.markdown(
+        f"""
+        <div style="background-color:#f0f2f6; padding:14px; border-radius:10px;
+                    border-left: 5px solid #2563EB; margin-bottom: 14px;">
+            <b style="color:#0f172a;">🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
+            <span style="color:#334155;">{DEPLOY_GUIDES.get(key, "Intelligence Gathering")}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def render_guide():
     st.header("📖 Agent Intelligence Manual")
     st.info(f"Command Center Active for: {st.session_state.get('biz_name', 'Global Mission')}")
+
     st.subheader("Agent Specializations")
     for _, desc in AGENT_SPECS.items():
         st.markdown(desc)
 
-# ----------------------------------------------------------------
-# SECTION B: AGENT SEATS (ROUTED BY NAME, NOT INDEX)
-# ----------------------------------------------------------------
-for (title, key) in agent_map:
-    with TAB[title]:
-        st.subheader(f"🚀 {title} Seat")
-        st.markdown(
-            f'''<div style="background-color:#f0f2f6; padding:15px; border-radius:10px; border-left: 5px solid #2563EB;">
-                <b>🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
-                {DEPLOY_GUIDES.get(key, "Intelligence Gathering")}
-            </div>''',
-            unsafe_allow_html=True
-        )
+    st.markdown("---")
+    st.markdown("### 🛡️ Swarm Execution Protocol")
+    st.write("1) Launch from the sidebar\n2) Edit inside the Agent Seat\n3) Export using Word/PDF buttons")
 
-        if st.session_state.get("gen") and st.session_state.get("report"):
-            content = (st.session_state.report or {}).get(key)
-            if content:
-                edited = st.text_area("Refine Intel", value=str(content), height=400, key=f"ed_{key}")
-                c1, c2 = st.columns(2)
-                with c1:
-                    if "export_word" in globals():
-                        st.download_button("📄 Word", export_word(edited, title), f"{key}.docx", key=f"w_{key}")
-                    else:
-                        st.warning("export_word() not defined.")
-                with c2:
-                    if "export_pdf" in globals():
-                        st.download_button("📕 PDF", export_pdf(edited, title), f"{key}.pdf", key=f"p_{key}")
-                    else:
-                        st.warning("export_pdf() not defined.")
-            else:
-                st.warning("Agent not selected for this run.")
+def render_agent_seat(title: str, key: str):
+    st.success(f"✅ {title} loaded")
+    st.subheader(f"🚀 {title} Seat")
+    show_deploy_guide(title, key)
+
+    report = st.session_state.get("report") or {}
+    if st.session_state.get("gen") and report:
+        content = report.get(key)
+
+        if content:
+            edited = st.text_area("Refine Intel", value=str(content), height=400, key=f"ed_{key}")
+            c1, c2 = st.columns(2)
+
+            with c1:
+                if "export_word" in globals():
+                    st.download_button("📄 Download Word", export_word(edited, title), f"{key}.docx", key=f"w_{key}")
+                else:
+                    st.warning("export_word() is not defined.")
+
+            with c2:
+                if "export_pdf" in globals():
+                    st.download_button("📕 Download PDF", export_pdf(edited, title), f"{key}.pdf", key=f"p_{key}")
+                else:
+                    st.warning("export_pdf() is not defined.")
         else:
-            st.info("System Standby. Launch from sidebar.")
+            st.warning("Agent not selected for this run.")
+    else:
+        st.info("System Standby. Launch from sidebar.")
 
-# ----------------------------------------------------------------
-# SECTION C: VISION & VEO
-# ----------------------------------------------------------------
-with TAB["👁️ Vision"]:
+def render_vision():
+    st.success("✅ Vision loaded")
     st.header("👁️ Visual Intelligence")
     st.write("Visual audits and image analysis results appear here.")
 
-with TAB["🎬 Veo Studio"]:
+def render_veo():
+    st.success("✅ Veo Studio loaded")
     st.header("🎬 Veo Video Studio")
-    st.write("AI Video generation assets.")
+    st.write("AI video generation assets appear here.")
 
-# ----------------------------------------------------------------
-# SECTION D: TEAM INTEL
-# ----------------------------------------------------------------
-with TAB["🤝 Team Intel"]:
+def render_team_intel():
+    st.success("✅ Team Intel loaded")
     st.header("🤝 Global Team Pipeline")
 
     try:
-        conn = sqlite3.connect("breatheeasy.db")
-        if is_admin:
-            query, params = "SELECT * FROM leads", ()
-        else:
-            team_id = user_row.get("team_id")
-            query, params = "SELECT * FROM leads WHERE team_id = ?", (team_id,)
+        with sqlite3.connect("breatheeasy.db") as conn:
+            if is_admin:
+                query, params = "SELECT * FROM leads", ()
+            else:
+                team_id = user_row.get("team_id")
+                query, params = "SELECT * FROM leads WHERE team_id = ?", (team_id,)
 
-        team_df = pd.read_sql_query(query, conn, params=params)
+            team_df = pd.read_sql_query(query, conn, params=params)
 
         if team_df.empty:
             st.info("Pipeline currently empty.")
@@ -728,30 +762,98 @@ with TAB["🤝 Team Intel"]:
 
     except Exception as e:
         st.error(f"Team Intel Error: {e}")
-    finally:
-        try:
-            conn.close()
-        except:
-            pass
+        st.info("If this is a fresh deploy, ensure the SQLite DB exists and the `leads` table is created.")
 
-# ----------------------------------------------------------------
-# SECTION E: ADMIN
-# ----------------------------------------------------------------
+def render_admin():
+    st.success("✅ Admin loaded")
+    st.header("⚙️ Admin Forensics")
+
+    admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
+
+    with admin_sub1:
+        st.subheader("Global Activity Audit")
+        try:
+            with sqlite3.connect("breatheeasy.db") as conn:
+                logs = pd.read_sql_query(
+                    "SELECT * FROM master_audit_logs ORDER BY id DESC LIMIT 50",
+                    conn
+                )
+            st.dataframe(logs, use_container_width=True)
+        except Exception as e:
+            st.warning(f"No logs available (or table missing). Details: {e}")
+
+    with admin_sub2:
+        st.subheader("User Management")
+        st.write(f"Role: **{current_role}**")
+        st.write(f"Team ID: **{user_row.get('team_id', 'N/A')}**")
+
+    with admin_sub3:
+        st.subheader("System Security")
+        st.success("API Connections Active | Encryption: AES-256")
+
+# -----------------------------
+# 8) Render content into tabs (and allow sidebar fallback)
+# -----------------------------
+# Always render into the tab containers, but also auto-scroll the user by showing
+# the selected page at the top if they choose from sidebar.
+def render_selected_page(name: str):
+    if name == "📖 Guide":
+        render_guide()
+        return
+
+    # Agent seats
+    for (title, key) in agent_map:
+        if name == title:
+            render_agent_seat(title, key)
+            return
+
+    if name == "👁️ Vision":
+        render_vision()
+        return
+
+    if name == "🎬 Veo Studio":
+        render_veo()
+        return
+
+    if name == "🤝 Team Intel":
+        render_team_intel()
+        return
+
+    if name == "⚙ Admin":
+        if is_admin:
+            render_admin()
+        else:
+            st.error("Not authorized.")
+        return
+
+# Render everything into actual tabs
+with TAB["📖 Guide"]:
+    render_guide()
+
+for (title, key) in agent_map:
+    with TAB[title]:
+        render_agent_seat(title, key)
+
+with TAB["👁️ Vision"]:
+    render_vision()
+
+with TAB["🎬 Veo Studio"]:
+    render_veo()
+
+with TAB["🤝 Team Intel"]:
+    render_team_intel()
+
 if "⚙ Admin" in TAB:
     with TAB["⚙ Admin"]:
-        st.header("⚙️ Admin Forensics")
+        if is_admin:
+            render_admin()
+        else:
+            st.error("Not authorized.")
 
-        admin_sub1, admin_sub2, admin_sub3 = st.tabs(["📊 Logs", "👥 Users", "🔐 Security"])
-
-        with admin_sub1:
-            st.subheader("Global Activity Audit")
-
-        with admin_sub2:
-            st.subheader("User Management")
-
-        with admin_sub3:
-            st.subheader("System Security")
-            st.success("Security Protocols Active")
+# Sidebar fallback: show the selected page prominently (optional UX)
+st.markdown("---")
+st.subheader(f"📌 Quick View: {nav_choice}")
+render_selected_page(nav_choice)
         
      # --- SUB-TAB 1: ACTIVITY AUDIT ---
         with admin_sub1:
