@@ -1,392 +1,425 @@
 import os
-import json
+import base64
 from datetime import datetime
-from typing import List, Optional, Dict
+from typing import Dict, Any, Optional
+
 from pydantic import BaseModel
 from dotenv import load_dotenv
+
 from crewai import Agent, Task, Crew, Process, LLM
 from crewai.flow.flow import Flow, listen, start
 from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 
-# Force fresh read of environment variables
+import streamlit as st
+
+# Force fresh read of environment variables (local dev)
 load_dotenv(override=True)
 
-# --- 1. SHARED STATE (EXECUTIVE DATA SLOTS) ---
+
+# ============================================================
+# 0) SECRETS / ENV HELPERS
+# ============================================================
+def _get_secret(name: str, default: Optional[str] = None) -> Optional[str]:
+    """Get from Streamlit secrets first, then env."""
+    try:
+        if hasattr(st, "secrets") and name in st.secrets and st.secrets[name]:
+            return str(st.secrets[name])
+    except Exception:
+        pass
+    return os.getenv(name, default)
+
+
+def _is_429(err: Exception) -> bool:
+    msg = str(err)
+    return ("429" in msg) or ("RESOURCE_EXHAUSTED" in msg)
+
+
+def kickoff_with_retry(crew: Crew, retries: int = 2, base_sleep: int = 15):
+    """
+    Retries crew.kickoff() on Gemini 429 rate limit errors.
+    """
+    for attempt in range(retries + 1):
+        try:
+            return crew.kickoff()
+        except Exception as e:
+            if _is_429(e) and attempt < retries:
+                wait = base_sleep * (attempt + 1)
+                # Don't crash; just wait and retry
+                st.warning(f"⚠️ Rate limited (429). Retrying in {wait}s (attempt {attempt+1}/{retries})...")
+                import time
+                time.sleep(wait)
+                continue
+            raise
+
+
+# ============================================================
+# 1) SHARED STATE
+# ============================================================
 class SwarmState(BaseModel):
-    # New Input Fields (Required for your __init__ to work)
+    # Inputs
     biz_name: str = ""
     location: str = ""
     directives: str = ""
+    url: str = ""
 
-    # Existing Agent Output Fields
+    # Outputs
     market_data: str = "Agent not selected for this run."
-    competitor_ads: str = "Ad tracking pending..."
-    vision_intel: str = "Agent not selected for this run." 
-    ad_drafts: str = "Creative build pending..."
-    website_audit: str = "Audit not selected for this run."
-    social_plan: str = "Social strategy not selected."
-    geo_intel: str = "GEO mapping not selected."
-    seo_article: str = "SEO Content not selected." 
-    strategist_brief: str = "Final brief pending..."
-    production_schedule: str = "Roadmap pending..."
+    competitor_ads: str = "Agent not selected for this run."
+    vision_intel: str = "Agent not selected for this run."
+    website_audit: str = "Agent not selected for this run."
+    social_plan: str = "Agent not selected for this run."
+    geo_intel: str = "Agent not selected for this run."
+    seo_article: str = "Agent not selected for this run."
+    strategist_brief: str = "Agent not selected for this run."
 
-# --- 2. ENGINE INITIALIZATION (Streamlit Cloud & Secrets Optimized) ---
-import streamlit as st
+    # Master export
+    full_report: str = "Full report not generated."
 
-# 1. Initialize LLM using the secret key directly
+
+# ============================================================
+# 2) ENGINE INITIALIZATION
+# ============================================================
+GOOGLE_API_KEY = _get_secret("GOOGLE_API_KEY") or _get_secret("GEMINI_API_KEY") or _get_secret("GENAI_API_KEY")
+SERPER_API_KEY = _get_secret("SERPER_API_KEY")
+
+if not GOOGLE_API_KEY:
+    raise RuntimeError(
+        "Missing GOOGLE_API_KEY (Gemini). Add it to Streamlit Cloud Secrets or environment variables."
+    )
+
+# LLM (Gemini via CrewAI)
 gemini_llm = LLM(
-    model="google/gemini-2.0-flash", 
-    api_key=st.secrets["GOOGLE_API_KEY"], # Pulls from secrets.toml
-    temperature=0.3 
+    model="google/gemini-2.0-flash",
+    api_key=GOOGLE_API_KEY,
+    temperature=0.3,
 )
 
-# 2. Initialize Tools using the secret keys directly
-search_tool = SerperDevTool(api_key=st.secrets["SERPER_API_KEY"]) # Pulls from secrets.toml
+# Tools
 scrape_tool = ScrapeWebsiteTool()
+search_tool = SerperDevTool(api_key=SERPER_API_KEY) if SERPER_API_KEY else None
 
-# --- 3. AGENT DEFINITIONS (VALIDATED WITH BACKSTORIES) ---
-def get_swarm_agents(inputs):
-    biz = inputs.get('biz_name', 'The Business')
-    city = inputs.get('city', 'the local area')
-    url = inputs.get('url', 'the provided website')
-    reqs = inputs.get('custom_reqs', 'Standard growth optimization.')
+
+# ============================================================
+# 3) AGENTS
+# ============================================================
+def get_swarm_agents(inputs: Dict[str, Any]) -> Dict[str, Agent]:
+    biz = inputs.get("biz_name", "The Business")
+    city = inputs.get("city", "the local area")
+    url = inputs.get("url") or inputs.get("website") or "the provided website"
+    reqs = inputs.get("directives") or inputs.get("custom_reqs") or "Standard growth optimization."
+
+    analyst_tools = [scrape_tool]
+    if search_tool:
+        analyst_tools = [search_tool, scrape_tool]
 
     return {
+        # Keys match app.py toggles: analyst, ads, creative, strategist, social, geo, audit, seo
         "analyst": Agent(
             role="Chief Market Strategist (McKinsey Level)",
             goal=f"Identify high-value market entry gaps for {biz} in {city}.",
-            backstory=f"You are a market scientist. You quantify 'Market Entry Gaps' and 'Competitor Fatigue'. Priority: {reqs}",
-            tools=[search_tool, scrape_tool], llm=gemini_llm, verbose=True
+            backstory=f"You are a market scientist. You quantify market entry gaps and competitor fatigue. Priority: {reqs}",
+            tools=analyst_tools,
+            llm=gemini_llm,
+            verbose=True
         ),
-        "vision_agent": Agent(
-            role="Technical Visual Auditor & Forensic Analyst",
-            goal=f"Analyze field photos to identify damage or defects for {biz}.",
-            backstory="You are a technical forensics expert. You inspect photos and provide evidence-based reports.",
-            llm=gemini_llm, verbose=True
+        "ads": Agent(
+            role="Performance Ads Architect",
+            goal=f"Generate deployable ad copy for {biz} targeting {city}.",
+            backstory="You are a direct-response ad specialist for Google Search and Meta. You write scroll-stopping hooks and conversion-focused copy.",
+            llm=gemini_llm,
+            verbose=True
         ),
         "creative": Agent(
-            role="Multichannel Direct-Response Ad Architect",
-            goal="Engineer deployable ad copy for Google Search, Facebook, and Instagram.",
-            backstory="You are an expert copywriter specializing in character-limited ad formats and high-conversion hooks.",
-            llm=gemini_llm, verbose=True
+            role="Creative Director (Assets & Prompts)",
+            goal=f"Create high-converting creative direction and prompt packs for {biz}.",
+            backstory="You produce visual ad concepts and prompt packs that convert (Midjourney/Canva-ready).",
+            llm=gemini_llm,
+            verbose=True
         ),
-        "seo_blogger": Agent(
-            role="SEO Content Architect", 
-            goal="Compose high-authority technical articles.", 
-            backstory="Expert in E-E-A-T and Google Search Generative Experience optimization.", 
-            llm=gemini_llm, verbose=True
+        "seo": Agent(
+            role="SEO Content Architect",
+            goal=f"Write an SEO authority article for {biz} in {city}.",
+            backstory="Expert in E-E-A-T and Search Generative Experience optimization. You write helpful, structured content that ranks and converts.",
+            llm=gemini_llm,
+            verbose=True
         ),
-        "web_auditor": Agent(
-            role="Conversion UX Auditor", 
-            goal=f"Diagnose technical conversion leaks on {url}.", 
-            backstory="You identify digital friction points that prevent ROI.",
-            tools=[scrape_tool], llm=gemini_llm, verbose=True
+        "audit": Agent(
+            role="Conversion UX Auditor",
+            goal=f"Diagnose technical conversion leaks on {url}.",
+            backstory="You identify digital friction points, speed/mobile issues, and trust blockers that prevent ROI.",
+            tools=[scrape_tool],
+            llm=gemini_llm,
+            verbose=True
         ),
-        "social_agent": Agent(
-            role="Social Distribution Architect", 
-            goal="Repurpose strategy into a viral broadcast plan.", 
-            backstory="Expert in social media algorithms and viral hook engineering.",
-            llm=gemini_llm, verbose=True
+        "social": Agent(
+            role="Social Distribution Architect",
+            goal=f"Create a 30-day social plan for {biz} in {city}.",
+            backstory="Expert in social algorithms, hooks, and repurposing strategy into daily posts that drive inbound leads.",
+            llm=gemini_llm,
+            verbose=True
         ),
-        "geo_specialist": Agent(
-            role="GEO Specialist", 
-            goal=f"Optimize citation velocity in {city}.", 
-            backstory="Expert in Local Ranking Factors and AI-driven map discovery.",
-            llm=gemini_llm, verbose=True
+        "geo": Agent(
+            role="GEO / Local Search Specialist",
+            goal=f"Optimize local visibility and citations for {biz} in {city}.",
+            backstory="Expert in local ranking factors and AI-driven map discovery. You produce actionable local SEO steps.",
+            llm=gemini_llm,
+            verbose=True
         ),
         "strategist": Agent(
-            role="Chief Growth Officer", 
-            goal="Synthesize all agent intelligence into a roadmap.", 
-            backstory="The ultimate decision maker. You ensure all output aligns with the CEO's growth goals.",
-            llm=gemini_llm, verbose=True
-        )
+            role="Chief Growth Officer",
+            goal=f"Synthesize intelligence into a 30-day execution plan for {biz}.",
+            backstory="You are the integrator. You turn research into a CEO-ready plan with quick wins and priorities.",
+            llm=gemini_llm,
+            verbose=True
+        ),
+        # Optional vision agent (only used if you later add a toggle)
+        "vision": Agent(
+            role="Technical Visual Auditor & Forensic Analyst",
+            goal=f"Analyze field photos to identify damage/defects for {biz}.",
+            backstory="You are a technical forensics expert. You provide evidence-based findings and recommended actions.",
+            llm=gemini_llm,
+            verbose=True
+        ),
     }
 
-# --- 4. THE STATEFUL WORKFLOW ---
+
+# ============================================================
+# 4) FLOW
+# ============================================================
 class MarketingSwarmFlow(Flow[SwarmState]):
-    def __init__(self, inputs):
+    def __init__(self, inputs: Dict[str, Any]):
         super().__init__()
-        self.inputs = inputs
-        
-        # Hydrate State
-        self.state.biz_name = inputs.get('biz_name', 'Unknown Brand')
-        self.state.location = inputs.get('city', 'USA')
-        self.state.directives = inputs.get('directives', '')
-        
-        self.agents = get_swarm_agents(inputs)
-        self.active_swarm = inputs.get('active_swarm', [])
+        self.inputs = inputs or {}
+
+        self.state.biz_name = self.inputs.get("biz_name", "Unknown Brand")
+        self.state.location = self.inputs.get("city", "USA")
+        self.state.directives = self.inputs.get("directives", "")
+        self.state.url = self.inputs.get("url", "")
+
+        self.agents = get_swarm_agents(self.inputs)
+        self.active_swarm = self.inputs.get("active_swarm", []) or []
 
     @start()
     def phase_1_discovery(self):
-        """Phase 1: Research & Executive Audit"""
-        active_tasks = []
-        
+        """Phase 1: Research & Executive Audit (sequential, retry on 429)."""
+        tasks = []
+
         if "analyst" in self.active_swarm:
-            active_tasks.append(Task(
-                description=f"Identify market gaps for {self.state.biz_name} in {self.state.location}.",
+            tasks.append(Task(
+                description=(
+                    f"Identify market gaps for {self.state.biz_name} in {self.state.location}. "
+                    f"Return a structured analysis with: pricing gaps, positioning, 3 offers, and quick-win tactics."
+                ),
                 agent=self.agents["analyst"],
                 expected_output="A structured Market Analysis."
             ))
 
-        if "vision" in self.active_swarm:
-            active_tasks.append(Task(
-                description=f"Forensic visual audit for {self.state.biz_name}.",
-                agent=self.agents["vision_agent"],
-                expected_output="Forensic visual report."
-            ))
-            
         if "audit" in self.active_swarm:
-            active_tasks.append(Task(
-                description=f"Scan {self.inputs.get('url', 'the web')} for conversion friction. DO NOT dump raw HTML. Provide 3-5 executive bullet points.",
-                agent=self.agents["web_auditor"],
+            url = self.inputs.get("url") or self.inputs.get("website") or "the website"
+            tasks.append(Task(
+                description=(
+                    f"Audit {url} for conversion friction. "
+                    "DO NOT dump raw HTML. Provide: top issues, impact, and fixes. Keep it executive-friendly."
+                ),
+                agent=self.agents["audit"],
                 expected_output="Executive Technical Audit."
             ))
 
-        if active_tasks:
-            discovery_crew = Crew(
-                agents=[t.agent for t in active_tasks],
-                tasks=active_tasks,
+        # Optional: if you ever toggle vision later
+        if "vision" in self.active_swarm:
+            tasks.append(Task(
+                description=f"Provide a forensic visual audit for {self.state.biz_name}.",
+                agent=self.agents["vision"],
+                expected_output="Forensic visual report."
+            ))
+
+        if tasks:
+            crew = Crew(
+                agents=[t.agent for t in tasks],
+                tasks=tasks,
                 process=Process.sequential
             )
-            discovery_crew.kickoff()
-            
-            for task in active_tasks:
-                out = str(task.output.raw)
-                desc = task.description.lower()
-                # AUDITOR CLEANUP: Prevents the 'Copy-Paste' look
-                if "scan" in desc:
-                    self.state.website_audit = out if len(out) < 2000 else out[:2000] + "\n\n[Full technical data archived...]"
-                elif "market" in desc: self.state.market_data = out
-                elif "forensic" in desc: self.state.vision_intel = out
-            
-        return "trigger_production" # Explicit signal for Phase 2
+            kickoff_with_retry(crew, retries=2, base_sleep=15)
+
+            for t in tasks:
+                out = str(getattr(t.output, "raw", "") or "")
+                desc = (t.description or "").lower()
+                if "market gaps" in desc or "market" in desc:
+                    self.state.market_data = out
+                elif "audit" in desc or "conversion" in desc:
+                    # Clip extreme length to keep UI clean
+                    self.state.website_audit = out if len(out) <= 3500 else out[:3500] + "\n\n[Output truncated for UI]"
+                elif "forensic" in desc or "visual" in desc:
+                    self.state.vision_intel = out
+
+        return "trigger_production"
 
     @listen("trigger_production")
     def phase_2_execution(self):
-        """Phase 2: Strategy & High-Value Production"""
-        production_tasks = []
-        
+        """Phase 2: Production (sequential, retry on 429)."""
+        tasks = []
+
         if "strategist" in self.active_swarm:
-            production_tasks.append(Task(
-                description=f"Master Strategy for {self.state.biz_name}.",
+            tasks.append(Task(
+                description=(
+                    f"Create a 30-day execution roadmap for {self.state.biz_name} in {self.state.location}. "
+                    "Include: priorities, weekly plan, KPIs, and quick wins."
+                ),
                 agent=self.agents["strategist"],
                 expected_output="Executive Strategic Brief."
             ))
 
-        if "creative" in self.active_swarm:
-            production_tasks.append(Task(
-                description="Multichannel Ad Suite Engineering.",
-                agent=self.agents["creative"],
+        # 'ads' is the app toggle; produce ad suite here
+        if "ads" in self.active_swarm:
+            tasks.append(Task(
+                description=(
+                    f"Generate a multichannel ad suite for {self.state.biz_name} in {self.state.location}: "
+                    "Google Search headlines/descriptions + Meta primary text + hooks. Format as a Markdown table."
+                ),
+                agent=self.agents["ads"],
                 expected_output="Markdown Ad Copy Table."
             ))
 
+        # 'creative' toggle (asset direction + prompts)
+        if "creative" in self.active_swarm:
+            tasks.append(Task(
+                description=(
+                    f"Create creative direction for {self.state.biz_name}: "
+                    "5 concepts + color/typography notes + Midjourney/Canva-ready prompt pack."
+                ),
+                agent=self.agents["creative"],
+                expected_output="Creative direction and prompt pack."
+            ))
+
         if "seo" in self.active_swarm:
-            production_tasks.append(Task(
-                description="Authority SEO-Optimized Article.",
-                agent=self.agents["seo_blogger"],
+            tasks.append(Task(
+                description=(
+                    f"Write an SEO authority article for {self.state.biz_name} in {self.state.location}. "
+                    "Use headings, FAQs, and strong local intent. Be helpful and conversion-aware."
+                ),
+                agent=self.agents["seo"],
                 expected_output="Full Technical Article."
             ))
 
         if "social" in self.active_swarm:
-            production_tasks.append(Task(description="30-Day Viral Calendar.", agent=self.agents["social_agent"], expected_output="Social Schedule."))
+            tasks.append(Task(
+                description=(
+                    f"Create a 30-day social calendar for {self.state.biz_name} in {self.state.location}. "
+                    "Include daily post ideas, hooks, and CTA."
+                ),
+                agent=self.agents["social"],
+                expected_output="Social schedule."
+            ))
 
         if "geo" in self.active_swarm:
-            production_tasks.append(Task(description="Local GEO Intelligence.", agent=self.agents["geo_specialist"], expected_output="Local SEO Strategy."))
+            tasks.append(Task(
+                description=(
+                    f"Create a local GEO plan for {self.state.biz_name} in {self.state.location}. "
+                    "Include citation plan, GBP optimizations, and near-me targeting steps."
+                ),
+                agent=self.agents["geo"],
+                expected_output="Local SEO strategy."
+            ))
 
-        if production_tasks:
-            prod_crew = Crew(
-                agents=[t.agent for t in production_tasks],
-                tasks=production_tasks,
+        if tasks:
+            crew = Crew(
+                agents=[t.agent for t in tasks],
+                tasks=tasks,
                 process=Process.sequential
             )
-            prod_crew.kickoff()
-            
-            for task in production_tasks:
-                out = str(task.output.raw)
-                desc = task.description.lower()
-                if "strategy" in desc: self.state.strategist_brief = out
-                elif "multichannel" in desc: self.state.ad_drafts = out
-                elif "seo" in desc: self.state.seo_article = out
-                elif "viral" in desc: self.state.social_plan = out
-                elif "geo" in desc: self.state.geo_intel = out
-            
+            kickoff_with_retry(crew, retries=2, base_sleep=15)
+
+            for t in tasks:
+                out = str(getattr(t.output, "raw", "") or "")
+                desc = (t.description or "").lower()
+
+                if "30-day execution roadmap" in desc or "execution roadmap" in desc or "roadmap" in desc:
+                    self.state.strategist_brief = out
+                elif "multichannel ad suite" in desc or "ad suite" in desc or "google search" in desc:
+                    self.state.competitor_ads = out
+                elif "creative direction" in desc or "prompt pack" in desc:
+                    # Store creative direction into competitor_ads if you prefer; here we keep it separate by using market_data? no
+                    # We'll store it in competitor_ads ONLY if ads not selected; otherwise keep it appended.
+                    if self.state.competitor_ads and self.state.competitor_ads != "Agent not selected for this run.":
+                        self.state.competitor_ads += "\n\n---\n\n## 🎨 Creative Direction & Prompt Pack\n" + out
+                    else:
+                        self.state.competitor_ads = "## 🎨 Creative Direction & Prompt Pack\n" + out
+                elif "seo authority article" in desc or "seo" in desc:
+                    self.state.seo_article = out
+                elif "social calendar" in desc or "30-day social" in desc:
+                    self.state.social_plan = out
+                elif "local geo plan" in desc or "geo plan" in desc or "citation" in desc:
+                    self.state.geo_intel = out
+
         return "finalize_branding"
 
     @listen("finalize_branding")
     def add_stakeholder_branding(self):
-        """Phase 3: Injecting Professional Branding, Timestamps, and Tiered Logos"""
-        from datetime import datetime
-        import base64
-        
-        # 1. Capture Current Timestamp
+        """Phase 3: Assemble full report string."""
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        
-        # 2. LOGO INJECTION LOGIC
-        package = self.inputs.get('package', 'Basic')
-        custom_logo_file = self.inputs.get('custom_logo') 
+        package = self.inputs.get("package", "Basic")
+        custom_logo_file = self.inputs.get("custom_logo")
+
         logo_html = ""
-        
-        # Only allow custom logos for Pro, Enterprise, or Admin
         if package != "Basic" and custom_logo_file is not None:
             try:
-                # Read the file object from Streamlit and encode to base64
                 bytes_data = custom_logo_file.getvalue()
                 b64_logo = base64.b64encode(bytes_data).decode()
-                # We use HTML img tag for precise PDF layout control
-                logo_html = f'<div style="text-align: center;"><img src="data:image/png;base64,{b64_logo}" width="200"></div>'
-            except Exception as e:
+                logo_html = f'<div style="text-align:center;"><img src="data:image/png;base64,{b64_logo}" width="200"></div>'
+            except Exception:
                 logo_html = ""
         else:
-            # Branding for Basic plan
-            logo_html = "<div style='text-align: center;'>🛡️ <strong>SYSTEM GENERATED REPORT</strong></div>"
+            logo_html = "<div style='text-align:center;'>🛡️ <strong>SYSTEM GENERATED REPORT</strong></div>"
 
-        # 3. CONSTRUCT STAKEHOLDER HEADER
         header = f"""
 {logo_html}
 # {self.state.biz_name} Intelligence Report
 **Date:** {now} | **Location:** {self.state.location} | **Plan:** {package}
 ---
-        """
-        
-        # 4. ASSEMBLE MASTER REPORT FOR PDF
-        # We combine all results into one master string
-        self.state.full_report = f"{header}\n\n" \
-            f"## 🕵️ Market Analysis\n{self.state.market_data}\n\n" \
-            f"## 👔 Executive Strategy\n{self.state.strategist_brief}\n\n" \
-            f"## 🎨 Multichannel Creative\n{self.state.ad_drafts}\n\n" \
-            f"## ✍️ SEO Authority Article\n{self.state.seo_article}\n\n" \
-            f"## 🌐 Website Audit\n{self.state.website_audit}\n\n" \
-            f"## 📍 GEO Intelligence\n{self.state.geo_intel}\n\n" \
-            f"## 📱 Social Roadmap\n{self.state.social_plan}"
+        """.strip()
+
+        self.state.full_report = (
+            f"{header}\n\n"
+            f"## 🕵️ Market Analysis\n{self.state.market_data}\n\n"
+            f"## 🌐 Website Audit\n{self.state.website_audit}\n\n"
+            f"## 👔 Executive Strategy\n{self.state.strategist_brief}\n\n"
+            f"## 📣 Ads & Creative\n{self.state.competitor_ads}\n\n"
+            f"## ✍️ SEO Authority Article\n{self.state.seo_article}\n\n"
+            f"## 📍 GEO Intelligence\n{self.state.geo_intel}\n\n"
+            f"## 📱 Social Roadmap\n{self.state.social_plan}\n\n"
+            f"## 👁️ Visual Forensics\n{self.state.vision_intel}\n"
+        )
 
         return "branding_complete"
-        
-        # 1. STRATEGIST (The Lead Architect)
-        if "strategist" in self.active_swarm:
-            production_tasks.append(Task(
-                description=f"Develop a Master Marketing Strategy for {self.state.biz_name}.",
-                agent=self.agents["strategist"],
-                expected_output="A high-level executive strategic brief."
-            ))
 
-        # 2. CREATIVE (Ad Copy)
-        if "creative" in self.active_swarm:
-            production_tasks.append(Task(
-                description="Engineer a Multichannel Ad Suite (Google, Meta, Veo).",
-                agent=self.agents["creative"],
-                expected_output="Markdown table with platform-specific ad copy."
-            ))
 
-        # 3. SEO (The Blogger)
-        if "seo" in self.active_swarm:
-            production_tasks.append(Task(
-                description="Compose a technical SEO-optimized authority article.", 
-                agent=self.agents["seo_blogger"], 
-                expected_output="A 1000-word technical SEO article."
-            ))
-
-        # 4. SOCIAL (Viral Specialist)
-        if "social" in self.active_swarm:
-            production_tasks.append(Task(
-                description="Create a 30-day viral social media content calendar.", 
-                agent=self.agents["social_agent"], 
-                expected_output="Calendar with hooks and captions."
-            ))
-
-        # 5. GEO (Local Search)
-        if "geo" in self.active_swarm:
-            production_tasks.append(Task(
-                description="Develop a local GEO-fencing and GMB optimization plan.", 
-                agent=self.agents["geo_specialist"], 
-                expected_output="Local SEO and GEO intelligence report."
-            ))
-
-       # --- EXECUTION & ROBUST MAPPING ---
-        if production_tasks:
-            crew = Crew(
-                agents=[t.agent for t in production_tasks],
-                tasks=production_tasks,
-                process=Process.sequential
-            )
-            crew.kickoff()
-            
-            for task in production_tasks:
-                # Ensure we are capturing the raw string output correctly
-                out = str(task.output.raw)
-                desc = task.description.lower()
-                
-                # Broad Keyword Matching: If ANY of these words exist, save to the state
-                if any(word in desc for word in ["strategy", "master", "brief"]): 
-                    self.state.strategist_brief = out
-                elif any(word in desc for word in ["ad suite", "multichannel", "creative", "copy"]): 
-                    self.state.ad_drafts = out
-                elif any(word in desc for word in ["seo", "article", "blog", "content"]): 
-                    self.state.seo_article = out
-                elif any(word in desc for word in ["viral", "social", "calendar", "post"]): 
-                    self.state.social_plan = out
-                elif any(word in desc for word in ["geo", "local", "gmb", "map"]): 
-                    self.state.geo_intel = out
-            
-        return "execution_complete"
-
-# --- 5. EXECUTION WRAPPER ---
-def run_marketing_swarm(inputs):
-    # 1. Initialize and execute the Swarm Flow
+# ============================================================
+# 5) EXECUTION WRAPPER (CALLED BY app.py)
+# ============================================================
+def run_marketing_swarm(inputs: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Executes the Flow and returns a dict keyed exactly to app.py tab keys:
+    analyst, ads, creative, strategist, social, geo, audit, seo, full_report
+    """
     flow = MarketingSwarmFlow(inputs)
     flow.kickoff()
-    
-    # 2. Capture the active list from the UI (Folder 05 sync)
-    active_list = inputs.get('active_swarm', [])
 
-    # 3. YOUR FORMATTED STRING (Keep this for the master export)
-    # We use .get() here as well to prevent crashes if an agent is skipped
-    formatted_string_report = f"""
-# 🚀 {inputs.get('biz_name', 'Enterprise')} | EXECUTIVE INTELLIGENCE SUMMARY
-
-## 🔍 PHASE 1: MARKET DISCOVERY & AUDIT
-### Strategic Market Analysis
-{flow.state.market_data}
-
-### 👁️ Visual Forensics & Field Audit
-{flow.state.vision_intel}
-
-### Technical Website Audit
-{flow.state.website_audit}
-
-## 📝 PHASE 2: CONTENT & MULTI-PLATFORM ADS
-### Deployable Ad Suite (Google, FB, IG)
-{flow.state.ad_drafts}
-
-### Authority SEO Content
-{flow.state.seo_article}
-
-### Local GEO Dominance
-{flow.state.geo_intel}
-
-### Social Roadmap
-{flow.state.social_plan}
-
-## 🗓️ PHASE 3: 30-DAY ROI ROADMAP
-{flow.state.production_schedule}
-"""
-
-# 4. SYSTEMIC MAPPING (Final Alignment for Go-Live)
-    # This dictionary bridges your Backend State to your Frontend Tabs
+    # Bridge backend state -> frontend tabs
     master_data = {
-        "analyst": getattr(flow.state, 'market_data', "No analyst data found."),
-        "vision": getattr(flow.state, 'vision_intel', "No visual intel found."), 
-        "creative": getattr(flow.state, 'ad_drafts', "No creative drafts found."),
-        "strategist": getattr(flow.state, 'strategist_brief', "Final brief pending."),
-        "social": getattr(flow.state, 'social_plan', "Social roadmap not generated."),
-        "geo": getattr(flow.state, 'geo_intel', "GEO data not selected."),
-        "seo": getattr(flow.state, 'seo_article', "SEO Content not selected."),
-        "audit": getattr(flow.state, 'website_audit', "Website audit pending."),
-        "full_report": getattr(flow.state, 'full_report', "Full report generation failed.")
+        "analyst": getattr(flow.state, "market_data", "No analyst data found."),
+        # app key is 'ads' (we store combined ads+creative direction in competitor_ads)
+        "ads": getattr(flow.state, "competitor_ads", "No ad output found."),
+        # keep creative also available; if you want separate, change mapping strategy
+        "creative": getattr(flow.state, "competitor_ads", "No creative output found."),
+        "strategist": getattr(flow.state, "strategist_brief", "Final brief pending."),
+        "social": getattr(flow.state, "social_plan", "Social roadmap not generated."),
+        "geo": getattr(flow.state, "geo_intel", "GEO data not selected."),
+        "seo": getattr(flow.state, "seo_article", "SEO content not generated."),
+        "audit": getattr(flow.state, "website_audit", "Website audit not generated."),
+        "full_report": getattr(flow.state, "full_report", "Full report generation failed.")
     }
 
-    # 5. FILTERED RETURN
-    # We retrieve the list of buttons the user actually clicked
-    active_list = inputs.get('active_swarm', [])
-    
-    # We return the data for active agents + the full summary for the PDF
+    active_list = inputs.get("active_swarm", []) or []
+
+    # Return only requested keys + full_report
     return {k: v for k, v in master_data.items() if k in active_list or k == "full_report"}
