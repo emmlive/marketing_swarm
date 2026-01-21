@@ -23,7 +23,7 @@ from main import run_marketing_swarm
 # ============================================================
 st.set_page_config(page_title="Marketing Swarm Intelligence", layout="wide")
 DB_PATH = "breatheeasy.db"
-APP_LOGO_PATH = "Logo1.jpeg"  # ensure exists in repo
+APP_LOGO_PATH = "Logo1.jpeg"  # ensure this file exists in repo
 
 
 # ============================================================
@@ -41,7 +41,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
 
-    # --- CORE USERS (RBAC) ---
+    # Users (RBAC)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -54,13 +54,13 @@ def init_db():
             credits INTEGER DEFAULT 10,
             verified INTEGER DEFAULT 0,
             team_id TEXT DEFAULT 'HQ_001',
-            sso_provider TEXT DEFAULT '',            -- placeholder
-            mfa_enabled INTEGER DEFAULT 0,           -- placeholder
-            last_login TEXT DEFAULT ''               -- ISO string
+            sso_provider TEXT DEFAULT '',
+            mfa_enabled INTEGER DEFAULT 0,
+            last_login TEXT DEFAULT ''
         )
     """)
 
-    # --- TEAM LEADS (pipeline) ---
+    # Team pipeline
     cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,7 +73,7 @@ def init_db():
         )
     """)
 
-    # --- AUDIT / ACTIVITY LOGS (security + compliance) ---
+    # Activity logs
     cur.execute("""
         CREATE TABLE IF NOT EXISTS activity_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +87,7 @@ def init_db():
         )
     """)
 
-    # --- MARKETING: CAMPAIGNS ---
+    # Campaigns
     cur.execute("""
         CREATE TABLE IF NOT EXISTS campaigns (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,7 +105,7 @@ def init_db():
         )
     """)
 
-    # --- MARKETING: CONTENT / ASSET LIBRARY ---
+    # Assets library (small files only; cloud FS is ephemeral)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS assets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,7 +121,7 @@ def init_db():
         )
     """)
 
-    # --- WORKFLOW AUTOMATION ---
+    # Workflows
     cur.execute("""
         CREATE TABLE IF NOT EXISTS workflows (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,7 +135,7 @@ def init_db():
         )
     """)
 
-    # --- INTEGRATIONS ---
+    # Integrations
     cur.execute("""
         CREATE TABLE IF NOT EXISTS integrations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -147,7 +147,7 @@ def init_db():
         )
     """)
 
-    # --- BILLING ---
+    # Billing (placeholder)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS billing (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -289,12 +289,15 @@ def export_word(content, title):
 
 
 # ============================================================
-# 3) AUTHENTICATION (FUTURISTIC MAXIMIZED UI)
+# 3) AUTHENTICATION (FUTURISTIC / MAXIMIZED / CENTERED)
 # ============================================================
 def get_db_creds():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     try:
-        df = pd.read_sql_query("SELECT username, email, name, password FROM users WHERE is_active = 1", conn)
+        df = pd.read_sql_query(
+            "SELECT username, email, name, password FROM users WHERE is_active = 1",
+            conn
+        )
         return {
             "usernames": {
                 r["username"]: {
@@ -316,79 +319,87 @@ if "authenticator" not in st.session_state:
         st.secrets["cookie"]["key"],
         30
     )
+
 authenticator = st.session_state.authenticator
 
 
 def render_login_screen():
+    # Remove top padding to truly "maximize"
     st.markdown("""
     <style>
+      div.block-container { padding-top: 0.8rem !important; }
       .ms-bg {
         position: fixed; inset: 0;
-        background: radial-gradient(1200px 800px at 20% 20%, rgba(37,99,235,0.25), transparent 55%),
-                    radial-gradient(1200px 800px at 80% 30%, rgba(168,85,247,0.22), transparent 55%),
-                    radial-gradient(1200px 800px at 50% 80%, rgba(34,197,94,0.12), transparent 55%),
-                    linear-gradient(180deg, rgba(2,6,23,1), rgba(3,7,18,1));
+        background:
+          radial-gradient(1200px 800px at 20% 20%, rgba(37,99,235,0.25), transparent 55%),
+          radial-gradient(1200px 800px at 80% 30%, rgba(168,85,247,0.22), transparent 55%),
+          radial-gradient(1200px 800px at 50% 80%, rgba(34,197,94,0.12), transparent 55%),
+          linear-gradient(180deg, rgba(2,6,23,1), rgba(3,7,18,1));
         z-index: -1;
       }
-      .ms-shell { max-width: 1080px; margin: 0 auto; padding: 44px 18px; }
+      .ms-shell { max-width: 1100px; margin: 0 auto; padding: 36px 18px 24px; }
       .ms-hero {
-        border: 1px solid rgba(255,255,255,0.12);
+        border: 1px solid rgba(255,255,255,0.14);
         border-radius: 22px;
-        padding: 28px;
+        padding: 22px;
         background: rgba(255,255,255,0.06);
         backdrop-filter: blur(10px);
         box-shadow: 0 25px 70px rgba(0,0,0,0.35);
       }
-      .ms-title { font-size: 44px; font-weight: 900; letter-spacing: -0.02em; color: #fff; margin: 10px 0 6px; }
-      .ms-sub { color: rgba(255,255,255,0.82); font-size: 16px; margin: 0 0 18px; }
+      .ms-header { display:flex; gap:18px; align-items:center; }
+      .ms-title { font-size: 44px; font-weight: 900; letter-spacing: -0.02em; color: #fff; margin: 0; }
+      .ms-sub { color: rgba(255,255,255,0.82); font-size: 16px; margin: 6px 0 0; }
       .ms-chip { display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:999px;
-                 border:1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.90); font-size: 12px; }
-      .ms-grid { display:grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; margin-top: 16px; }
+                 border:1px solid rgba(255,255,255,0.16); color: rgba(255,255,255,0.90); font-size: 12px; }
+      .ms-grid { display:grid; grid-template-columns: 1.15fr 0.85fr; gap: 16px; margin-top: 16px; }
       @media (max-width: 980px) { .ms-grid { grid-template-columns: 1fr; } .ms-title{font-size:36px;} }
       .ms-panel {
-        border: 1px solid rgba(255,255,255,0.12);
+        border: 1px solid rgba(255,255,255,0.14);
         border-radius: 18px;
-        padding: 18px;
+        padding: 16px;
         background: rgba(255,255,255,0.05);
       }
-      .ms-kpi { display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+      .ms-kpi { display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
       @media (max-width: 980px) { .ms-kpi { grid-template-columns: 1fr; } }
       .ms-kpi-card {
-        border: 1px solid rgba(255,255,255,0.12);
+        border: 1px solid rgba(255,255,255,0.14);
         border-radius: 14px;
         padding: 12px;
         background: rgba(255,255,255,0.04);
       }
       .ms-kpi-card b { color:#fff; }
       .ms-kpi-card span { color: rgba(255,255,255,0.72); font-size: 12px; }
-      .ms-muted { color: rgba(255,255,255,0.72); }
+      .ms-muted { color: rgba(255,255,255,0.74); }
+      /* make tabs visible on dark bg */
       .stTabs [data-baseweb="tab"] { color: rgba(255,255,255,0.86) !important; }
+      .stTabs [aria-selected="true"] { color: #fff !important; }
     </style>
     <div class="ms-bg"></div>
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="ms-shell"><div class="ms-hero">', unsafe_allow_html=True)
 
-    top = st.columns([1, 3])
-    with top[0]:
-        if os.path.exists(APP_LOGO_PATH):
-            st.image(APP_LOGO_PATH, width=140)
-    with top[1]:
-        st.markdown('<div class="ms-chip">🧠 AI Marketing OS • Secure • Multi-Agent</div>', unsafe_allow_html=True)
-        st.markdown('<div class="ms-title">Marketing Swarm Intelligence</div>', unsafe_allow_html=True)
-        st.markdown('<div class="ms-sub">A state-of-the-art SaaS command center for multi-agent marketing research, creative production, governance, and executive reporting.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="ms-header">', unsafe_allow_html=True)
+    if os.path.exists(APP_LOGO_PATH):
+        st.image(APP_LOGO_PATH, width=120)
+    st.markdown('<div>', unsafe_allow_html=True)
+    st.markdown('<div class="ms-chip">🧠 AI Marketing OS • Secure • Multi-Agent • SaaS</div>', unsafe_allow_html=True)
+    st.markdown('<h1 class="ms-title">Marketing Swarm Intelligence</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="ms-sub">Future-ready command center for multi-agent marketing production, governance, and executive reporting.</p>', unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
     st.markdown("""
     <div class="ms-kpi">
       <div class="ms-kpi-card"><b>RBAC</b><br><span>Admin • Editor • Viewer</span></div>
-      <div class="ms-kpi-card"><b>Audit Trails</b><br><span>Compliance-ready activity logging</span></div>
+      <div class="ms-kpi-card"><b>Compliance</b><br><span>Audit trails & usage monitoring</span></div>
       <div class="ms-kpi-card"><b>Exports</b><br><span>Executive-ready Word/PDF</span></div>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="ms-grid">', unsafe_allow_html=True)
-    st.markdown('<div class="ms-panel">', unsafe_allow_html=True)
 
+    # LEFT: auth tabs
+    st.markdown('<div class="ms-panel">', unsafe_allow_html=True)
     auth_tabs = st.tabs(["🔑 Login", "✨ Pricing & Sign Up", "🤝 Join Team", "❓ Forget Password"])
 
     with auth_tabs[0]:
@@ -399,21 +410,18 @@ def render_login_screen():
     with auth_tabs[1]:
         st.markdown("### Plans")
         c1, c2, c3 = st.columns(3)
-
         with c1:
             st.markdown("#### 🥉 LITE")
             st.markdown("**$99/mo**")
             st.write("- 3 seats\n- Standard exports\n- System logo on reports")
             if st.button("Choose Lite", key="p_lite", use_container_width=True):
                 st.session_state.selected_tier = "Lite"
-
         with c2:
             st.markdown("#### 🥈 PRO")
             st.markdown("**$299/mo**")
             st.write("- 8 seats\n- Custom logo\n- Team modules")
             if st.button("Choose Pro", key="p_pro", use_container_width=True):
                 st.session_state.selected_tier = "Pro"
-
         with c3:
             st.markdown("#### 🥇 ENTERPRISE")
             st.markdown("**$999/mo**")
@@ -440,28 +448,29 @@ def render_login_screen():
     with auth_tabs[3]:
         authenticator.forgot_password(location="main")
 
-    st.markdown('</div>', unsafe_allow_html=True)  # panel
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Right panel: “future look” feature list
+    # RIGHT: future features list
     st.markdown("""
     <div class="ms-panel">
-      <h3 style="margin-top:0;color:#fff;">What you get</h3>
+      <h3 style="margin-top:0;color:#fff;">Platform Modules</h3>
       <div class="ms-muted">
         <ul>
-          <li><b>Multi-agent Swarm</b> for market research, creative, SEO, GEO, audit.</li>
-          <li><b>Governance</b> with RBAC, audit logs, and compliance controls.</li>
-          <li><b>Marketing Ops</b> campaigns, assets, workflows, integrations.</li>
-          <li><b>Analytics</b> adoption, performance tracking, segmentation-ready.</li>
+          <li><b>User & Access</b>: RBAC, onboarding/offboarding, SSO/MFA placeholders</li>
+          <li><b>Marketing Config</b>: campaigns, channels, content & asset library</li>
+          <li><b>Analytics</b>: dashboards, segmentation-ready reporting, usage analytics</li>
+          <li><b>Automation</b>: workflows, triggers, integrations</li>
+          <li><b>Security</b>: audit logs, compliance posture, monitoring</li>
         </ul>
       </div>
-      <hr style="border:0;border-top:1px solid rgba(255,255,255,0.12);margin:14px 0;">
+      <hr style="border:0;border-top:1px solid rgba(255,255,255,0.14);margin:14px 0;">
       <div class="ms-muted" style="font-size:12px;">
-        Tip: Use <b>Lite</b> for quick wins. Upgrade to unlock custom branding and advanced controls.
+        Tip: Sign in as <b>admin</b> to access full governance controls.
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown('</div></div></div>', unsafe_allow_html=True)  # grid/hero/shell
+    st.markdown('</div></div></div>', unsafe_allow_html=True)
 
 
 if not st.session_state.get("authentication_status"):
@@ -483,8 +492,8 @@ conn.close()
 current_user = user_row.get("username", "")
 current_role = str(user_row.get("role", "viewer")).strip().lower()
 current_tier = user_row.get("plan", "Lite")
-st.session_state["current_tier"] = current_tier
 team_id = user_row.get("team_id", "HQ_001")
+st.session_state["current_tier"] = current_tier
 
 # Update last login
 try:
@@ -512,6 +521,9 @@ def can(perm: str) -> bool:
     perms = PERMS.get(current_role, set())
     return ("*" in perms) or (perm in perms)
 
+def is_admin() -> bool:
+    return current_role == "admin"
+
 
 # ============================================================
 # 5) SIDEBAR + DYNAMIC GEO
@@ -538,22 +550,24 @@ def get_geo_data_with_custom():
                 merged[st_name].append(c)
     return merged
 
+
 with st.sidebar:
     st.success("Authenticated")
     if os.path.exists(APP_LOGO_PATH):
         st.image(APP_LOGO_PATH, width=120)
+
     st.subheader(f"Welcome, {user_row.get('name','User')}")
     st.caption(f"Role: **{current_role.upper()}** | Team: **{team_id}**")
     st.metric(f"{current_tier} Plan", f"{int(user_row.get('credits', 0))} Credits")
     st.divider()
 
     tier_limits = {"Lite": 3, "Pro": 8, "Enterprise": 8, "Unlimited": 8}
-    agent_limit = 8 if current_role == "admin" else tier_limits.get(str(current_tier), 3)
+    agent_limit = 8 if is_admin() else tier_limits.get(str(current_tier), 3)
 
     biz_name = st.text_input("🏢 Brand Name", placeholder="Acme Corp")
 
     custom_logo = None
-    if str(current_tier).strip().lower() == "lite" and current_role != "admin":
+    if str(current_tier).strip().lower() == "lite" and not is_admin():
         st.info("🪪 LITE: System logo used for executive exports.")
     else:
         custom_logo = st.file_uploader("📤 Custom Brand Logo (Pro+)", type=["png", "jpg", "jpeg"])
@@ -608,7 +622,8 @@ with st.sidebar:
             ("✍ SEO", "seo"),
         ]
         toggles = {k: st.toggle(t, value=st.session_state.get(f"tg_{k}", False), key=f"tg_{k}") for t, k in agent_map}
-        if current_role != "admin" and sum(1 for v in toggles.values() if v) > agent_limit:
+
+        if not is_admin() and sum(1 for v in toggles.values() if v) > agent_limit:
             st.warning(f"Selected more than {agent_limit}. Turn some off.")
 
     st.divider()
@@ -708,7 +723,7 @@ if run_btn:
 
 
 # ============================================================
-# 7) DASHBOARD TABS
+# 7) DASHBOARD TABS + ADMIN/TEAM INTEL FUNCTIONS
 # ============================================================
 AGENT_SPECS = {
     "analyst": "🕵️ **Market Analyst**: Scans competitors and identifies price-gaps.",
@@ -806,181 +821,138 @@ def render_veo():
     st.write("AI video generation assets appear here.")
 
 
-# ============================================================
-# ADMIN TAB: Full SaaS Admin Suite (as requested)
-# ============================================================
+def render_team_intel():
+    """
+    FIXES NameError:
+    This function exists and is safe to call from the Team Intel tab.
+    """
+    st.header("🤝 Team Intel")
+    st.caption("Team operations view: users, pipeline, campaigns, and usage (RBAC aware).")
+
+    t1, t2, t3, t4 = st.tabs(["👥 Team Users", "🧩 Pipeline", "📣 Campaigns", "📊 Usage"])
+
+    # Team Users
+    with t1:
+        if not (is_admin() or can("user.view")):
+            st.error("You don’t have permission to view users.")
+        else:
+            with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+                users_df = pd.read_sql_query(
+                    "SELECT username, name, email, role, is_active, plan, verified, team_id, last_login "
+                    "FROM users WHERE team_id = ? ORDER BY username",
+                    conn,
+                    params=(team_id,)
+                )
+            st.dataframe(users_df, use_container_width=True)
+
+    # Pipeline
+    with t2:
+        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+            if is_admin():
+                leads_df = pd.read_sql_query("SELECT * FROM leads ORDER BY id DESC LIMIT 200", conn)
+            else:
+                leads_df = pd.read_sql_query(
+                    "SELECT * FROM leads WHERE team_id = ? ORDER BY id DESC LIMIT 200",
+                    conn,
+                    params=(team_id,)
+                )
+        if leads_df.empty:
+            st.info("No leads yet.")
+        else:
+            st.dataframe(leads_df, use_container_width=True)
+
+    # Campaigns
+    with t3:
+        if not can("campaign.view") and not is_admin():
+            st.error("You don’t have permission to view campaigns.")
+        else:
+            with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+                camp_df = pd.read_sql_query(
+                    "SELECT id, name, channel, status, start_date, end_date, budget, owner, created_at, updated_at "
+                    "FROM campaigns WHERE team_id = ? ORDER BY id DESC",
+                    conn,
+                    params=(team_id,)
+                )
+            st.dataframe(camp_df, use_container_width=True)
+
+    # Usage
+    with t4:
+        if not (can("view.analytics") or is_admin()):
+            st.error("You don’t have permission to view analytics.")
+        else:
+            with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+                logs_df = pd.read_sql_query(
+                    "SELECT timestamp, actor, action_type, object_type, object_id "
+                    "FROM activity_logs WHERE team_id = ? ORDER BY id DESC LIMIT 300",
+                    conn,
+                    params=(team_id,)
+                )
+            st.dataframe(logs_df, use_container_width=True)
+
+
 def render_admin():
     st.header("⚙ Admin Console")
-    st.caption("Enterprise admin suite aligned with SaaS requirements.")
+    st.caption("SaaS administration suite: access management, marketing config, analytics, automation, security.")
+
+    if not is_admin():
+        st.error("Admin access required.")
+        return
 
     a_users, a_marketing, a_analytics, a_workflows, a_security = st.tabs([
-        "👥 User & Access",
-        "📣 Marketing Config",
+        "👥 User & Access Management",
+        "📣 Marketing Configuration",
         "📊 Analytics & Reporting",
         "🤖 Automation & Workflows",
         "🔐 Security & Compliance"
     ])
 
-    # --- USER & ACCESS MGMT ---
+    # --- User & Access Management (RBAC, SSO, MFA, onboarding/offboarding) ---
     with a_users:
         st.subheader("User & Access Management")
-        st.write("RBAC roles: Admin, Editor, Viewer. SSO/MFA shown as placeholders.")
-        if current_role != "admin":
-            st.info("Admin-only view.")
-        else:
-            with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-                df = pd.read_sql_query(
-                    "SELECT username, name, email, role, is_active, plan, verified, team_id, mfa_enabled, sso_provider, last_login "
-                    "FROM users ORDER BY username",
-                    conn
-                )
-            st.dataframe(df, use_container_width=True)
+        st.caption("RBAC (Admin/Editor/Viewer), onboarding/offboarding, and SSO/MFA placeholders.")
 
-            st.write("---")
-            c1, c2 = st.columns(2)
-
-            with c1:
-                st.markdown("### ➕ Onboarding / Provision User")
-                with st.form("admin_create_user"):
-                    u = st.text_input("Username")
-                    n = st.text_input("Full Name")
-                    e = st.text_input("Email")
-                    r = st.selectbox("Role", ["viewer", "editor", "admin"])
-                    p = st.selectbox("Plan", ["Lite", "Pro", "Enterprise", "Unlimited"])
-                    active = st.checkbox("Active", value=True)
-                    mfa = st.checkbox("MFA Enabled (placeholder)", value=False)
-                    sso = st.selectbox("SSO Provider (placeholder)", ["", "Google", "Microsoft", "Okta"])
-                    pw = st.text_input("Temp Password", type="password")
-                    submit = st.form_submit_button("Create / Update")
-                    if submit:
-                        if not u.strip() or not pw.strip():
-                            st.error("Username and Temp Password required.")
-                        else:
-                            hashed = stauth.Hasher.hash(pw.strip())
-                            with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-                                conn.execute("""
-                                    INSERT INTO users (username, name, email, password, role, is_active, plan, verified, team_id, mfa_enabled, sso_provider, last_login)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, '')
-                                    ON CONFLICT(username) DO UPDATE SET
-                                        name=excluded.name,
-                                        email=excluded.email,
-                                        password=excluded.password,
-                                        role=excluded.role,
-                                        is_active=excluded.is_active,
-                                        plan=excluded.plan,
-                                        mfa_enabled=excluded.mfa_enabled,
-                                        sso_provider=excluded.sso_provider,
-                                        team_id=excluded.team_id
-                                """, (u.strip(), n.strip(), e.strip(), hashed, r, 1 if active else 0, p, team_id, 1 if mfa else 0, sso))
-                                conn.commit()
-                            log_event(current_user, "user.onboard", "user", u.strip(), f"role={r},active={active}", team_id)
-                            st.success("User created/updated.")
-                            st.rerun()
-
-            with c2:
-                st.markdown("### 📴 Offboarding / Deactivate User")
-                target = st.selectbox("Select user", df["username"].tolist(), key="admin_off_user")
-                if st.button("Deactivate"):
-                    if target == current_user:
-                        st.error("You cannot deactivate yourself.")
-                    else:
-                        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-                            conn.execute("UPDATE users SET is_active = 0 WHERE username = ?", (target,))
-                            conn.commit()
-                        log_event(current_user, "user.offboard", "user", target, "deactivated", team_id)
-                        st.success("User deactivated.")
-                        st.rerun()
-
-    # --- MARKETING CONFIG ---
-    with a_marketing:
-        st.subheader("Marketing Configuration")
-        st.caption("Campaign setup, content, channels, and asset controls.")
-        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-            camp = pd.read_sql_query(
-                "SELECT id, name, channel, status, start_date, end_date, budget, owner, created_at, updated_at FROM campaigns ORDER BY id DESC",
-                conn
-            )
-            assets = pd.read_sql_query(
-                "SELECT id, name, asset_type, mime_type, size_bytes, owner, created_at, tags FROM assets ORDER BY id DESC",
-                conn
-            )
-        st.markdown("#### Campaigns")
-        st.dataframe(camp, use_container_width=True)
-        st.markdown("#### Assets")
-        st.dataframe(assets, use_container_width=True)
-
-    # --- ANALYTICS & REPORTING ---
-    with a_analytics:
-        st.subheader("Analytics & Reporting")
-        st.caption("Performance tracking, segmentation-ready dashboards, and usage analytics.")
-        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-            logs = pd.read_sql_query("SELECT action_type FROM activity_logs ORDER BY id DESC LIMIT 2000", conn)
-            camps = pd.read_sql_query("SELECT status, channel, budget FROM campaigns", conn)
-
-        if not logs.empty:
-            st.markdown("#### Usage Analytics")
-            st.bar_chart(logs["action_type"].value_counts().head(12))
-        else:
-            st.info("No usage data yet.")
-
-        if not camps.empty:
-            st.markdown("#### Campaign Status")
-            st.bar_chart(camps["status"].value_counts())
-            st.markdown("#### Channel Mix")
-            st.bar_chart(camps["channel"].value_counts())
-        else:
-            st.info("No campaigns yet.")
-
-    # --- AUTOMATION & WORKFLOWS ---
-    with a_workflows:
-        st.subheader("Automation & Workflows")
-        st.caption("Journeys, triggers, integrations, and approvals (baseline).")
-        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-            wf = pd.read_sql_query("SELECT id, name, trigger, is_enabled, owner, created_at FROM workflows ORDER BY id DESC", conn)
-            integ = pd.read_sql_query("SELECT id, name, status, details, updated_at FROM integrations ORDER BY id DESC", conn)
-        st.markdown("#### Workflows")
-        st.dataframe(wf, use_container_width=True)
-        st.markdown("#### Integrations")
-        st.dataframe(integ, use_container_width=True)
-
-    # --- SECURITY & COMPLIANCE ---
-    with a_security:
-        st.subheader("Security & Compliance")
-        st.caption("Audit logs, data security posture, and usage monitoring.")
         with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
             df = pd.read_sql_query(
-                "SELECT timestamp, actor, action_type, object_type, object_id, details, team_id FROM activity_logs ORDER BY id DESC LIMIT 400",
+                "SELECT username, name, email, role, is_active, plan, verified, team_id, sso_provider, mfa_enabled, last_login "
+                "FROM users ORDER BY username",
                 conn
             )
         st.dataframe(df, use_container_width=True)
-        st.info("SSO/MFA are placeholders here. For production SaaS, integrate an identity provider (Okta/AzureAD/Google) and enforce MFA at the IdP.")
 
+        st.write("---")
+        c1, c2 = st.columns(2)
 
-# ---- Build tab labels ----
-agent_titles = [a[0] for a in agent_map]
-tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel", "⚙ Admin"]
+        with c1:
+            st.markdown("### ➕ Onboard / Provision User")
+            with st.form("admin_create_user"):
+                u = st.text_input("Username")
+                n = st.text_input("Full Name")
+                e = st.text_input("Email")
+                r = st.selectbox("Role", ["viewer", "editor", "admin"])
+                p = st.selectbox("Plan", ["Lite", "Pro", "Enterprise", "Unlimited"])
+                active = st.checkbox("Active", value=True)
+                mfa = st.checkbox("MFA Enabled (placeholder)", value=False)
+                sso = st.selectbox("SSO Provider (placeholder)", ["", "Google", "Microsoft", "Okta"])
+                pw = st.text_input("Temp Password", type="password")
+                submit = st.form_submit_button("Create / Update")
 
-tabs_obj = st.tabs(tab_labels)
-TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
-
-with TAB["📖 Guide"]:
-    render_guide()
-
-for (title, key) in agent_map:
-    with TAB[title]:
-        render_agent_seat(title, key)
-
-with TAB["👁️ Vision"]:
-    render_vision()
-
-with TAB["🎬 Veo Studio"]:
-    render_veo()
-
-with TAB["🤝 Team Intel"]:
-    # Team Intel can show team modules; Admin is the governance console
-    # Keeping Team Intel as a lighter ops view; Admin as full governance.
-    st.info("Team Intel modules are available in Admin Console. Use Admin for governance, RBAC, and compliance.")
-    render_team_intel()
-
-with TAB["⚙ Admin"]:
-    render_admin()
+                if submit:
+                    if not u.strip() or not pw.strip():
+                        st.error("Username and Temp Password required.")
+                    else:
+                        hashed = stauth.Hasher.hash(pw.strip())
+                        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+                            conn.execute("""
+                                INSERT INTO users (username, name, email, password, role, is_active, plan, verified, team_id, mfa_enabled, sso_provider, last_login)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, '')
+                                ON CONFLICT(username) DO UPDATE SET
+                                    name=excluded.name,
+                                    email=excluded.email,
+                                    password=excluded.password,
+                                    role=excluded.role,
+                                    is_active=excluded.is_active,
+                                    plan=excluded.plan,
+                                    mfa_enabled=excluded.mfa_enabled,
+                                    sso_provider=excluded.sso_provider,
+                                    team_id=excluded.team_id
+                            """, (u.strip(), n.strip(), e.strip(), hashed, r, 1 if active else 0
