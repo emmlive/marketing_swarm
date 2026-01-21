@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import base64
 import unicodedata
 import sqlite3
 from io import BytesIO
@@ -10,6 +11,7 @@ import streamlit as st
 import pandas as pd
 import streamlit_authenticator as stauth
 from docx import Document
+from docx.shared import Inches
 from fpdf import FPDF
 import fpdf
 
@@ -20,16 +22,14 @@ from main import run_marketing_swarm
 # 0) CONFIG
 # ============================================================
 st.set_page_config(page_title="Marketing Swarm Intelligence", layout="wide")
+DB_PATH = "breatheeasy.db"
+APP_LOGO_PATH = "Logo1.jpeg"   # make sure this file exists in your repo
 
 
 # ============================================================
 # 1) DATABASE: SCHEMA + ADMIN SEED (ONE TIME)
 # ============================================================
-DB_PATH = "breatheeasy.db"
-
-
 def ensure_column(conn: sqlite3.Connection, table: str, col: str, col_def: str):
-    """Adds a column if it doesn't exist."""
     cur = conn.cursor()
     cur.execute(f"PRAGMA table_info({table})")
     cols = {row[1] for row in cur.fetchall()}
@@ -41,7 +41,6 @@ def init_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
 
-    # USERS: single, consistent schema (username PRIMARY KEY)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -49,14 +48,13 @@ def init_db():
             name TEXT,
             password TEXT,
             role TEXT DEFAULT 'user',
-            plan TEXT DEFAULT 'Basic',
+            plan TEXT DEFAULT 'Lite',
             credits INTEGER DEFAULT 10,
             verified INTEGER DEFAULT 0,
             team_id TEXT DEFAULT 'HQ_001'
         )
     """)
 
-    # LEADS: for Team Intel
     cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +67,6 @@ def init_db():
         )
     """)
 
-    # AUDIT LOGS: admin forensics
     cur.execute("""
         CREATE TABLE IF NOT EXISTS master_audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,9 +79,8 @@ def init_db():
         )
     """)
 
-    # Migrations / safety
     ensure_column(conn, "users", "role", "TEXT DEFAULT 'user'")
-    ensure_column(conn, "users", "plan", "TEXT DEFAULT 'Basic'")
+    ensure_column(conn, "users", "plan", "TEXT DEFAULT 'Lite'")
     ensure_column(conn, "users", "credits", "INTEGER DEFAULT 10")
     ensure_column(conn, "users", "verified", "INTEGER DEFAULT 0")
     ensure_column(conn, "users", "team_id", "TEXT DEFAULT 'HQ_001'")
@@ -92,7 +88,7 @@ def init_db():
     ensure_column(conn, "leads", "team_id", "TEXT")
     ensure_column(conn, "leads", "timestamp", "DATETIME DEFAULT CURRENT_TIMESTAMP")
 
-    # Seed/refresh admin record
+    # Seed admin
     admin_pw = stauth.Hasher.hash("admin123")
     cur.execute("""
         INSERT OR REPLACE INTO users
@@ -143,11 +139,29 @@ def nuclear_ascii(text):
     return text
 
 
+def _should_use_lite_logo() -> bool:
+    plan = st.session_state.get("current_tier", "") or ""
+    return str(plan).strip().lower() == "lite"
+
+
 def export_pdf(content, title):
+    """
+    Executive-ready PDF:
+    - Adds Logo1.jpeg header for LITE plan
+    - Sanitizes content for FPDF
+    """
     try:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=15)
+
+        # Logo for LITE
+        if _should_use_lite_logo() and os.path.exists(APP_LOGO_PATH):
+            try:
+                pdf.image(APP_LOGO_PATH, x=60, y=10, w=90)
+                pdf.ln(30)
+            except Exception:
+                pass
 
         pdf.set_font("Arial", "B", 16)
         safe_title = nuclear_ascii(title)
@@ -172,16 +186,28 @@ def export_pdf(content, title):
 
 
 def export_word(content, title):
+    """
+    Executive-ready Word:
+    - Adds Logo1.jpeg header for LITE plan
+    """
     doc = Document()
+
+    if _should_use_lite_logo() and os.path.exists(APP_LOGO_PATH):
+        try:
+            doc.add_picture(APP_LOGO_PATH, width=Inches(2.5))
+        except Exception:
+            pass
+
     doc.add_heading(f"Intelligence Brief: {title}", 0)
     doc.add_paragraph(str(content))
+
     bio = BytesIO()
     doc.save(bio)
     return bio.getvalue()
 
 
 # ============================================================
-# 3) AUTHENTICATION (SINGLE FLOW)
+# 3) AUTHENTICATION (SINGLE FLOW) + PRO LOOK
 # ============================================================
 def get_db_creds():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -212,89 +238,128 @@ if "authenticator" not in st.session_state:
 authenticator = st.session_state.authenticator
 
 
+def _centered_card_start():
+    st.markdown("""
+    <style>
+      .auth-wrap { max-width: 980px; margin: 0 auto; }
+      .auth-card {
+        border: 1px solid rgba(0,0,0,0.08);
+        border-radius: 16px;
+        padding: 22px 22px;
+        background: white;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+      }
+      @media (prefers-color-scheme: dark) {
+        .auth-card { background: #0b1220; border-color: rgba(255,255,255,0.10); }
+      }
+      .auth-title { font-size: 30px; font-weight: 700; margin: 6px 0 2px 0; }
+      .auth-sub { opacity: 0.8; margin-bottom: 18px; }
+      .tier-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+      @media (max-width: 900px) { .tier-grid { grid-template-columns: 1fr; } }
+      .tier {
+        border: 1px solid rgba(0,0,0,0.08);
+        border-radius: 14px;
+        padding: 16px 16px;
+        background: rgba(255,255,255,0.6);
+      }
+      @media (prefers-color-scheme: dark) {
+        .tier { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.10); }
+      }
+      .tier h3 { margin: 0 0 6px 0; }
+      .tier .price { font-size: 28px; font-weight: 800; margin: 0 0 6px 0; }
+      .pill { display:inline-block; font-size:12px; padding: 2px 10px; border-radius: 999px; background:#2563EB; color:white; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="auth-wrap"><div class="auth-card">', unsafe_allow_html=True)
+
+
+def _centered_card_end():
+    st.markdown("</div></div>", unsafe_allow_html=True)
+
+
 if not st.session_state.get("authentication_status"):
-    st.image("Logo1.jpeg", width=220)
-    st.title("🚀 Marketing Swarm Intelligence")
-    st.markdown("---")
+    cols = st.columns([1, 2, 1])
+    with cols[1]:
+        _centered_card_start()
 
-    auth_tabs = st.tabs(["🔑 Login", "✨ Pricing & Sign Up", "🤝 Join Team", "❓ Forget Password"])
+        if os.path.exists(APP_LOGO_PATH):
+            st.image(APP_LOGO_PATH, width=160)
+        st.markdown('<div class="auth-title">Marketing Swarm Intelligence</div>', unsafe_allow_html=True)
+        st.markdown('<div class="auth-sub">Login to launch agents, generate executive briefs, and export client-ready reports.</div>', unsafe_allow_html=True)
 
-    with auth_tabs[0]:
-        authenticator.login(location="main")
-        if st.session_state.get("authentication_status"):
-            st.rerun()
+        auth_tabs = st.tabs(["🔑 Login", "✨ Pricing & Sign Up", "🤝 Join Team", "❓ Forget Password"])
 
-    with auth_tabs[1]:
-        st.subheader("Select Your Swarm Package")
-        p1, p2, p3 = st.columns(3)
+        # --- Login ---
+        with auth_tabs[0]:
+            authenticator.login(location="main")
+            if st.session_state.get("authentication_status"):
+                st.rerun()
 
-        with p1:
-            st.markdown("""
-            <div style="border:1px solid #E5E7EB; padding:20px; border-radius:10px; text-align:center;">
-                <h3>🥉 LITE</h3>
-                <h2 style="color:#2563EB;">$99<small>/mo</small></h2>
-                <p><i>The "Solopreneur" Swarm</i></p>
-                <ul style="text-align:left; font-size:14px;">
-                    <li>3 Specialized Agents</li>
-                    <li>Standard PDF Reports</li>
-                    <li>Single User Access</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("Choose Lite", key="p_lite", use_container_width=True):
-                st.session_state.selected_tier = "lite"
+        # --- Pricing & Sign Up ---
+        with auth_tabs[1]:
+            st.markdown("### Choose a plan")
+            st.markdown('<div class="tier-grid">', unsafe_allow_html=True)
 
-        with p2:
-            st.markdown("""
-            <div style="border:2px solid #2563EB; padding:20px; border-radius:10px; text-align:center; background-color:#F8FAFC;">
-                <span style="background-color:#2563EB; color:white; padding:2px 10px; border-radius:5px; font-size:12px;">MOST POPULAR</span>
-                <h3>🥈 PRO</h3>
-                <h2 style="color:#2563EB;">$299<small>/mo</small></h2>
-                <p><i>The "Growth" Swarm</i></p>
-                <ul style="text-align:left; font-size:14px;">
-                    <li><b>All 8 AI Agents</b></li>
-                    <li>White-label Word/PDF</li>
-                    <li>Team Kanban Pipeline</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("Choose Pro", key="p_pro", use_container_width=True):
-                st.session_state.selected_tier = "pro"
+            cA, cB, cC = st.columns(3)
 
-        with p3:
-            st.markdown("""
-            <div style="border:1px solid #E5E7EB; padding:20px; border-radius:10px; text-align:center;">
-                <h3>🥇 ENTERPRISE</h3>
-                <h2 style="color:#2563EB;">$999<small>/mo</small></h2>
-                <p><i>The "Global" Swarm</i></p>
-                <ul style="text-align:left; font-size:14px;">
-                    <li>Unlimited Swarms</li>
-                    <li>Admin Forensics Hub</li>
-                    <li>API & Custom Training</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("Choose Enterprise", key="p_ent", use_container_width=True):
-                st.session_state.selected_tier = "enterprise"
+            # LITE
+            with cA:
+                st.markdown('<div class="tier">', unsafe_allow_html=True)
+                st.markdown("#### 🥉 LITE")
+                st.markdown('<div class="price">$99 <span style="font-size:14px; font-weight:600;">/mo</span></div>', unsafe_allow_html=True)
+                st.write("- 3 Specialized Agents\n- Standard PDF/Word\n- Single user access\n- **Executive logo header included**")
+                if st.button("Choose Lite", key="p_lite", use_container_width=True):
+                    st.session_state.selected_tier = "Lite"
+                st.markdown("</div>", unsafe_allow_html=True)
 
-        if st.session_state.get("selected_tier"):
-            st.info(f"✨ You've selected **{st.session_state.selected_tier.upper()}**. Complete registration below:")
-            try:
-                if authenticator.register_user(location="main"):
-                    st.success("Account created! Switch to Login tab.")
-            except Exception as e:
-                st.error(f"Registration error: {e}")
+            # PRO
+            with cB:
+                st.markdown('<div class="tier">', unsafe_allow_html=True)
+                st.markdown("#### 🥈 PRO  <span class='pill'>MOST POPULAR</span>", unsafe_allow_html=True)
+                st.markdown('<div class="price">$299 <span style="font-size:14px; font-weight:600;">/mo</span></div>', unsafe_allow_html=True)
+                st.write("- All 8 agents\n- White-label exports\n- Team pipeline\n- Custom logo allowed")
+                if st.button("Choose Pro", key="p_pro", use_container_width=True):
+                    st.session_state.selected_tier = "Pro"
+                st.markdown("</div>", unsafe_allow_html=True)
 
-    with auth_tabs[2]:
-        st.subheader("🤝 Request Enterprise Team Access")
-        with st.form("team_request_form"):
-            team_id_req = st.text_input("Enterprise Team ID", placeholder="e.g., HQ_NORTH_2026")
-            reason = st.text_area("Purpose of Access", placeholder="e.g., Regional Marketing Analyst")
-            if st.form_submit_button("Submit Access Request", use_container_width=True):
-                st.success(f"Request for Team {team_id_req} logged. Status: PENDING.")
+            # ENTERPRISE
+            with cC:
+                st.markdown('<div class="tier">', unsafe_allow_html=True)
+                st.markdown("#### 🥇 ENTERPRISE")
+                st.markdown('<div class="price">$999 <span style="font-size:14px; font-weight:600;">/mo</span></div>', unsafe_allow_html=True)
+                st.write("- Unlimited swarms\n- Admin forensics\n- API & custom training\n- Priority support")
+                if st.button("Choose Enterprise", key="p_ent", use_container_width=True):
+                    st.session_state.selected_tier = "Enterprise"
+                st.markdown("</div>", unsafe_allow_html=True)
 
-    with auth_tabs[3]:
-        authenticator.forgot_password(location="main")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            if st.session_state.get("selected_tier"):
+                st.info(f"Selected: **{st.session_state.selected_tier}** — complete registration below.")
+                try:
+                    created = authenticator.register_user(location="main")
+                    if created:
+                        # NOTE: streamlit_authenticator doesn't reliably expose the new username across versions.
+                        # Users can log in right away; plan assignment can be handled later if needed.
+                        st.success("Account created! Switch to **Login** tab to sign in.")
+                except Exception as e:
+                    st.error(f"Registration error: {e}")
+
+        # --- Join Team ---
+        with auth_tabs[2]:
+            st.subheader("🤝 Request Enterprise Team Access")
+            with st.form("team_request_form"):
+                team_id_req = st.text_input("Enterprise Team ID", placeholder="e.g., HQ_NORTH_2026")
+                reason = st.text_area("Purpose of Access", placeholder="e.g., Regional Marketing Analyst")
+                if st.form_submit_button("Submit Access Request", use_container_width=True):
+                    st.success(f"Request for Team {team_id_req} logged. Status: PENDING.")
+
+        # --- Forgot Password ---
+        with auth_tabs[3]:
+            authenticator.forgot_password(location="main")
+
+        _centered_card_end()
 
     st.stop()
 
@@ -313,12 +378,16 @@ conn.close()
 role = str(user_row.get("role", "")).strip().lower()
 is_admin = role == "admin"
 
+current_tier = user_row.get("plan", "Lite")
+st.session_state["current_tier"] = current_tier  # used by export functions
+
 
 # ============================================================
-# 5) SIDEBAR CONTROLS
+# 5) SIDEBAR CONTROLS (DYNAMIC GEO)
 # ============================================================
 @st.cache_data(ttl=3600)
 def get_geo_data():
+    # base list
     return {
         "Alabama": ["Birmingham", "Huntsville", "Mobile"],
         "Arizona": ["Phoenix", "Scottsdale", "Tucson"],
@@ -329,31 +398,72 @@ def get_geo_data():
     }
 
 
+def get_geo_data_with_custom():
+    base = get_geo_data()
+    custom = st.session_state.get("custom_geo", {})
+    # custom structure: {state: [cities]}
+    merged = dict(base)
+    for st_name, cities in custom.items():
+        if st_name not in merged:
+            merged[st_name] = []
+        for c in cities:
+            if c not in merged[st_name]:
+                merged[st_name].append(c)
+    return merged
+
+
 with st.sidebar:
     st.success("Authenticated")
-    st.image("Logo1.jpeg", width=120)
+    if os.path.exists(APP_LOGO_PATH):
+        st.image(APP_LOGO_PATH, width=120)
     st.subheader(f"Welcome, {user_row.get('name','User')}")
 
-    current_tier = user_row.get("plan", "Basic")
     current_credits = int(user_row.get("credits", 0))
-
     st.metric(f"{current_tier} Plan", f"{current_credits} Credits")
     st.divider()
 
-    tier_limits = {"Basic": 3, "Pro": 5, "Enterprise": 8, "Unlimited": 8}
-    agent_limit = 8 if is_admin else tier_limits.get(current_tier, 3)
+    tier_limits = {"Lite": 3, "Pro": 8, "Enterprise": 8, "Unlimited": 8}
+    agent_limit = 8 if is_admin else tier_limits.get(str(current_tier), 3)
 
     biz_name = st.text_input("🏢 Brand Name", placeholder="Acme Corp")
 
+    # Logo policy: Lite shows system logo in exports; Pro+ can upload custom
     custom_logo = None
-    if current_tier == "Basic" and not is_admin:
-        st.info("💡 Basic Plan: System branding active. Upgrade for custom logos.")
+    if str(current_tier).strip().lower() in {"lite"} and not is_admin:
+        st.info("🪪 LITE: System logo + executive header will be used in exports.")
     else:
         custom_logo = st.file_uploader("📤 Custom Brand Logo (Pro+)", type=["png", "jpg", "jpeg"])
 
-    geo_dict = get_geo_data()
-    selected_state = st.selectbox("🎯 Target State", sorted(geo_dict.keys()))
-    selected_city = st.selectbox("🏙️ Target City", sorted(geo_dict[selected_state]))
+    # Dynamic GEO
+    geo_dict = get_geo_data_with_custom()
+    states = sorted(list(geo_dict.keys())) + ["➕ Add new state..."]
+    selected_state = st.selectbox("🎯 Target State", states)
+
+    if selected_state == "➕ Add new state...":
+        new_state = st.text_input("New State Name")
+        if st.button("Add State"):
+            if new_state.strip():
+                custom_geo = st.session_state.get("custom_geo", {})
+                custom_geo.setdefault(new_state.strip(), [])
+                st.session_state["custom_geo"] = custom_geo
+                st.rerun()
+        selected_state = sorted(get_geo_data_with_custom().keys())[0]
+
+    cities = sorted(geo_dict.get(selected_state, [])) + ["➕ Add new city..."]
+    selected_city = st.selectbox("🏙️ Target City", cities)
+
+    if selected_city == "➕ Add new city...":
+        new_city = st.text_input("New City Name")
+        if st.button("Add City"):
+            if new_city.strip():
+                custom_geo = st.session_state.get("custom_geo", {})
+                custom_geo.setdefault(selected_state, [])
+                if new_city.strip() not in custom_geo[selected_state]:
+                    custom_geo[selected_state].append(new_city.strip())
+                st.session_state["custom_geo"] = custom_geo
+                st.rerun()
+        selected_city = (geo_dict.get(selected_state) or [""])[0]
+
     full_loc = f"{selected_city}, {selected_state}"
 
     st.divider()
@@ -379,15 +489,13 @@ with st.sidebar:
         ]
 
         toggles = {}
-        active_count = sum(1 for _, k in agent_map if st.session_state.get(f"tg_{k}", False))
-
+        # use current stored toggles
         for title, key in agent_map:
-            disable_toggle = (not is_admin) and active_count >= agent_limit and not st.session_state.get(f"tg_{key}", False)
-            default_val = True if key in ["analyst", "audit", "seo"] and active_count < 3 else st.session_state.get(f"tg_{key}", False)
-            toggles[key] = st.toggle(title, value=default_val, disabled=disable_toggle, key=f"tg_{key}")
+            toggles[key] = st.toggle(title, value=st.session_state.get(f"tg_{key}", False), key=f"tg_{key}")
 
-        if not is_admin and sum(1 for v in toggles.values() if v) >= agent_limit:
-            st.warning(f"Agent limit reached for {current_tier} plan.")
+        # enforce limits for non-admin by warning only (no hard disable, so UX stays smooth)
+        if not is_admin and sum(1 for v in toggles.values() if v) > agent_limit:
+            st.warning(f"Selected more than {agent_limit} agents. Please turn some off.")
 
     st.divider()
 
@@ -410,13 +518,9 @@ with st.sidebar:
 
 
 # ============================================================
-# 6) RUN SWARM (BATCHED TO AVOID 429 RATE LIMIT)
+# 6) RUN SWARM (BATCHED TO AVOID 429)
 # ============================================================
 def run_swarm_in_batches(base_payload: dict, agents: list[str], batch_size: int = 3, pause_sec: int = 20, max_retries: int = 2):
-    """
-    Runs the swarm in batches to avoid Gemini 429 RESOURCE_EXHAUSTED errors.
-    Merges partial reports into a single dict.
-    """
     final_report: dict = {}
     total = len(agents)
 
@@ -442,8 +546,6 @@ def run_swarm_in_batches(base_payload: dict, agents: list[str], batch_size: int 
                     st.warning(f"⚠️ Rate limited (429). Waiting {wait}s then retrying this batch...")
                     time.sleep(wait)
                     continue
-
-                # non-429 or too many retries
                 raise
 
         if start + batch_size < total:
@@ -458,47 +560,54 @@ if run_btn:
         st.error("🚨 Please enter a Brand Name before launching.")
     else:
         active_agents = [k for k, v in toggles.items() if v]
+        if not active_agents:
+            st.warning("Select at least one agent before launching.")
+        else:
+            # NOTE: The package name is used by main.py branding logic
+            package_name = str(current_tier)
 
-        base_payload = {
-            "city": full_loc,
-            "biz_name": biz_name,
-            "package": current_tier,
-            "custom_logo": custom_logo,
-            "directives": agent_info
-        }
+            base_payload = {
+                "city": full_loc,
+                "biz_name": biz_name,
+                "package": package_name,
+                "custom_logo": custom_logo,
+                "directives": agent_info,
+                # optional: if you later collect a website URL:
+                # "url": website_url,
+            }
 
-        with st.status("🚀 Initializing Swarm Intelligence...", expanded=True) as status:
-            st.write(f"📡 Preparing {len(active_agents)} agents for {biz_name} (batched)...")
+            with st.status("🚀 Initializing Swarm Intelligence...", expanded=True) as status:
+                st.write(f"📡 Preparing {len(active_agents)} agents for {biz_name} (batched)…")
 
-            try:
-                report = run_swarm_in_batches(
-                    base_payload=base_payload,
-                    agents=active_agents,
-                    batch_size=3,      # adjust to 2-4 depending on your quota
-                    pause_sec=20,      # adjust to 10-30 depending on your quota
-                    max_retries=2
-                )
+                try:
+                    report = run_swarm_in_batches(
+                        base_payload=base_payload,
+                        agents=active_agents,
+                        batch_size=3,
+                        pause_sec=20,
+                        max_retries=2
+                    )
 
-                st.session_state.report = report
-                st.session_state.gen = True
+                    st.session_state.report = report
+                    st.session_state.gen = True
 
-                status.update(label="✅ Swarm Coordination Complete!", state="complete", expanded=False)
-                st.rerun()
+                    status.update(label="✅ Swarm Coordination Complete!", state="complete", expanded=False)
+                    st.rerun()
 
-            except Exception as e:
-                st.session_state.report = {}
-                st.session_state.gen = False
-                status.update(label="❌ Swarm failed", state="error", expanded=True)
-                st.error(f"Swarm Error: {e}")
+                except Exception as e:
+                    st.session_state.report = {}
+                    st.session_state.gen = False
+                    status.update(label="❌ Swarm failed", state="error", expanded=True)
+                    st.error(f"Swarm Error: {e}")
 
 
 # ============================================================
-# 7) DASHBOARD: TABS
+# 7) DASHBOARD: TABS + SOCIAL PUSH BUTTONS
 # ============================================================
 AGENT_SPECS = {
     "analyst": "🕵️ **Market Analyst**: Scans competitors and identifies price-gaps.",
     "ads": "📺 **Ads Architect**: Generates high-converting copy for Meta/Google.",
-    "creative": "🎨 **Creative Director**: Provides high-fidelity image prompts.",
+    "creative": "🎨 **Creative Director**: Provides high-fidelity image prompts & creative direction.",
     "strategist": "📝 **Swarm Strategist**: Builds a 30-day CEO-level ROI roadmap.",
     "social": "📱 **Social Engineer**: Crafts engagement-driven posts.",
     "geo": "📍 **Geo-Fencer**: Optimizes local map rankings.",
@@ -531,12 +640,32 @@ def show_deploy_guide(title: str, key: str):
     )
 
 
+def render_social_push_panel(context_key: str):
+    """
+    Social push links (opens external platform tools).
+    Shown for Ads/Creative/Social tabs after content exists.
+    """
+    st.markdown("### 🚀 Publish / Push")
+    st.caption("Open the platform tools below to publish or deploy the generated assets.")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.link_button("Google Ads", "https://ads.google.com/home/")
+        st.link_button("Google Business Profile", "https://business.google.com/")
+    with c2:
+        st.link_button("Meta Business Suite", "https://business.facebook.com/latest/")
+        st.link_button("Facebook Ads Manager", "https://www.facebook.com/adsmanager/manage/")
+    with c3:
+        st.link_button("Instagram (Creator)", "https://business.facebook.com/creatorstudio/")
+        st.link_button("YouTube Studio", "https://studio.youtube.com/")
+
+
 def render_guide():
     st.header("📖 Agent Intelligence Manual")
     st.info(f"Command Center Active for: {st.session_state.get('biz_name', 'Global Mission')}")
     st.subheader("Agent Specializations")
     for _, desc in AGENT_SPECS.items():
         st.markdown(desc)
+
     st.markdown("---")
     st.markdown("### 🛡️ Swarm Execution Protocol")
     st.write("1) Launch from the sidebar\n2) Edit inside the Agent Seat\n3) Export using Word/PDF buttons")
@@ -550,12 +679,31 @@ def render_agent_seat(title: str, key: str):
     if st.session_state.get("gen") and report:
         content = report.get(key)
         if content:
-            edited = st.text_area("Refine Intel", value=str(content), height=400, key=f"ed_{key}")
+            edited = st.text_area("Refine Intel", value=str(content), height=420, key=f"ed_{key}")
+
+            # Social push panel for certain outputs
+            if key in {"ads", "creative", "social"}:
+                st.write("---")
+                render_social_push_panel(key)
+
+            st.write("---")
             c1, c2 = st.columns(2)
             with c1:
-                st.download_button("📄 Download Word", export_word(edited, title), file_name=f"{key}.docx", key=f"w_{key}")
+                st.download_button(
+                    "📄 Download Word",
+                    export_word(edited, title),
+                    file_name=f"{key}.docx",
+                    key=f"w_{key}",
+                    use_container_width=True
+                )
             with c2:
-                st.download_button("📕 Download PDF", export_pdf(edited, title), file_name=f"{key}.pdf", key=f"p_{key}")
+                st.download_button(
+                    "📕 Download PDF",
+                    export_pdf(edited, title),
+                    file_name=f"{key}.pdf",
+                    key=f"p_{key}",
+                    use_container_width=True
+                )
         else:
             st.warning("Agent not selected for this run.")
     else:
@@ -610,7 +758,10 @@ def render_admin():
         st.subheader("Subscriber Management")
         try:
             with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-                users_df = pd.read_sql_query("SELECT username, name, email, plan, role, credits, verified, team_id FROM users", conn)
+                users_df = pd.read_sql_query(
+                    "SELECT username, name, email, plan, role, credits, verified, team_id FROM users",
+                    conn
+                )
             st.dataframe(users_df, use_container_width=True)
         except Exception as e:
             st.error(f"User Manager Error: {e}")
@@ -642,7 +793,7 @@ def render_admin():
             st.error(f"Security Tab Error: {e}")
 
 
-# ---- Build tab labels (includes Team Intel + Admin) ----
+# ---- Build tab labels ----
 agent_titles = [a[0] for a in agent_map]
 tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 if is_admin:
