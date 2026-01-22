@@ -18,6 +18,7 @@ import fpdf
 
 from main import run_marketing_swarm
 
+
 # ============================================================
 # CONFIG
 # ============================================================
@@ -62,6 +63,7 @@ SOCIAL_PUSH_PLATFORMS = [
     ("X (Twitter)", "https://twitter.com/compose/tweet"),
 ]
 
+
 # ============================================================
 # CSS / CHROME
 # ============================================================
@@ -87,6 +89,7 @@ def inject_global_css():
     """, unsafe_allow_html=True)
 
 inject_global_css()
+
 
 # ============================================================
 # DB HELPERS + SCHEMA
@@ -287,104 +290,20 @@ PERMISSIONS = {
     "admin": {"read", "campaign_write", "asset_write", "workflow_write", "user_manage", "export"},
     "root": {"*"},
 }
+
 def can(role: str, perm: str) -> bool:
     perms = PERMISSIONS.get(normalize_role(role), {"read"})
     return ("*" in perms) or (perm in perms) or (perm == "read")
 
-def upsert_org(team_id: str, org_name: str, plan: str):
-    plan = (plan or "Lite").strip()
-    seats = PLAN_SEATS.get(plan, 1)
-    conn = db_conn()
-    conn.execute("""
-        INSERT OR REPLACE INTO orgs (team_id, org_name, plan, seats_allowed, status, created_at)
-        VALUES (?, ?, ?, ?, 'active', COALESCE((SELECT created_at FROM orgs WHERE team_id=?), datetime('now')))
-    """, (team_id, org_name, plan, seats, team_id))
-    conn.commit()
-    conn.close()
-
-def create_user(team_id: str, username: str, name: str, email: str, password_plain: str, role: str) -> Tuple[bool, str]:
-    username = (username or "").strip()
-    if not username:
-        return False, "Username required."
-    if username.lower() == "root":
-        return False, "Reserved username."
-    role = normalize_role(role)
-    if role == "root":
-        return False, "Root role cannot be assigned."
-
-    seats = seats_allowed_for_team(team_id)
-    used = active_user_count(team_id)
-    if used >= seats:
-        return False, f"Seat limit reached ({used}/{seats}). Upgrade to add more users."
-
-    hashed = stauth.Hasher.hash(password_plain)
-    conn = db_conn()
-    try:
-        conn.execute("""
-            INSERT INTO users (username, email, name, password, role, active, plan, credits, verified, team_id)
-            VALUES (?, ?, ?, ?, ?, 1, (SELECT plan FROM orgs WHERE team_id=?), 10, 1, ?)
-        """, (username, email, name, hashed, role, team_id, team_id))
-        conn.commit()
-        return True, "User created."
-    except sqlite3.IntegrityError:
-        return False, "Username already exists."
-    finally:
-        conn.close()
-
-def set_user_active(team_id: str, username: str, active: int):
-    conn = db_conn()
-    conn.execute("UPDATE users SET active=? WHERE username=? AND team_id=? AND role!='root'", (int(active), username, team_id))
-    conn.commit()
-    conn.close()
-
-def update_user_role(team_id: str, username: str, role: str):
-    role = normalize_role(role)
-    if role == "root":
-        return
-    conn = db_conn()
-    conn.execute("UPDATE users SET role=? WHERE username=? AND team_id=? AND role!='root'", (role, username, team_id))
-    conn.commit()
-    conn.close()
-
-def bulk_import_users(team_id: str, csv_bytes: bytes) -> Tuple[int, List[str]]:
-    errors = []
-    created = 0
-    seats = seats_allowed_for_team(team_id)
-    used = active_user_count(team_id)
-    remaining = max(0, seats - used)
-
-    decoded = csv_bytes.decode("utf-8", errors="ignore")
-    reader = csv.DictReader(decoded.splitlines())
-    rows = list(reader)
-
-    if len(rows) > remaining:
-        errors.append(f"Seat limit: only {remaining} more user(s) can be added ({used}/{seats}). Extra rows ignored.")
-        rows = rows[:remaining]
-
-    for i, r in enumerate(rows, start=1):
-        u = (r.get("username") or "").strip()
-        n = (r.get("name") or u).strip()
-        e = (r.get("email") or "").strip()
-        ro = normalize_role(r.get("role") or "viewer")
-        pw = (r.get("password") or "").strip()
-        if not u or not pw:
-            errors.append(f"Row {i}: missing username or password.")
-            continue
-        ok, msg = create_user(team_id, u, n, e, pw, ro)
-        if ok:
-            created += 1
-        else:
-            errors.append(f"Row {i} ({u}): {msg}")
-
-    return created, errors
-
 # Initialize DB
 init_db_once()
 
+
 # ============================================================
-# FPDF PATCH (kept)
+# EXPORT HELPERS
 # ============================================================
 _original_putpages = fpdf.fpdf.FPDF._putpages
+
 def _patched_putpages(self):
     pages = self.pages
     self.pages = {}
@@ -393,6 +312,7 @@ def _patched_putpages(self):
             v = v.encode("latin-1", "ignore").decode("latin-1", "ignore")
         self.pages[k] = v
     _original_putpages(self)
+
 fpdf.fpdf.FPDF._putpages = _patched_putpages
 
 def nuclear_ascii(text):
@@ -465,6 +385,7 @@ def export_word(content, title):
     doc.save(bio)
     return bio.getvalue()
 
+
 # ============================================================
 # AUTHENTICATION
 # ============================================================
@@ -484,6 +405,7 @@ if "authenticator" not in st.session_state:
         30
     )
 authenticator = st.session_state.authenticator
+
 
 # ============================================================
 # LOGIN PAGE
@@ -552,7 +474,7 @@ def login_page():
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    tabs = st.tabs(["🔑 Login", "✨ Create Org & Admin", "💳 Billing (Stripe)", "❓ Forgot Password"])
+    tabs = st.tabs(["🔑 Login", "❓ Forgot Password"])
 
     with tabs[0]:
         authenticator.login(location="main")
@@ -565,36 +487,6 @@ def login_page():
             st.rerun()
 
     with tabs[1]:
-        st.subheader("Create Organization")
-        with st.form("org_create_form"):
-            team_id = st.text_input("Organization (Team ID)", placeholder="e.g., ORG_ACME_2026")
-            org_name = st.text_input("Organization Name", placeholder="e.g., Acme Corp")
-            plan = st.selectbox("Plan", ["Lite","Pro","Enterprise"], index=0)
-            admin_username = st.text_input("Org Admin Username", placeholder="e.g., acme_admin")
-            admin_name = st.text_input("Admin Name", placeholder="e.g., Jane Doe")
-            admin_email = st.text_input("Admin Email", placeholder="e.g., jane@acme.com")
-            admin_password = st.text_input("Admin Password", type="password")
-            submitted = st.form_submit_button("Create Org + Admin", use_container_width=True)
-        if submitted:
-            team_id = (team_id or "").strip()
-            if not team_id or not org_name or not admin_username or not admin_password:
-                st.error("Team ID, Org Name, Admin Username, Admin Password are required.")
-            elif team_id.upper() == "ROOT":
-                st.error("ROOT is reserved.")
-            else:
-                upsert_org(team_id, org_name, plan)
-                ok, msg = create_user(team_id, admin_username, admin_name, admin_email, admin_password, "admin")
-                if ok:
-                    log_audit(team_id, admin_username, "admin", "org.create", "org", team_id, f"plan={plan}")
-                    st.success("Organization created. Use Login tab to sign in.")
-                else:
-                    st.error(msg)
-
-    with tabs[2]:
-        st.subheader("Stripe Billing (Scaffold)")
-        st.info("Add Stripe secrets for live checkout. Webhooks recommended to update plans automatically.")
-
-    with tabs[3]:
         authenticator.forgot_password(location="main")
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -606,6 +498,7 @@ def login_page():
 if not st.session_state.get("authentication_status"):
     login_page()
 
+
 # ============================================================
 # POST-AUTH CONTEXT
 # ============================================================
@@ -616,8 +509,9 @@ is_root = (my_role == "root") or (my_team == "ROOT")
 org = get_org(my_team)
 org_plan = str(org.get("plan", "Lite"))
 
+
 # ============================================================
-# SIDEBAR (fixed)
+# Sidebar: Agent gray-out + dynamic add state/city
 # ============================================================
 @st.cache_data(ttl=3600)
 def default_geo_data():
@@ -631,33 +525,72 @@ def default_geo_data():
     }
 
 def agent_limit_by_plan(plan: str) -> int:
-    if plan in {"Lite","Basic"}:
+    if plan in {"Lite", "Basic"}:
         return 3
     if plan == "Pro":
         return 5
     return 8
 
+def normalize_report(report: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Defensive mapping in case main.py returns alternate keys.
+    This prevents 'Agent not selected' when output exists under another name.
+    """
+    if not isinstance(report, dict):
+        return {}
+
+    alias_map = {
+        "market_data": "analyst",
+        "website_audit": "audit",
+        "ads_output": "ads",
+        "creative_pack": "creative",
+        "strategist_brief": "strategist",
+        "social_plan": "social",
+        "geo_intel": "geo",
+        "seo_article": "seo",
+    }
+
+    fixed = dict(report)
+    for src, dst in alias_map.items():
+        if dst not in fixed and src in fixed and fixed.get(src):
+            fixed[dst] = fixed.get(src)
+
+    return fixed
+
 with st.sidebar:
     if os.path.exists(APP_LOGO_PATH):
         st.image(APP_LOGO_PATH, width=110)
-    st.subheader(org.get("org_name","Organization"))
+
+    st.subheader(org.get("org_name", "Organization"))
     st.caption(f"Team: `{my_team}` • Role: **{my_role.upper()}**")
     st.metric("Plan", org_plan)
     st.metric("Seats", f"{active_user_count(my_team)}/{seats_allowed_for_team(my_team)}")
     st.divider()
 
-    biz_name = st.text_input("🏢 Brand Name", value=st.session_state.get("biz_name",""))
+    biz_name = st.text_input("🏢 Brand Name", value=st.session_state.get("biz_name", ""))
     st.session_state["biz_name"] = biz_name
 
-    custom_logo = st.file_uploader("📤 Brand Logo (All plans)", type=["png","jpg","jpeg"])
+    custom_logo = st.file_uploader("📤 Brand Logo (All plans)", type=["png", "jpg", "jpeg"])
 
     geo = default_geo_data()
-    selected_state = st.selectbox("🎯 Target State", sorted(geo.keys()))
-    selected_city = st.selectbox("🏙️ Target City", sorted(geo[selected_state]))
-    full_loc = f"{selected_city}, {selected_state}"
+    st.write("📍 Location")
+
+    state_mode = st.radio("State", ["Pick from list", "Add custom"], horizontal=True, key="state_mode")
+    if state_mode == "Pick from list":
+        selected_state = st.selectbox("Target State", sorted(geo.keys()), key="state_pick")
+    else:
+        selected_state = st.text_input("Custom State", key="state_custom").strip() or "Custom"
+
+    city_mode = st.radio("City", ["Pick from list", "Add custom"], horizontal=True, key="city_mode")
+    if city_mode == "Pick from list" and state_mode == "Pick from list":
+        selected_city = st.selectbox("Target City", sorted(geo[selected_state]), key="city_pick")
+    else:
+        selected_city = st.text_input("Custom City", key="city_custom").strip() or "Custom City"
+
+    full_loc = f"{selected_city}, {selected_state}".strip(", ")
 
     st.divider()
-    directives = st.text_area("✍️ Strategic Directives", value=st.session_state.get("directives",""))
+    directives = st.text_area("✍️ Strategic Directives", value=st.session_state.get("directives", ""))
     st.session_state["directives"] = directives
 
     agent_map = [
@@ -672,21 +605,37 @@ with st.sidebar:
     ]
 
     limit = 8 if is_root else agent_limit_by_plan(org_plan)
+
+    # ✅ Grey-out behavior: once limit reached, remaining toggles are disabled
     with st.expander("🤖 Swarm Personnel", expanded=True):
         st.caption(f"Max agents: {limit}")
+
+        # Count currently ON before rendering new state
+        currently_on = sum(1 for _, k in agent_map if st.session_state.get(f"tg_{k}", False))
+
         toggles = {}
-        for t, k in agent_map:
-            toggles[k] = st.toggle(t, value=bool(st.session_state.get(f"tg_{k}", False)), key=f"tg_{k}")
-        if not is_root and sum(1 for v in toggles.values() if v) > limit:
-            st.warning("Selected more than your plan limit. Turn some off.")
+        for title, key in agent_map:
+            already_on = bool(st.session_state.get(f"tg_{key}", False))
+            disable_toggle = (not is_root) and (currently_on >= limit) and (not already_on)
+            toggles[key] = st.toggle(
+                title,
+                value=already_on,
+                disabled=disable_toggle,
+                key=f"tg_{key}"
+            )
+
+        # Recompute after rendering
+        after_on = sum(1 for v in toggles.values() if v)
+        if not is_root and after_on > limit:
+            st.warning(f"You selected {after_on}, but your limit is {limit}. Turn some off.")
 
     st.divider()
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
-
     authenticator.logout("🔒 Sign Out", "sidebar")
 
+
 # ============================================================
-# RUN SWARM
+# RUN SWARM (improved diagnostics)
 # ============================================================
 def safe_run(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
@@ -698,37 +647,48 @@ def safe_run(payload: Dict[str, Any]) -> Dict[str, Any]:
         return {}
 
 if run_btn:
-    agents = [k for k, v in toggles.items() if v]
+    active_agents = [k for k, v in toggles.items() if v]
+
     if not biz_name:
         st.error("Enter Brand Name first.")
-    elif not agents:
+    elif not active_agents:
         st.warning("Select at least one agent.")
     else:
+        st.session_state["last_active_swarm"] = active_agents
+
         with st.status("🚀 Running Swarm…", expanded=True) as status:
+            st.write("Selected agents:", active_agents)
+
             report = safe_run({
                 "city": full_loc,
                 "biz_name": biz_name,
-                "active_swarm": agents,
+                "active_swarm": active_agents,
                 "package": org_plan,
                 "custom_logo": custom_logo,
                 "directives": directives,
             })
+
+            report = normalize_report(report)
+            st.write("Report keys returned:", sorted(list(report.keys())))
+
             if report:
                 st.session_state["report"] = report
                 st.session_state["gen"] = True
-                log_audit(my_team, me["username"], my_role, "swarm.run", "swarm", biz_name, f"agents={agents}")
+                log_audit(my_team, me["username"], my_role, "swarm.run", "swarm", biz_name, f"agents={active_agents}")
                 status.update(label="✅ Complete", state="complete", expanded=False)
             else:
                 st.session_state["gen"] = False
-                status.update(label="⚠️ No output returned", state="error", expanded=True)
+                status.update(label="❌ Swarm returned empty report", state="error", expanded=True)
+
         st.rerun()
 
+
 # ============================================================
-# RENDERERS (includes missing functions)
+# RENDERERS
 # ============================================================
 def render_guide():
     st.header("📖 Agent Intelligence Manual")
-    st.info(f"Command Center Active for: **{st.session_state.get('biz_name','Global Mission')}**")
+    st.info(f"Command Center Active for: **{st.session_state.get('biz_name', 'Global Mission')}**")
     st.subheader("Agent Specializations")
     for _, desc in AGENT_SPECS.items():
         st.markdown(desc)
@@ -739,17 +699,26 @@ def render_guide():
 
 def render_agent_seat(title: str, key: str):
     st.subheader(f"{title} Seat")
-    st.caption(AGENT_SPECS.get(key,""))
+    st.caption(AGENT_SPECS.get(key, ""))
+
     report = st.session_state.get("report") or {}
+    selected = st.session_state.get("last_active_swarm", [])
+
+    # If selected, but missing output, show correct message
+    if st.session_state.get("gen") and key in selected and not report.get(key):
+        st.error("This agent WAS selected, but no output was returned. Check run status for returned keys.")
+        return
+
     if st.session_state.get("gen") and report.get(key):
         edited = st.text_area("Refine Intel", value=str(report.get(key)), height=420, key=f"ed_{key}")
+
         c1, c2 = st.columns(2)
         with c1:
             st.download_button("📄 Word", export_word(edited, title), file_name=f"{key}.docx", key=f"w_{key}", use_container_width=True)
         with c2:
             st.download_button("📕 PDF", export_pdf(edited, title, custom_logo), file_name=f"{key}.pdf", key=f"p_{key}", use_container_width=True)
 
-        if key in {"ads","creative","social"}:
+        if key in {"ads", "creative", "social"}:
             st.markdown("---")
             st.markdown("#### 📣 Publish / Push")
             st.text_area("Copy-ready content", value=edited, height=140, key=f"push_{key}")
@@ -757,8 +726,9 @@ def render_agent_seat(title: str, key: str):
             for i, (nm, url) in enumerate(SOCIAL_PUSH_PLATFORMS):
                 with cols[i % 4]:
                     st.link_button(nm, url)
-    else:
-        st.info("Agent not selected for this run.")
+        return
+
+    st.info("Agent not selected for this run.")
 
 def render_vision():
     st.header("👁️ Vision")
@@ -789,38 +759,6 @@ def render_team_intel_minimal():
         udf = pd.read_sql_query("SELECT username,name,email,role,active,last_login_at FROM users WHERE team_id=? AND role!='root' ORDER BY created_at DESC", conn, params=(my_team,))
         conn.close()
         st.dataframe(udf, width="stretch")
-
-        if can(my_role, "user_manage") or is_root:
-            st.markdown("### ➕ Add user")
-            with st.form("add_user"):
-                u = st.text_input("Username")
-                n = st.text_input("Name")
-                e = st.text_input("Email")
-                r = st.selectbox("Role", ["viewer","editor","admin"])
-                pw = st.text_input("Temp Password", type="password")
-                submit = st.form_submit_button("Create", use_container_width=True)
-            if submit:
-                ok, msg = create_user(my_team, u, n, e, pw, r)
-                if ok:
-                    log_audit(my_team, me["username"], my_role, "user.create", "user", u, f"role={r}")
-                    st.success(msg); st.rerun()
-                else:
-                    st.error(msg)
-
-            st.markdown("### 📥 Bulk import (CSV)")
-            st.caption("Headers: username,name,email,role,password • seat limits enforced")
-            up = st.file_uploader("Upload CSV", type=["csv"])
-            if up and st.button("Import", use_container_width=True):
-                created, errs = bulk_import_users(my_team, up.getvalue())
-                log_audit(my_team, me["username"], my_role, "user.bulk_import", "user", "", f"created={created} errs={len(errs)}")
-                if created: st.success(f"Imported {created} user(s).")
-                if errs:
-                    st.error("Issues:")
-                    for x in errs[:15]:
-                        st.write(f"- {x}")
-                st.rerun()
-        else:
-            st.info("Only Admin can manage users.")
 
     with tabs[1]:
         conn = db_conn()
@@ -862,6 +800,7 @@ def render_root_admin():
         df = pd.read_sql_query("SELECT timestamp,team_id,actor,actor_role,action_type,object_type,object_id,details FROM audit_logs ORDER BY id DESC LIMIT 500", conn)
         conn.close()
         st.dataframe(df, width="stretch")
+
 
 # ============================================================
 # TABS
