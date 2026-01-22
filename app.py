@@ -7,7 +7,7 @@ import sqlite3
 import unicodedata
 from io import BytesIO
 from datetime import datetime
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
 import streamlit as st
 import pandas as pd
@@ -18,7 +18,6 @@ import fpdf
 
 from main import run_marketing_swarm
 
-
 # ============================================================
 # CONFIG
 # ============================================================
@@ -26,9 +25,9 @@ st.set_page_config(page_title="Marketing Swarm Intelligence", layout="wide")
 
 DB_PATH = "breatheeasy.db"
 APP_LOGO_PATH = "Logo1.jpeg"
-
 PRODUCTION_MODE = True  # hides Streamlit chrome (not Streamlit Cloud overlays)
 
+# Seat limits (users per org)
 PLAN_SEATS = {
     "Lite": 1,
     "Basic": 1,
@@ -37,23 +36,44 @@ PLAN_SEATS = {
     "Unlimited": 9999,
 }
 
+# Agent limits (how many agents are unlocked per org) — LOCKED AT SIGNUP
+PLAN_AGENT_LIMITS = {
+    "Lite": 3,
+    "Basic": 3,
+    "Pro": 5,
+    "Enterprise": 8,
+    "Unlimited": 8,
+}
+
+ALL_AGENT_KEYS = ["analyst", "ads", "creative", "strategist", "social", "geo", "audit", "seo"]
+
+AGENT_LABELS = {
+    "analyst": "🕵️ Analyst",
+    "ads": "📺 Ads",
+    "creative": "🎨 Creative",
+    "strategist": "👔 Strategist",
+    "social": "📱 Social",
+    "geo": "📍 GEO",
+    "audit": "🌐 Auditor",
+    "seo": "✍ SEO",
+}
+
 AGENT_SPECS = {
-    "analyst": "🕵️ **Market Analyst**: competitor gaps, pricing, positioning.",
-    "ads": "📺 **Ads Architect**: deployable ads for Google/Meta.",
-    "creative": "🎨 **Creative Director**: concepts + prompt packs + ad variants.",
-    "strategist": "👔 **Strategist**: 30-day execution roadmap.",
-    "social": "📱 **Social**: engagement content calendar.",
-    "geo": "📍 **GEO**: local visibility and citations.",
-    "audit": "🌐 **Audit**: website conversion friction.",
-    "seo": "✍️ **SEO**: authority article + cluster plan.",
+    "analyst": "Market gaps, pricing, positioning.",
+    "ads": "Deployable ads for Google/Meta.",
+    "creative": "Concepts + prompt packs + ad variants.",
+    "strategist": "30-day execution roadmap.",
+    "social": "Engagement content calendar.",
+    "geo": "Local visibility and citations.",
+    "audit": "Website conversion friction.",
+    "seo": "Authority article + cluster plan.",
 }
 
 DEPLOY_PROTOCOL = [
-    "1) **Configure mission** in the sidebar (Brand, Location, Directives).",
-    "2) **Select agents** (your plan limits how many can run).",
-    "3) Click **LAUNCH OMNI-SWARM**.",
-    "4) Review outputs in each **Agent Seat** and refine as needed.",
-    "5) Export deliverables as **Word/PDF** and publish via platform consoles.",
+    "1) Configure mission in the sidebar (Brand, Location, Directives).",
+    "2) Launch OMNI-SWARM.",
+    "3) Review outputs in each Agent Seat and refine as needed.",
+    "4) Export deliverables as Word/PDF.",
 ]
 
 SOCIAL_PUSH_PLATFORMS = [
@@ -63,9 +83,8 @@ SOCIAL_PUSH_PLATFORMS = [
     ("X (Twitter)", "https://twitter.com/compose/tweet"),
 ]
 
-
 # ============================================================
-# CSS / CHROME
+# CSS / CHROME / LOADER
 # ============================================================
 def inject_global_css():
     if st.session_state.get("_css_loaded"):
@@ -85,6 +104,48 @@ def inject_global_css():
     <style>
       {hide_chrome}
       .stTabs [data-baseweb="tab-list"] {{ gap: 10px; }}
+      .ms-card {{
+        border: 1px solid rgba(15,23,42,0.10);
+        border-radius: 18px;
+        background: rgba(255,255,255,0.92);
+        box-shadow: 0 24px 60px rgba(2,6,23,0.08);
+        padding: 16px;
+      }}
+      .ms-badge {{
+        font-size: 12px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(99,102,241,0.20);
+        background: rgba(99,102,241,0.08);
+        color: #3730a3;
+        display: inline-block;
+      }}
+      .ms-loader-wrap {{
+        border: 1px solid rgba(15,23,42,0.10);
+        border-radius: 18px;
+        padding: 16px;
+        background: rgba(255,255,255,0.92);
+      }}
+      .ms-bar {{
+        height: 10px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(99,102,241,0.20), rgba(16,185,129,0.20), rgba(236,72,153,0.20));
+        overflow: hidden;
+        position: relative;
+      }}
+      .ms-bar::after {{
+        content: "";
+        position: absolute;
+        top: 0; left: -40%;
+        width: 40%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(99,102,241,0.75), transparent);
+        animation: ms-slide 1.2s infinite;
+      }}
+      @keyframes ms-slide {{
+        0% {{ left: -40%; }}
+        100% {{ left: 100%; }}
+      }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -115,6 +176,7 @@ def init_db_once() -> None:
             org_name TEXT,
             plan TEXT DEFAULT 'Lite',
             seats_allowed INTEGER DEFAULT 1,
+            allowed_agents_json TEXT DEFAULT '[]',
             status TEXT DEFAULT 'active',
             created_at TEXT DEFAULT (datetime('now')),
             stripe_customer_id TEXT,
@@ -201,24 +263,14 @@ def init_db_once() -> None:
         )
     """)
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS kpi_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            team_id TEXT,
-            event_type TEXT,
-            value REAL DEFAULT 1,
-            metadata_json TEXT,
-            timestamp TEXT DEFAULT (datetime('now'))
-        )
-    """)
-
     ensure_column(conn, "orgs", "seats_allowed", "INTEGER DEFAULT 1")
+    ensure_column(conn, "orgs", "allowed_agents_json", "TEXT DEFAULT '[]'")
     ensure_column(conn, "users", "team_id", "TEXT DEFAULT 'ORG_001'")
 
-    # Seed ROOT org + root user
+    # Root org + root user
     cur.execute("""
-        INSERT OR IGNORE INTO orgs (team_id, org_name, plan, seats_allowed, status)
-        VALUES ('ROOT', 'SaaS Root', 'Unlimited', 9999, 'active')
+        INSERT OR IGNORE INTO orgs (team_id, org_name, plan, seats_allowed, allowed_agents_json, status)
+        VALUES ('ROOT', 'SaaS Root', 'Unlimited', 9999, '[]', 'active')
     """)
     root_pw = stauth.Hasher.hash("root123")
     cur.execute("""
@@ -227,13 +279,14 @@ def init_db_once() -> None:
         VALUES ('root','root@tech.ai','Root Admin',?, 'root', 1, 'Unlimited', 9999, 1, 'ROOT')
     """, (root_pw,))
 
-    # Seed demo org
+    # Demo org
     cur.execute("SELECT COUNT(*) FROM orgs WHERE team_id != 'ROOT'")
     if int(cur.fetchone()[0] or 0) == 0:
+        default_allowed = json.dumps(["analyst", "creative", "strategist"])
         cur.execute("""
-            INSERT OR IGNORE INTO orgs (team_id, org_name, plan, seats_allowed, status)
-            VALUES ('ORG_001', 'TechNovance Customer', 'Lite', 1, 'active')
-        """)
+            INSERT OR IGNORE INTO orgs (team_id, org_name, plan, seats_allowed, allowed_agents_json, status)
+            VALUES ('ORG_001', 'TechNovance Customer', 'Lite', 1, ?, 'active')
+        """, (default_allowed,))
         admin_pw = stauth.Hasher.hash("admin123")
         cur.execute("""
             INSERT OR REPLACE INTO users
@@ -261,7 +314,7 @@ def get_org(team_id: str) -> Dict[str, Any]:
     conn = db_conn()
     df = pd.read_sql_query("SELECT * FROM orgs WHERE team_id=?", conn, params=(team_id,))
     conn.close()
-    return df.iloc[0].to_dict() if not df.empty else {"team_id": team_id, "org_name": team_id, "plan": "Lite", "seats_allowed": 1}
+    return df.iloc[0].to_dict() if not df.empty else {"team_id": team_id, "org_name": team_id, "plan": "Lite", "seats_allowed": 1, "allowed_agents_json": "[]"}
 
 def get_user(username: str) -> Dict[str, Any]:
     conn = db_conn()
@@ -284,18 +337,26 @@ def normalize_role(role: str) -> str:
     role = (role or "").strip().lower()
     return role if role in {"viewer","editor","admin","root"} else "viewer"
 
-PERMISSIONS = {
-    "viewer": {"read"},
-    "editor": {"read", "campaign_write", "asset_write", "workflow_write"},
-    "admin": {"read", "campaign_write", "asset_write", "workflow_write", "user_manage", "export"},
-    "root": {"*"},
-}
+def allowed_agents_for_org(team_id: str) -> List[str]:
+    org = get_org(team_id)
+    raw = org.get("allowed_agents_json") or "[]"
+    try:
+        lst = json.loads(raw)
+        lst = [x for x in lst if x in ALL_AGENT_KEYS]
+        return lst
+    except Exception:
+        return []
 
-def can(role: str, perm: str) -> bool:
-    perms = PERMISSIONS.get(normalize_role(role), {"read"})
-    return ("*" in perms) or (perm in perms) or (perm == "read")
+def set_allowed_agents_for_org(team_id: str, agents: List[str]) -> None:
+    agents = [a for a in agents if a in ALL_AGENT_KEYS]
+    conn = db_conn()
+    conn.execute("UPDATE orgs SET allowed_agents_json=? WHERE team_id=?", (json.dumps(agents), team_id))
+    conn.commit()
+    conn.close()
 
-# Initialize DB
+def plan_agent_limit(plan: str) -> int:
+    return int(PLAN_AGENT_LIMITS.get(plan, 3))
+
 init_db_once()
 
 
@@ -303,7 +364,6 @@ init_db_once()
 # EXPORT HELPERS
 # ============================================================
 _original_putpages = fpdf.fpdf.FPDF._putpages
-
 def _patched_putpages(self):
     pages = self.pages
     self.pages = {}
@@ -312,7 +372,6 @@ def _patched_putpages(self):
             v = v.encode("latin-1", "ignore").decode("latin-1", "ignore")
         self.pages[k] = v
     _original_putpages(self)
-
 fpdf.fpdf.FPDF._putpages = _patched_putpages
 
 def nuclear_ascii(text):
@@ -408,74 +467,12 @@ authenticator = st.session_state.authenticator
 
 
 # ============================================================
-# LOGIN PAGE
+# LOGIN PAGE (minimal for now)
 # ============================================================
 def login_page():
-    st.markdown("""
-    <style>
-      [data-testid="stSidebar"] { display:none; }
-      .bg {
-        position: fixed; inset: 0;
-        background:
-          radial-gradient(1200px 600px at 50% 0%, rgba(99,102,241,0.20), transparent 60%),
-          radial-gradient(900px 500px at 10% 30%, rgba(16,185,129,0.16), transparent 60%),
-          radial-gradient(900px 500px at 90% 30%, rgba(236,72,153,0.14), transparent 60%),
-          linear-gradient(180deg, #ffffff 0%, #fafafe 60%, #ffffff 100%);
-        z-index: -1;
-      }
-      .shell { max-width: 1120px; margin: 0 auto; padding: 26px 12px 50px; }
-      .badge { font-size:12px; padding: 5px 10px; border-radius: 999px; border:1px solid rgba(99,102,241,0.20); background: rgba(99,102,241,0.08); color:#3730a3; display:inline-block; }
-      .title { font-size: 46px; font-weight: 850; letter-spacing:-0.02em; margin: 6px 0 8px; color:#0f172a; }
-      .sub { color:#334155; font-size:14px; margin:0 0 16px; }
-      .grid { display:grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; }
-      .card { border:1px solid rgba(15,23,42,0.10); border-radius: 18px; background: rgba(255,255,255,0.82); box-shadow: 0 24px 60px rgba(2,6,23,0.08); padding: 16px; }
-      .pricing { display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-      .pricecard { border:1px solid rgba(15,23,42,0.10); border-radius: 16px; padding: 12px; background: rgba(255,255,255,0.92); }
-      .price { font-size: 26px; font-weight: 900; }
-      @media (max-width: 980px){ .grid { grid-template-columns: 1fr; } .pricing { grid-template-columns: 1fr; } .title{font-size:36px;} }
-    </style>
-    <div class="bg"></div>
-    """, unsafe_allow_html=True)
-
-    st.markdown('<div class="shell">', unsafe_allow_html=True)
-
-    if os.path.exists(APP_LOGO_PATH):
-        st.image(APP_LOGO_PATH, width=70)
-
-    st.markdown('<div class="badge">AI Marketing OS • Secure • Multi-Tenant</div>', unsafe_allow_html=True)
-    st.markdown('<div class="title">Marketing Swarm Intelligence</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub">Campaign ops, governance, analytics & executive reporting — organization-scoped.</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="grid">', unsafe_allow_html=True)
-
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("### What you get")
-    st.markdown("""
-- Org isolation (Team ID)  
-- RBAC (Admin / Editor / Viewer)  
-- Audit trails (logins, exports, changes)  
-- Executive exports (logo supported for all plans)  
-""")
-    st.markdown("### Price Packages")
-    st.markdown('<div class="pricing">', unsafe_allow_html=True)
-    st.markdown("""
-      <div class="pricecard"><b>🥉 LITE</b><div class="price">$99/mo</div>
-      <div style="color:#475569;font-size:13px;">1 seat • up to 3 agents</div></div>
-    """, unsafe_allow_html=True)
-    st.markdown("""
-      <div class="pricecard"><b>🥈 PRO</b><div class="price">$299/mo</div>
-      <div style="color:#475569;font-size:13px;">5 seats • up to 5 agents</div></div>
-    """, unsafe_allow_html=True)
-    st.markdown("""
-      <div class="pricecard"><b>🥇 ENTERPRISE</b><div class="price">$999/mo</div>
-      <div style="color:#475569;font-size:13px;">20 seats • up to 8 agents</div></div>
-    """, unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    tabs = st.tabs(["🔑 Login", "❓ Forgot Password"])
-
+    st.title("Marketing Swarm Intelligence")
+    st.caption("Login to access your organization-scoped dashboard.")
+    tabs = st.tabs(["Login", "Forgot Password"])
     with tabs[0]:
         authenticator.login(location="main")
         if st.session_state.get("authentication_status"):
@@ -483,16 +480,10 @@ def login_page():
             conn = db_conn()
             conn.execute("UPDATE users SET last_login_at=? WHERE username=?", (datetime.utcnow().isoformat(), u["username"]))
             conn.commit(); conn.close()
-            log_audit(u["team_id"], u["username"], u["role"], "auth.login", "user", u["username"], "login_success")
+            log_audit(u["team_id"], u["username"], u.get("role",""), "auth.login", "user", u["username"], "login_success")
             st.rerun()
-
     with tabs[1]:
         authenticator.forgot_password(location="main")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 if not st.session_state.get("authentication_status"):
@@ -509,9 +500,16 @@ is_root = (my_role == "root") or (my_team == "ROOT")
 org = get_org(my_team)
 org_plan = str(org.get("plan", "Lite"))
 
+allowed_agents = allowed_agents_for_org(my_team)
+if not allowed_agents and not is_root:
+    # Backfill safety: if allowed agents missing, set defaults based on plan
+    limit = plan_agent_limit(org_plan)
+    allowed_agents = ALL_AGENT_KEYS[:limit]
+    set_allowed_agents_for_org(my_team, allowed_agents)
+
 
 # ============================================================
-# Sidebar: Agent gray-out + dynamic add state/city
+# SIDEBAR (LOCKED agent availability + greyed-out)
 # ============================================================
 @st.cache_data(ttl=3600)
 def default_geo_data():
@@ -524,21 +522,9 @@ def default_geo_data():
         "Texas": ["Austin", "Dallas", "Houston"],
     }
 
-def agent_limit_by_plan(plan: str) -> int:
-    if plan in {"Lite", "Basic"}:
-        return 3
-    if plan == "Pro":
-        return 5
-    return 8
-
 def normalize_report(report: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Defensive mapping in case main.py returns alternate keys.
-    This prevents 'Agent not selected' when output exists under another name.
-    """
     if not isinstance(report, dict):
         return {}
-
     alias_map = {
         "market_data": "analyst",
         "website_audit": "audit",
@@ -549,12 +535,10 @@ def normalize_report(report: Dict[str, Any]) -> Dict[str, Any]:
         "geo_intel": "geo",
         "seo_article": "seo",
     }
-
     fixed = dict(report)
     for src, dst in alias_map.items():
         if dst not in fixed and src in fixed and fixed.get(src):
             fixed[dst] = fixed.get(src)
-
     return fixed
 
 with st.sidebar:
@@ -565,69 +549,51 @@ with st.sidebar:
     st.caption(f"Team: `{my_team}` • Role: **{my_role.upper()}**")
     st.metric("Plan", org_plan)
     st.metric("Seats", f"{active_user_count(my_team)}/{seats_allowed_for_team(my_team)}")
+
+    if not is_root:
+        st.caption(f"Unlocked agents: {len(allowed_agents)}/{plan_agent_limit(org_plan)}")
+
     st.divider()
 
     biz_name = st.text_input("🏢 Brand Name", value=st.session_state.get("biz_name", ""))
     st.session_state["biz_name"] = biz_name
 
-    custom_logo = st.file_uploader("📤 Brand Logo (All plans)", type=["png", "jpg", "jpeg"])
+    custom_logo = st.file_uploader("📤 Brand Logo", type=["png", "jpg", "jpeg"])
 
     geo = default_geo_data()
-    st.write("📍 Location")
-
-    state_mode = st.radio("State", ["Pick from list", "Add custom"], horizontal=True, key="state_mode")
-    if state_mode == "Pick from list":
-        selected_state = st.selectbox("Target State", sorted(geo.keys()), key="state_pick")
+    selected_state = st.selectbox("🎯 Target State", sorted(geo.keys()))
+    city_mode = st.radio("City", ["Pick from list", "Add custom"], horizontal=True)
+    if city_mode == "Pick from list":
+        selected_city = st.selectbox("🏙️ Target City", sorted(geo[selected_state]))
     else:
-        selected_state = st.text_input("Custom State", key="state_custom").strip() or "Custom"
-
-    city_mode = st.radio("City", ["Pick from list", "Add custom"], horizontal=True, key="city_mode")
-    if city_mode == "Pick from list" and state_mode == "Pick from list":
-        selected_city = st.selectbox("Target City", sorted(geo[selected_state]), key="city_pick")
-    else:
-        selected_city = st.text_input("Custom City", key="city_custom").strip() or "Custom City"
-
-    full_loc = f"{selected_city}, {selected_state}".strip(", ")
+        selected_city = st.text_input("🏙️ Custom City").strip() or "Custom City"
+    full_loc = f"{selected_city}, {selected_state}"
 
     st.divider()
     directives = st.text_area("✍️ Strategic Directives", value=st.session_state.get("directives", ""))
     st.session_state["directives"] = directives
 
-    agent_map = [
-        ("🕵️ Analyst", "analyst"),
-        ("📺 Ads", "ads"),
-        ("🎨 Creative", "creative"),
-        ("👔 Strategist", "strategist"),
-        ("📱 Social", "social"),
-        ("📍 GEO", "geo"),
-        ("🌐 Auditor", "audit"),
-        ("✍ SEO", "seo"),
-    ]
+    st.markdown("### 🤖 Swarm Personnel")
+    st.caption("Agents are locked by your package selection at signup. Upgrade to unlock more.")
 
-    limit = 8 if is_root else agent_limit_by_plan(org_plan)
+    toggles: Dict[str, bool] = {}
+    # Root can use all agents
+    effective_allowed = ALL_AGENT_KEYS if is_root else allowed_agents
 
-    # ✅ Grey-out behavior: once limit reached, remaining toggles are disabled
-    with st.expander("🤖 Swarm Personnel", expanded=True):
-        st.caption(f"Max agents: {limit}")
+    for key in ALL_AGENT_KEYS:
+        label = AGENT_LABELS[key]
+        is_enabled_for_org = (key in effective_allowed)
 
-        # Count currently ON before rendering new state
-        currently_on = sum(1 for _, k in agent_map if st.session_state.get(f"tg_{k}", False))
+        toggles[key] = st.toggle(
+            label,
+            value=bool(st.session_state.get(f"tg_{key}", False)) if is_enabled_for_org else False,
+            disabled=not is_enabled_for_org,
+            key=f"tg_{key}"
+        )
 
-        toggles = {}
-        for title, key in agent_map:
-            already_on = bool(st.session_state.get(f"tg_{key}", False))
-            disable_toggle = (not is_root) and (currently_on >= limit) and (not already_on)
-            toggles[key] = st.toggle(
-                title,
-                value=already_on,
-                disabled=disable_toggle,
-                key=f"tg_{key}"
-            )
-
-        # Recompute after rendering
-        after_on = sum(1 for v in toggles.values() if v)
-        if not is_root and after_on > limit:
-            st.warning(f"You selected {after_on}, but your limit is {limit}. Turn some off.")
+        # Ensure disabled ones are always off
+        if not is_enabled_for_org:
+            st.session_state[f"tg_{key}"] = False
 
     st.divider()
     run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
@@ -635,7 +601,7 @@ with st.sidebar:
 
 
 # ============================================================
-# RUN SWARM (improved diagnostics)
+# RUN SWARM (better running screen)
 # ============================================================
 def safe_run(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
@@ -656,29 +622,40 @@ if run_btn:
     else:
         st.session_state["last_active_swarm"] = active_agents
 
-        with st.status("🚀 Running Swarm…", expanded=True) as status:
+        # Nice running UI
+        run_box = st.empty()
+        with run_box.container():
+            st.markdown('<div class="ms-loader-wrap">', unsafe_allow_html=True)
+            st.markdown("### 🚀 Running Swarm…")
+            st.markdown('<div class="ms-bar"></div>', unsafe_allow_html=True)
+            st.write("")
             st.write("Selected agents:", active_agents)
+            st.caption("This may take a minute depending on provider rate limits.")
+            st.markdown("</div>", unsafe_allow_html=True)
 
-            report = safe_run({
-                "city": full_loc,
-                "biz_name": biz_name,
-                "active_swarm": active_agents,
-                "package": org_plan,
-                "custom_logo": custom_logo,
-                "directives": directives,
-            })
+        report = safe_run({
+            "city": full_loc,
+            "biz_name": biz_name,
+            "active_swarm": active_agents,
+            "package": org_plan,
+            "custom_logo": custom_logo,
+            "directives": directives,
+        })
 
-            report = normalize_report(report)
-            st.write("Report keys returned:", sorted(list(report.keys())))
+        report = normalize_report(report)
 
-            if report:
-                st.session_state["report"] = report
-                st.session_state["gen"] = True
-                log_audit(my_team, me["username"], my_role, "swarm.run", "swarm", biz_name, f"agents={active_agents}")
-                status.update(label="✅ Complete", state="complete", expanded=False)
-            else:
-                st.session_state["gen"] = False
-                status.update(label="❌ Swarm returned empty report", state="error", expanded=True)
+        # Clear loader
+        run_box.empty()
+
+        if report:
+            st.session_state["report"] = report
+            st.session_state["gen"] = True
+            st.session_state["last_report_keys"] = sorted(list(report.keys()))
+            log_audit(my_team, me["username"], my_role, "swarm.run", "swarm", biz_name, f"agents={active_agents}")
+        else:
+            st.session_state["gen"] = False
+            st.session_state["report"] = {}
+            st.session_state["last_report_keys"] = []
 
         st.rerun()
 
@@ -690,8 +667,8 @@ def render_guide():
     st.header("📖 Agent Intelligence Manual")
     st.info(f"Command Center Active for: **{st.session_state.get('biz_name', 'Global Mission')}**")
     st.subheader("Agent Specializations")
-    for _, desc in AGENT_SPECS.items():
-        st.markdown(desc)
+    for k in ALL_AGENT_KEYS:
+        st.markdown(f"- {AGENT_LABELS[k]}: {AGENT_SPECS[k]}")
     st.markdown("---")
     st.subheader("🛡️ Swarm Execution Protocol")
     for line in DEPLOY_PROTOCOL:
@@ -704,14 +681,16 @@ def render_agent_seat(title: str, key: str):
     report = st.session_state.get("report") or {}
     selected = st.session_state.get("last_active_swarm", [])
 
-    # If selected, but missing output, show correct message
-    if st.session_state.get("gen") and key in selected and not report.get(key):
-        st.error("This agent WAS selected, but no output was returned. Check run status for returned keys.")
+    # Diagnostic hint
+    if st.session_state.get("last_report_keys") is not None:
+        st.caption(f"Last report keys: {st.session_state.get('last_report_keys')}")
+
+    if key in selected and st.session_state.get("gen") and not report.get(key):
+        st.error("This agent WAS selected, but no output was returned. Check logs or provider limits.")
         return
 
     if st.session_state.get("gen") and report.get(key):
         edited = st.text_area("Refine Intel", value=str(report.get(key)), height=420, key=f"ed_{key}")
-
         c1, c2 = st.columns(2)
         with c1:
             st.download_button("📄 Word", export_word(edited, title), file_name=f"{key}.docx", key=f"w_{key}", use_container_width=True)
@@ -751,7 +730,7 @@ def render_team_intel_minimal():
     c2.metric("Seats Allowed", seats)
     c3.metric("Plan", org_plan)
 
-    tabs = st.tabs(["👥 User & Access", "📣 Campaigns", "🧩 Assets", "🔐 Logs"])
+    tabs = st.tabs(["👥 User & Access", "🔐 Logs"])
 
     with tabs[0]:
         st.subheader("User & Access (RBAC)")
@@ -762,42 +741,69 @@ def render_team_intel_minimal():
 
     with tabs[1]:
         conn = db_conn()
-        df = pd.read_sql_query("SELECT id,name,channel,status,created_at FROM campaigns WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
-        conn.close()
-        st.dataframe(df, width="stretch")
-
-    with tabs[2]:
-        conn = db_conn()
-        df = pd.read_sql_query("SELECT id,name,asset_type,created_at FROM assets WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
-        conn.close()
-        st.dataframe(df, width="stretch")
-
-    with tabs[3]:
-        conn = db_conn()
-        logs = pd.read_sql_query("SELECT timestamp, actor, action_type, object_type, object_id, details FROM audit_logs WHERE team_id=? ORDER BY id DESC LIMIT 200", conn, params=(my_team,))
+        logs = pd.read_sql_query("SELECT timestamp, actor, actor_role, action_type, object_type, object_id, details FROM audit_logs WHERE team_id=? ORDER BY id DESC LIMIT 200", conn, params=(my_team,))
         conn.close()
         st.dataframe(logs, width="stretch")
 
 def render_root_admin():
     st.header("🛡️ Root Admin")
-    st.caption("SaaS owner backend. Only root can see global orgs/users/logs.")
-    tabs = st.tabs(["🏢 Orgs", "👥 Users", "📜 Logs"])
+    st.caption("SaaS owner backend. Only root can edit org plan, seats, credits, and allowed agents.")
+
+    tabs = st.tabs(["🏢 Orgs", "👥 Users", "🔧 Agent Unlocks", "📜 Logs"])
 
     with tabs[0]:
         conn = db_conn()
-        df = pd.read_sql_query("SELECT team_id, org_name, plan, seats_allowed, status, created_at FROM orgs ORDER BY created_at DESC", conn)
+        df = pd.read_sql_query("SELECT team_id, org_name, plan, seats_allowed, status, allowed_agents_json FROM orgs ORDER BY created_at DESC", conn)
         conn.close()
         st.dataframe(df, width="stretch")
 
     with tabs[1]:
         conn = db_conn()
-        df = pd.read_sql_query("SELECT username,name,email,role,active,team_id,created_at,last_login_at FROM users ORDER BY created_at DESC", conn)
+        df = pd.read_sql_query("SELECT username,name,email,role,active,team_id,plan,credits FROM users ORDER BY created_at DESC", conn)
         conn.close()
         st.dataframe(df, width="stretch")
 
     with tabs[2]:
+        st.subheader("Agent Unlocks (per org)")
+        st.caption("This is where you enforce package agent selection. Customers cannot change unlocked agents without upgrade.")
+
         conn = db_conn()
-        df = pd.read_sql_query("SELECT timestamp,team_id,actor,actor_role,action_type,object_type,object_id,details FROM audit_logs ORDER BY id DESC LIMIT 500", conn)
+        orgs_df = pd.read_sql_query("SELECT team_id, org_name, plan, allowed_agents_json FROM orgs WHERE team_id!='ROOT' ORDER BY org_name", conn)
+        conn.close()
+
+        if orgs_df.empty:
+            st.info("No orgs found.")
+        else:
+            sel_team = st.selectbox("Select Org", orgs_df["team_id"].tolist())
+            row = orgs_df[orgs_df["team_id"] == sel_team].iloc[0]
+            plan = str(row["plan"])
+            limit = plan_agent_limit(plan)
+
+            current_allowed = []
+            try:
+                current_allowed = json.loads(row["allowed_agents_json"] or "[]")
+            except Exception:
+                current_allowed = []
+
+            st.write(f"Plan: **{plan}** — agent unlock limit: **{limit}**")
+            new_allowed = st.multiselect(
+                "Unlocked agents for this org",
+                options=ALL_AGENT_KEYS,
+                default=[a for a in current_allowed if a in ALL_AGENT_KEYS],
+            )
+
+            if len(new_allowed) > limit:
+                st.error(f"Too many agents selected ({len(new_allowed)}). Limit is {limit} for {plan}.")
+            else:
+                if st.button("Save Unlocked Agents", use_container_width=True):
+                    set_allowed_agents_for_org(sel_team, new_allowed)
+                    log_audit("ROOT", me["username"], my_role, "root.allowed_agents_update", "org", sel_team, f"allowed={new_allowed}")
+                    st.success("Saved.")
+                    st.rerun()
+
+    with tabs[3]:
+        conn = db_conn()
+        df = pd.read_sql_query("SELECT timestamp, team_id, actor, actor_role, action_type, object_type, object_id, details FROM audit_logs ORDER BY id DESC LIMIT 500", conn)
         conn.close()
         st.dataframe(df, width="stretch")
 
@@ -805,7 +811,7 @@ def render_root_admin():
 # ============================================================
 # TABS
 # ============================================================
-agent_titles = [a[0] for a in agent_map]
+agent_titles = [AGENT_LABELS[k] for k in ALL_AGENT_KEYS]
 tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
 if is_root:
     tab_labels.append("🛡️ Admin")
@@ -816,7 +822,9 @@ TAB = {name: tabs_obj[i] for i, name in enumerate(tab_labels)}
 with TAB["📖 Guide"]:
     render_guide()
 
-for (title, key) in agent_map:
+# render seats by label -> key mapping
+for key in ALL_AGENT_KEYS:
+    title = AGENT_LABELS[key]
     with TAB[title]:
         render_agent_seat(title, key)
 
