@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import base64
 import unicodedata
 import sqlite3
 from io import BytesIO
@@ -35,7 +36,6 @@ def load_css_once():
 
     st.markdown("""
     <style>
-      /* Keep layout stable + reduce "flash" by avoiding heavy full-screen DOM changes */
       .ms-login-wrap { max-width: 980px; margin: 36px auto; padding: 0 12px; }
       .ms-login-card {
         border: 1px solid rgba(0,0,0,0.10);
@@ -69,11 +69,8 @@ def load_css_once():
       .ms-kpi b { color:#fff; }
       .ms-kpi span { color: rgba(255,255,255,0.75); font-size: 12px; }
 
-      /* Hide sidebar on login to prevent layout shifts */
+      /* Hide sidebar on login to reduce layout shifts */
       [data-testid="stSidebar"] { display: none; }
-
-      /* Make tabs look tighter */
-      .stTabs [data-baseweb="tab-list"] { gap: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -93,7 +90,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
 
-    # USERS
+    # USERS (org-scoped by team_id)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
@@ -112,7 +109,7 @@ def init_db():
         )
     """)
 
-    # Activity logs
+    # Activity logs (org scoped)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS activity_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,7 +123,7 @@ def init_db():
         )
     """)
 
-    # Leads / Pipeline
+    # Leads
     cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,8 +141,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS campaigns (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
-            channel TEXT,       -- email | social | ads | seo | geo | other
-            status TEXT,        -- draft | scheduled | live | paused | complete
+            channel TEXT,
+            status TEXT,
             start_date TEXT,
             end_date TEXT,
             budget REAL DEFAULT 0,
@@ -162,7 +159,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS assets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
-            asset_type TEXT,    -- image | template | copy | other
+            asset_type TEXT,
             mime_type TEXT,
             size_bytes INTEGER,
             content BLOB,
@@ -192,14 +189,14 @@ def init_db():
         CREATE TABLE IF NOT EXISTS integrations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
-            status TEXT,        -- disconnected | connected | error
+            status TEXT,
             details TEXT,
             team_id TEXT,
             updated_at TEXT
         )
     """)
 
-    # Billing
+    # Billing / subscriptions (Stripe ready placeholders)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS billing (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -207,7 +204,9 @@ def init_db():
             plan TEXT,
             seats INTEGER DEFAULT 1,
             renewal_date TEXT,
-            status TEXT,        -- active | past_due | canceled
+            status TEXT,
+            stripe_customer_id TEXT DEFAULT '',
+            stripe_subscription_id TEXT DEFAULT '',
             updated_at TEXT
         )
     """)
@@ -226,14 +225,26 @@ def init_db():
     ensure_column(conn, "leads", "team_id", "TEXT")
     ensure_column(conn, "leads", "timestamp", "DATETIME DEFAULT CURRENT_TIMESTAMP")
 
-    # Seed admin (HQ_001)
-    admin_pw = stauth.Hasher.hash("admin123")
+    ensure_column(conn, "billing", "stripe_customer_id", "TEXT DEFAULT ''")
+    ensure_column(conn, "billing", "stripe_subscription_id", "TEXT DEFAULT ''")
+
+    # Seed PLATFORM admin (not visible to customer orgs)
+    platform_pw = stauth.Hasher.hash("admin123")
     cur.execute("""
         INSERT OR REPLACE INTO users
         (username, email, name, password, role, is_active, plan, credits, verified, team_id, mfa_enabled)
         VALUES
-        ('admin', 'admin@tech.ai', 'System Admin', ?, 'admin', 1, 'Unlimited', 9999, 1, 'HQ_001', 0)
-    """, (admin_pw,))
+        ('platform_admin', 'admin@tech.ai', 'Platform Admin', ?, 'admin', 1, 'Unlimited', 9999, 1, 'PLATFORM', 0)
+    """, (platform_pw,))
+
+    # Optional: seed demo org admin for HQ_001
+    org_admin_pw = stauth.Hasher.hash("admin123")
+    cur.execute("""
+        INSERT OR REPLACE INTO users
+        (username, email, name, password, role, is_active, plan, credits, verified, team_id, mfa_enabled)
+        VALUES
+        ('admin', 'orgadmin@tech.ai', 'Org Admin', ?, 'admin', 1, 'Pro', 9999, 1, 'HQ_001', 0)
+    """, (org_admin_pw,))
 
     conn.commit()
     conn.close()
@@ -252,17 +263,29 @@ def log_event(actor: str, action_type: str, object_type: str = "", object_id: st
         pass
 
 
-# Run DB init once per session to reduce blinking/work
 if not st.session_state.get("_db_inited"):
     init_db()
     st.session_state["_db_inited"] = True
 
 
 # ============================================================
-# 3) EXPORTS (EXEC-READY + LITE LOGO HEADER)
+# 3) SEAT LIMITS (PLAN ENFORCEMENT)
+# ============================================================
+SEAT_LIMITS = {
+    "lite": 1,          # adjust if you want
+    "pro": 5,
+    "enterprise": 25,
+    "unlimited": 10_000_000
+}
+
+def get_seat_limit(plan: str) -> int:
+    return SEAT_LIMITS.get(str(plan).strip().lower(), 1)
+
+
+# ============================================================
+# 4) EXPORTS (EXEC-READY + LITE LOGO HEADER)
 # ============================================================
 _original_putpages = fpdf.fpdf.FPDF._putpages
-
 
 def _patched_putpages(self):
     pages = self.pages
@@ -272,7 +295,6 @@ def _patched_putpages(self):
             v = v.encode("latin-1", "ignore").decode("latin-1", "ignore")
         self.pages[k] = v
     _original_putpages(self)
-
 
 fpdf.fpdf.FPDF._putpages = _patched_putpages
 
@@ -344,7 +366,7 @@ def export_word(content, title):
 
 
 # ============================================================
-# 4) AUTHENTICATION
+# 5) AUTHENTICATION
 # ============================================================
 def get_db_creds():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -381,9 +403,8 @@ def render_login_screen():
     load_css_once()
 
     st.markdown('<div class="ms-login-wrap"><div class="ms-login-card">', unsafe_allow_html=True)
-
-    # HERO
     st.markdown('<div class="ms-login-hero">', unsafe_allow_html=True)
+
     top = st.columns([1, 3])
     with top[0]:
         if os.path.exists(APP_LOGO_PATH):
@@ -391,19 +412,19 @@ def render_login_screen():
     with top[1]:
         st.markdown('<div class="ms-chip">🧠 AI Marketing OS • Secure • Multi-Agent</div>', unsafe_allow_html=True)
         st.markdown('<h1 class="ms-login-title">Marketing Swarm Intelligence</h1>', unsafe_allow_html=True)
-        st.markdown('<p class="ms-login-sub">Modern SaaS command center for campaign ops, governance, and executive reporting.</p>', unsafe_allow_html=True)
+        st.markdown('<p class="ms-login-sub">Campaign ops, governance, analytics & executive reporting — organization-scoped.</p>', unsafe_allow_html=True)
         st.markdown("""
         <div class="ms-kpis">
           <div class="ms-kpi"><b>RBAC</b><br><span>Admin • Editor • Viewer</span></div>
-          <div class="ms-kpi"><b>Audit Trails</b><br><span>Login, actions, exports, access</span></div>
-          <div class="ms-kpi"><b>Dashboards</b><br><span>KPIs, usage, segmentation-ready</span></div>
+          <div class="ms-kpi"><b>Audit Trails</b><br><span>Login, actions, exports</span></div>
+          <div class="ms-kpi"><b>Org Isolation</b><br><span>Team-scoped data access</span></div>
         </div>
         """, unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
 
-    # BODY
+    st.markdown("</div>", unsafe_allow_html=True)  # hero
     st.markdown('<div class="ms-login-body">', unsafe_allow_html=True)
-    auth_tabs = st.tabs(["🔑 Login", "✨ Pricing & Sign Up", "🤝 Join Team", "❓ Forgot Password"])
+
+    auth_tabs = st.tabs(["🔑 Login", "✨ Pricing & Sign Up", "💳 Billing (Stripe)", "❓ Forgot Password"])
 
     with auth_tabs[0]:
         authenticator.login(location="main")
@@ -413,25 +434,22 @@ def render_login_screen():
     with auth_tabs[1]:
         st.subheader("Plans")
         c1, c2, c3 = st.columns(3)
-
         with c1:
             st.markdown("#### 🥉 LITE")
             st.markdown("**$99/mo**")
-            st.write("- 3 agents\n- Standard exports\n- System logo on reports")
+            st.write("- 1 seat\n- Standard exports\n- System logo on reports")
             if st.button("Choose Lite", key="p_lite", use_container_width=True):
                 st.session_state.selected_tier = "Lite"
-
         with c2:
             st.markdown("#### 🥈 PRO")
             st.markdown("**$299/mo**")
-            st.write("- 8 agents\n- Custom logo\n- Team dashboards")
+            st.write("- 5 seats\n- Team Intel\n- Advanced modules")
             if st.button("Choose Pro", key="p_pro", use_container_width=True):
                 st.session_state.selected_tier = "Pro"
-
         with c3:
             st.markdown("#### 🥇 ENTERPRISE")
             st.markdown("**$999/mo**")
-            st.write("- Unlimited\n- Governance suite\n- Integrations")
+            st.write("- 25 seats\n- Governance\n- Integrations")
             if st.button("Choose Enterprise", key="p_ent", use_container_width=True):
                 st.session_state.selected_tier = "Enterprise"
 
@@ -443,14 +461,40 @@ def render_login_screen():
             except Exception as e:
                 st.error(f"Registration error: {e}")
 
+    # Stripe billing placeholder (client-side redirect)
     with auth_tabs[2]:
-        st.subheader("🤝 Join Organization")
-        st.caption("Your admin can provide your Organization ID (Team ID).")
-        with st.form("team_request_form"):
-            team_id_req = st.text_input("Organization ID (Team ID)", placeholder="e.g., HQ_001")
-            reason = st.text_area("Purpose of Access", placeholder="e.g., Marketing Specialist")
-            if st.form_submit_button("Submit Request", use_container_width=True):
-                st.success(f"Request logged for Team {team_id_req}. Status: PENDING.")
+        st.subheader("Stripe Billing (Checkout Links)")
+        st.caption("Paste your Stripe Checkout links in Streamlit secrets to enable live payments.")
+        st.markdown("""
+**Required secrets (examples):**
+- `STRIPE_CHECKOUT_LITE_URL`
+- `STRIPE_CHECKOUT_PRO_URL`
+- `STRIPE_CHECKOUT_ENTERPRISE_URL`
+
+When users click a plan, they’ll be redirected to Stripe Checkout.
+""")
+        lite_url = st.secrets.get("STRIPE_CHECKOUT_LITE_URL", "")
+        pro_url = st.secrets.get("STRIPE_CHECKOUT_PRO_URL", "")
+        ent_url = st.secrets.get("STRIPE_CHECKOUT_ENTERPRISE_URL", "")
+
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            if lite_url:
+                st.link_button("Pay for LITE", lite_url)
+            else:
+                st.info("Add STRIPE_CHECKOUT_LITE_URL")
+        with b2:
+            if pro_url:
+                st.link_button("Pay for PRO", pro_url)
+            else:
+                st.info("Add STRIPE_CHECKOUT_PRO_URL")
+        with b3:
+            if ent_url:
+                st.link_button("Pay for ENTERPRISE", ent_url)
+            else:
+                st.info("Add STRIPE_CHECKOUT_ENTERPRISE_URL")
+
+        st.info("Server-side Stripe verification requires a webhook endpoint (not included in Streamlit-only app).")
 
     with auth_tabs[3]:
         authenticator.forgot_password(location="main")
@@ -465,7 +509,7 @@ if not st.session_state.get("authentication_status"):
 
 
 # ============================================================
-# 5) LOAD USER CONTEXT + ORGANIZATION ISOLATION
+# 6) LOAD USER CONTEXT + ORG ISOLATION
 # ============================================================
 conn = sqlite3.connect(DB_PATH, check_same_thread=False)
 user_row = pd.read_sql_query(
@@ -477,11 +521,11 @@ conn.close()
 
 current_user = user_row.get("username", "")
 current_role = str(user_row.get("role", "viewer")).strip().lower()
-current_tier = user_row.get("plan", "Lite")
+current_tier = str(user_row.get("plan", "Lite"))
 team_id = user_row.get("team_id", "HQ_001")
 st.session_state["current_tier"] = current_tier
 
-# Update last_login + audit
+# last login + audit
 try:
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("UPDATE users SET last_login = ? WHERE username = ?", (datetime.utcnow().isoformat(), current_user))
@@ -491,22 +535,18 @@ try:
 except Exception:
     pass
 
-# RBAC permissions (granular)
+
+# ============================================================
+# 7) RBAC PERMS
+# ============================================================
 PERMS = {
     "admin": {"*"},
     "editor": {
         "user.view",
-        "user.provision",
-        "user.deactivate",
-        "campaign.view",
-        "campaign.create",
-        "campaign.edit",
-        "asset.view",
-        "asset.upload",
-        "workflow.view",
-        "workflow.manage",
-        "integration.view",
-        "integration.manage",
+        "campaign.view", "campaign.create", "campaign.edit",
+        "asset.view", "asset.upload",
+        "workflow.view", "workflow.manage",
+        "integration.view", "integration.manage",
         "analytics.view",
         "export.data",
         "logs.view",
@@ -526,7 +566,7 @@ def can(perm: str) -> bool:
 
 
 # ============================================================
-# 6) SIDEBAR (DYNAMIC GEO)
+# 8) SIDEBAR (DYNAMIC GEO + AGENTS)
 # ============================================================
 @st.cache_data(ttl=3600)
 def get_geo_data():
@@ -558,25 +598,20 @@ with st.sidebar:
 
     st.subheader(f"Welcome, {user_row.get('name','User')}")
     st.caption(f"Role: **{current_role.upper()}** | Org: **{team_id}**")
-
     st.metric(f"{current_tier} Plan", f"{int(user_row.get('credits', 0))} Credits")
     st.divider()
-
-    tier_limits = {"Lite": 3, "Pro": 8, "Enterprise": 8, "Unlimited": 8}
-    agent_limit = 8 if current_role == "admin" else tier_limits.get(str(current_tier), 3)
 
     biz_name = st.text_input("🏢 Brand Name", placeholder="Acme Corp")
 
     custom_logo = None
-    if str(current_tier).strip().lower() == "lite" and current_role != "admin":
-        st.info("🪪 LITE: System logo used on executive exports.")
+    if current_tier.strip().lower() == "lite" and current_role != "admin":
+        st.info("🪪 LITE: System logo used on exports.")
     else:
         custom_logo = st.file_uploader("📤 Custom Brand Logo (Pro+)", type=["png", "jpg", "jpeg"])
 
     geo_dict = get_geo_data_with_custom()
     states = sorted(list(geo_dict.keys())) + ["➕ Add new state..."]
     selected_state = st.selectbox("🎯 Target State", states)
-
     if selected_state == "➕ Add new state...":
         new_state = st.text_input("New State Name")
         if st.button("Add State"):
@@ -590,7 +625,6 @@ with st.sidebar:
 
     cities = sorted(geo_dict.get(selected_state, [])) + ["➕ Add new city..."]
     selected_city = st.selectbox("🏙️ Target City", cities)
-
     if selected_city == "➕ Add new city...":
         new_city = st.text_input("New City Name")
         if st.button("Add City"):
@@ -607,25 +641,27 @@ with st.sidebar:
     full_loc = f"{selected_city}, {selected_state}"
 
     st.divider()
-
     agent_info = st.text_area("✍️ Strategic Directives", placeholder="Injected into all agent prompts...")
+
+    # Agent toggles
+    agent_map = [
+        ("🕵️ Analyst", "analyst"),
+        ("📺 Ads", "ads"),
+        ("🎨 Creative", "creative"),
+        ("👔 Strategist", "strategist"),
+        ("📱 Social", "social"),
+        ("📍 GEO", "geo"),
+        ("🌐 Auditor", "audit"),
+        ("✍ SEO", "seo"),
+    ]
+
+    # Agent limit by plan (kept from earlier logic)
+    tier_agent_limits = {"lite": 3, "pro": 8, "enterprise": 8, "unlimited": 8}
+    agent_limit = 8 if current_role == "admin" else tier_agent_limits.get(current_tier.strip().lower(), 3)
 
     with st.expander("🤖 Swarm Personnel", expanded=True):
         st.caption(f"Plan cap: {agent_limit} agents")
-
-        agent_map = [
-            ("🕵️ Analyst", "analyst"),
-            ("📺 Ads", "ads"),
-            ("🎨 Creative", "creative"),
-            ("👔 Strategist", "strategist"),
-            ("📱 Social", "social"),
-            ("📍 GEO", "geo"),
-            ("🌐 Auditor", "audit"),
-            ("✍ SEO", "seo"),
-        ]
-
         toggles = {k: st.toggle(t, value=st.session_state.get(f"tg_{k}", False), key=f"tg_{k}") for t, k in agent_map}
-
         if current_role != "admin" and sum(1 for v in toggles.values() if v) > agent_limit:
             st.warning(f"Selected more than {agent_limit}. Turn some off.")
 
@@ -651,7 +687,7 @@ with st.sidebar:
 
 
 # ============================================================
-# 7) RUN SWARM (BATCHED TO AVOID 429)
+# 9) RUN SWARM (BATCHED)
 # ============================================================
 def run_swarm_in_batches(base_payload: dict, agents: list[str], batch_size: int = 3, pause_sec: int = 20, max_retries: int = 2):
     final_report: dict = {}
@@ -724,116 +760,13 @@ if run_btn:
 
 
 # ============================================================
-# 8) DASHBOARD TABS + “TEAM INTEL” SaaS MODULES
+# 10) DASHBOARD: Team Intel with seat limits + org isolation
 # ============================================================
-AGENT_SPECS = {
-    "analyst": "🕵️ **Market Analyst**: Scans competitors and identifies price-gaps.",
-    "ads": "📺 **Ads Architect**: Generates high-converting copy for Meta/Google.",
-    "creative": "🎨 **Creative Director**: Prompts & creative direction.",
-    "strategist": "📝 **Swarm Strategist**: 30-day execution roadmap.",
-    "social": "📱 **Social Engineer**: Engagement-driven posts.",
-    "geo": "📍 **Geo-Fencer**: Local map ranking optimization.",
-    "audit": "🔍 **Technical Auditor**: Speed + conversion leaks.",
-    "seo": "📝 **SEO Architect**: SGE-ready content clusters."
-}
-
-DEPLOY_GUIDES = {
-    "analyst": "Identify price-gaps to undercut rivals.",
-    "ads": "Translate platform hooks into ad headlines and angles.",
-    "creative": "Use prompts for Midjourney/Canva conversion assets.",
-    "strategist": "30-day CEO roadmap. Start with Phase 1 quick wins.",
-    "social": "Deploy viral hooks and community engagement posts.",
-    "geo": "Update citations and optimize for 'near me' search intent.",
-    "audit": "Patch technical leaks to improve speed and conversions.",
-    "seo": "Publish for SGE and optimize for zero-click answers."
-}
-
-def show_deploy_guide(title: str, key: str):
-    st.markdown(
-        f"""
-        <div style="background-color:#f0f2f6; padding:14px; border-radius:10px;
-                    border-left: 5px solid #2563EB; margin-bottom: 14px;">
-            <b style="color:#0f172a;">🚀 {title.upper()} DEPLOYMENT GUIDE:</b><br>
-            <span style="color:#334155;">{DEPLOY_GUIDES.get(key, "Intelligence Gathering")}</span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-def render_social_push_panel():
-    st.markdown("### 🚀 Publish / Push")
-    st.caption("Open platform consoles to publish or deploy the generated assets.")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.link_button("Google Ads", "https://ads.google.com/home/")
-        st.link_button("Google Business Profile", "https://business.google.com/")
-    with c2:
-        st.link_button("Meta Business Suite", "https://business.facebook.com/latest/")
-        st.link_button("Facebook Ads Manager", "https://www.facebook.com/adsmanager/manage/")
-    with c3:
-        st.link_button("YouTube Studio", "https://studio.youtube.com/")
-        st.link_button("LinkedIn Campaign Manager", "https://www.linkedin.com/campaignmanager/")
-
-def render_guide():
-    st.header("📖 Agent Intelligence Manual")
-    st.info(f"Command Center Active for: {biz_name or 'Global Mission'}")
-    st.subheader("Agent Specializations")
-    for _, desc in AGENT_SPECS.items():
-        st.markdown(desc)
-    st.markdown("---")
-    st.markdown("### 🛡️ Swarm Execution Protocol")
-    st.write("1) Launch from the sidebar\n2) Edit inside the Agent Seat\n3) Export using Word/PDF buttons")
-
-def render_agent_seat(title: str, key: str):
-    st.subheader(f"🚀 {title} Seat")
-    show_deploy_guide(title, key)
-
-    report = st.session_state.get("report") or {}
-    if st.session_state.get("gen") and report:
-        content = report.get(key)
-        if content:
-            edited = st.text_area("Refine Intel", value=str(content), height=420, key=f"ed_{key}")
-
-            if key in {"ads", "creative", "social"}:
-                st.write("---")
-                render_social_push_panel()
-
-            st.write("---")
-            c1, c2 = st.columns(2)
-            with c1:
-                if can("export.data"):
-                    st.download_button("📄 Download Word", export_word(edited, title), file_name=f"{key}.docx", key=f"w_{key}", use_container_width=True)
-                    log_event(current_user, "export.word", "agent_output", key, "", team_id)
-                else:
-                    st.info("Export requires Editor/Admin.")
-            with c2:
-                if can("export.data"):
-                    st.download_button("📕 Download PDF", export_pdf(edited, title), file_name=f"{key}.pdf", key=f"p_{key}", use_container_width=True)
-                    log_event(current_user, "export.pdf", "agent_output", key, "", team_id)
-                else:
-                    st.info("Export requires Editor/Admin.")
-        else:
-            st.warning("Agent not selected for this run.")
-    else:
-        st.info("System Standby. Launch from sidebar.")
-
-def render_vision():
-    st.header("👁️ Visual Intelligence")
-    st.write("Visual audits and image analysis results appear here.")
-
-def render_veo():
-    st.header("🎬 Veo Video Studio")
-    st.write("AI video generation assets appear here.")
-
-
-# ------------------------------------------------------------
-# TEAM INTEL: SaaS Customer Dashboard (Functional Modules)
-# ------------------------------------------------------------
 def render_team_intel():
     st.header("🤝 Team Intel")
-    st.caption("SaaS customer dashboard — organization-scoped. Users only see data for their Organization (Team ID).")
+    st.caption("Organization-scoped SaaS dashboard. Data is restricted to your Organization (Team ID).")
 
-    # snapshots
+    # counts (org-scoped)
     with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
         users_cnt = pd.read_sql_query("SELECT COUNT(*) AS c FROM users WHERE team_id=? AND is_active=1", conn, params=(team_id,))["c"].iloc[0]
         camp_cnt = pd.read_sql_query("SELECT COUNT(*) AS c FROM campaigns WHERE team_id=?", conn, params=(team_id,))["c"].iloc[0]
@@ -848,6 +781,9 @@ def render_team_intel():
     k4.metric("Enabled Workflows", int(wf_cnt))
     k5.metric("Leads", int(lead_cnt))
 
+    org_plan = str(current_tier)
+    seat_limit = get_seat_limit(org_plan)
+
     st.write("---")
 
     t_users, t_campaigns, t_assets, t_workflows, t_integrations, t_analytics, t_security = st.tabs([
@@ -860,12 +796,11 @@ def render_team_intel():
         "🔐 Security & Logs",
     ])
 
-    # 1) User & Access (RBAC + provisioning)
+    # Users & Access (seat limit enforcement)
     with t_users:
         st.subheader("Core User & Access Management (RBAC)")
-        st.caption("Roles: Admin • Editor • Viewer. Provisioning limited to Admin.")
+        st.caption("Only your Organization users are visible here. Seat limits are enforced by plan.")
 
-        # Only show your org’s users
         with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
             users_df = pd.read_sql_query(
                 "SELECT username, name, email, role, is_active, plan, verified, mfa_enabled, sso_provider, last_login "
@@ -873,7 +808,16 @@ def render_team_intel():
                 conn,
                 params=(team_id,)
             )
+
         st.dataframe(users_df, use_container_width=True)
+
+        active_seats = int((users_df["is_active"] == 1).sum())
+        remaining = max(seat_limit - active_seats, 0)
+
+        cA, cB, cC = st.columns(3)
+        cA.metric("Plan", org_plan)
+        cB.metric("Active Seats", active_seats)
+        cC.metric("Seats Remaining", remaining)
 
         if current_role == "admin":
             st.write("---")
@@ -897,6 +841,30 @@ def render_team_intel():
                         if not u.strip() or not pw.strip():
                             st.error("Username and Temp Password required.")
                         else:
+                            # Seat enforcement only when activating a NEW active user
+                            # Check if user exists
+                            with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+                                existing = pd.read_sql_query(
+                                    "SELECT username, is_active FROM users WHERE username=? AND team_id=?",
+                                    conn,
+                                    params=(u.strip(), team_id)
+                                )
+
+                            is_new_user = existing.empty
+                            would_be_active = bool(active)
+
+                            if would_be_active:
+                                # if new user OR re-activating an inactive user, enforce seats
+                                if is_new_user:
+                                    if active_seats >= seat_limit:
+                                        st.error(f"Seat limit reached for {org_plan}. Upgrade plan to add more users.")
+                                        st.stop()
+                                else:
+                                    prev_active = int(existing["is_active"].iloc[0])
+                                    if prev_active == 0 and active_seats >= seat_limit:
+                                        st.error(f"Seat limit reached for {org_plan}. Upgrade plan to add more users.")
+                                        st.stop()
+
                             hashed = stauth.Hasher.hash(pw.strip())
                             with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
                                 conn.execute("""
@@ -914,6 +882,7 @@ def render_team_intel():
                                         team_id=excluded.team_id
                                 """, (u.strip(), n.strip(), e.strip(), hashed, r, 1 if active else 0, p, team_id, 1 if mfa else 0, sso))
                                 conn.commit()
+
                             log_event(current_user, "user.provision", "user", u.strip(), f"role={r}, active={active}", team_id)
                             st.success("User provisioned/updated.")
                             st.rerun()
@@ -940,18 +909,77 @@ def render_team_intel():
                 try:
                     df = pd.read_csv(up)
                     st.dataframe(df.head(25), use_container_width=True)
+
+                    # count how many would add active seats
+                    def _would_add_seat(row) -> bool:
+                        uname = str(row.get("username", "")).strip()
+                        if not uname:
+                            return False
+                        is_active_val = str(row.get("is_active", "1")).strip()
+                        try:
+                            desired_active = bool(int(is_active_val)) if is_active_val != "" else True
+                        except Exception:
+                            desired_active = True
+                        if not desired_active:
+                            return False
+
+                        # if user exists and already active -> no
+                        return True
+
                     if st.button("Import Users"):
+                        # Determine seat impact precisely: new active users + reactivations
                         with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-                            for _, rr in df.iterrows():
+                            existing_df = pd.read_sql_query(
+                                "SELECT username, is_active FROM users WHERE team_id=?",
+                                conn, params=(team_id,)
+                            )
+
+                        existing_map = {r["username"]: int(r["is_active"]) for _, r in existing_df.iterrows()}
+
+                        seat_add = 0
+                        to_import = []
+
+                        for _, rr in df.iterrows():
+                            uname = str(rr.get("username", "")).strip()
+                            tpw = str(rr.get("temp_password", "")).strip()
+                            if not uname or not tpw:
+                                continue
+
+                            is_active_val = str(rr.get("is_active", "1")).strip()
+                            try:
+                                desired_active = bool(int(is_active_val)) if is_active_val != "" else True
+                            except Exception:
+                                desired_active = True
+
+                            # seat increase if desired_active and (new user OR currently inactive)
+                            if desired_active and (uname not in existing_map or existing_map.get(uname, 0) == 0):
+                                seat_add += 1
+
+                            to_import.append(rr)
+
+                        if active_seats + seat_add > seat_limit:
+                            st.error(
+                                f"Bulk import exceeds seat limit for {org_plan}. "
+                                f"Active seats: {active_seats}, seats needed: {seat_add}, limit: {seat_limit}."
+                            )
+                            st.stop()
+
+                        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+                            for rr in to_import:
                                 uname = str(rr.get("username", "")).strip()
                                 tpw = str(rr.get("temp_password", "")).strip()
-                                if not uname or not tpw:
-                                    continue
+
                                 role_ = str(rr.get("role", "viewer")).strip().lower()
                                 if role_ not in {"admin", "editor", "viewer"}:
                                     role_ = "viewer"
                                 plan_ = str(rr.get("plan", "Lite")).strip() or "Lite"
-                                is_active_ = int(rr.get("is_active", 1)) if str(rr.get("is_active", "1")).strip() != "" else 1
+
+                                is_active_val = str(rr.get("is_active", "1")).strip()
+                                try:
+                                    is_active_ = int(is_active_val) if is_active_val != "" else 1
+                                except Exception:
+                                    is_active_ = 1
+
                                 hashed = stauth.Hasher.hash(tpw)
 
                                 conn.execute("""
@@ -976,15 +1004,21 @@ def render_team_intel():
                                     team_id
                                 ))
                             conn.commit()
-                        log_event(current_user, "user.bulk_import", "user", "", f"rows={len(df)}", team_id)
+
+                        log_event(current_user, "user.bulk_import", "user", "", f"rows={len(to_import)}", team_id)
                         st.success("Bulk import completed.")
                         st.rerun()
+
                 except Exception as e:
                     st.error(f"CSV import error: {e}")
 
-        st.info("SSO/MFA: placeholders here. Production SSO/MFA requires an external identity provider (Okta/AzureAD/Google Workspace).")
+        else:
+            st.info("Provisioning is Admin-only.")
 
-    # 2) Campaign Management
+        st.info("SSO/MFA are placeholders in this Streamlit build. Production SSO/MFA requires an external identity provider.")
+
+
+    # Campaigns
     with t_campaigns:
         st.subheader("Campaign Management")
         with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
@@ -1024,7 +1058,7 @@ def render_team_intel():
         else:
             st.info("Create campaigns requires Editor/Admin role.")
 
-    # 3) Content & Asset Library
+    # Assets
     with t_assets:
         st.subheader("Content & Asset Library")
         with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
@@ -1038,7 +1072,7 @@ def render_team_intel():
 
         if can("asset.upload"):
             with st.expander("📤 Upload Asset", expanded=False):
-                up = st.file_uploader("Upload (small files recommended)", type=["png", "jpg", "jpeg", "pdf", "docx", "txt"])
+                up = st.file_uploader("Upload (<=2MB)", type=["png", "jpg", "jpeg", "pdf", "docx", "txt"])
                 asset_type = st.selectbox("Asset Type", ["image", "template", "copy", "other"])
                 tags = st.text_input("Tags (comma-separated)")
                 save = st.button("Save Asset")
@@ -1047,7 +1081,6 @@ def render_team_intel():
                         st.error("Upload a file first.")
                     else:
                         data = up.getvalue()
-                        # keep DB small; you can raise limit if desired
                         if len(data) > 2_000_000:
                             st.error("File too large for DB storage. Keep assets <= 2MB or store externally.")
                         else:
@@ -1063,7 +1096,7 @@ def render_team_intel():
         else:
             st.info("Upload assets requires Editor/Admin role.")
 
-    # 4) Workflow Automation
+    # Workflows
     with t_workflows:
         st.subheader("Automation & Workflows")
         with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
@@ -1096,11 +1129,10 @@ def render_team_intel():
         else:
             st.info("Manage workflows requires Editor/Admin role.")
 
-    # 5) Integrations
+    # Integrations
     with t_integrations:
         st.subheader("Integrations")
-        st.caption("Connect CRM/Analytics/Social tools (stored as placeholders; use secrets for real keys).")
-
+        st.caption("CRM/Analytics/Social connections stored as placeholders. Use secrets for real keys.")
         with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
             int_df = pd.read_sql_query(
                 "SELECT id, name, status, details, updated_at "
@@ -1115,7 +1147,7 @@ def render_team_intel():
                 with st.form("ti_integration_form"):
                     name = st.selectbox("Integration", ["Salesforce", "HubSpot", "Google Analytics", "Meta", "Mailchimp", "Other"])
                     status_ = st.selectbox("Status", ["disconnected", "connected", "error"])
-                    details = st.text_area("Details (non-secret)", placeholder="Workspace/Account ID, notes, etc.")
+                    details = st.text_area("Details (non-secret)")
                     submit = st.form_submit_button("Save")
                     if submit:
                         with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
@@ -1130,11 +1162,9 @@ def render_team_intel():
         else:
             st.info("Manage integrations requires Editor/Admin role.")
 
-    # 6) Analytics & Reporting
+    # Analytics
     with t_analytics:
         st.subheader("Analytics & Reporting")
-        st.caption("KPIs + usage analytics. (Campaign performance expansion ready.)")
-
         with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
             camps = pd.read_sql_query("SELECT status, channel, budget FROM campaigns WHERE team_id=?", conn, params=(team_id,))
             logs = pd.read_sql_query("SELECT action_type FROM activity_logs WHERE team_id=?", conn, params=(team_id,))
@@ -1146,7 +1176,6 @@ def render_team_intel():
         r3.metric("Active Users", int(users_cnt))
 
         st.write("---")
-
         if not leads.empty:
             st.markdown("#### Lead Status")
             st.bar_chart(leads["status"].value_counts())
@@ -1158,109 +1187,139 @@ def render_team_intel():
             st.bar_chart(camps["channel"].value_counts())
 
         if not logs.empty:
-            st.markdown("#### Usage Analytics (Top Actions)")
-            st.bar_chart(logs["action_type"].value_counts().head(12))
-
-    # 7) Security & Compliance (Audit logs)
-    with t_security:
-        st.subheader("Security & Compliance")
-        st.caption("Audit trails + monitoring. (SSO/MFA are placeholders in this Streamlit build.)")
-
-        if not can("logs.view") and current_role != "admin":
-            st.info("Viewing audit logs requires Editor/Admin role.")
-        else:
-            with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-                logs_df = pd.read_sql_query(
-                    "SELECT timestamp, actor, action_type, object_type, object_id, details "
-                    "FROM activity_logs WHERE team_id=? ORDER BY id DESC LIMIT 300",
-                    conn,
-                    params=(team_id,)
-                )
-            st.dataframe(logs_df, use_container_width=True)
-
-        st.info(
-            "SSO/MFA guidance: For a production SaaS, enforce SSO + MFA via Okta/AzureAD/Google Workspace and use an auth gateway. "
-            "This app exposes config placeholders and logs to support compliance workflows."
-        )
-
-
-# ------------------------------------------------------------
-# ADMIN TAB (GOVERNANCE VIEW) – still org-scoped (no cross-org)
-# ------------------------------------------------------------
-def render_admin():
-    st.header("⚙ Admin Console")
-    st.caption("Governance suite (organization-scoped).")
-
-    if current_role != "admin":
-        st.info("Admin-only view.")
-        return
-
-    a_users, a_marketing, a_analytics, a_workflows, a_security = st.tabs([
-        "👥 User & Access",
-        "📣 Marketing Config",
-        "📊 Analytics & Reporting",
-        "🤖 Automation & Workflows",
-        "🔐 Security & Compliance"
-    ])
-
-    with a_users:
-        st.subheader("User & Access Management (RBAC, SSO, MFA, Onboarding/Offboarding)")
-        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-            df = pd.read_sql_query(
-                "SELECT username, name, email, role, is_active, plan, verified, mfa_enabled, sso_provider, last_login "
-                "FROM users WHERE team_id=? ORDER BY username",
-                conn,
-                params=(team_id,)
-            )
-        st.dataframe(df, use_container_width=True)
-        st.info("Use Team Intel → User & Access for provisioning + bulk import. Admin Console is governance-focused.")
-
-    with a_marketing:
-        st.subheader("Marketing Configuration (Campaign setup, content, channels)")
-        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-            camp = pd.read_sql_query("SELECT * FROM campaigns WHERE team_id=? ORDER BY id DESC", conn, params=(team_id,))
-            assets = pd.read_sql_query("SELECT id, name, asset_type, tags, created_at FROM assets WHERE team_id=? ORDER BY id DESC", conn, params=(team_id,))
-        st.markdown("#### Campaigns")
-        st.dataframe(camp, use_container_width=True)
-        st.markdown("#### Assets")
-        st.dataframe(assets, use_container_width=True)
-
-    with a_analytics:
-        st.subheader("Analytics & Reporting (Dashboards, segmentation-ready)")
-        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-            logs = pd.read_sql_query("SELECT action_type FROM activity_logs WHERE team_id=? ORDER BY id DESC LIMIT 2000", conn, params=(team_id,))
-            camps = pd.read_sql_query("SELECT status, channel FROM campaigns WHERE team_id=?", conn, params=(team_id,))
-        if not logs.empty:
             st.markdown("#### Usage Analytics")
             st.bar_chart(logs["action_type"].value_counts().head(12))
-        if not camps.empty:
-            st.markdown("#### Campaign Status")
-            st.bar_chart(camps["status"].value_counts())
-            st.markdown("#### Channel Mix")
-            st.bar_chart(camps["channel"].value_counts())
 
-    with a_workflows:
-        st.subheader("Automation & Workflows (Journeys, triggers, integrations)")
-        with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-            wf = pd.read_sql_query("SELECT * FROM workflows WHERE team_id=? ORDER BY id DESC", conn, params=(team_id,))
-            integ = pd.read_sql_query("SELECT * FROM integrations WHERE team_id=? ORDER BY id DESC", conn, params=(team_id,))
-        st.dataframe(wf, use_container_width=True)
-        st.dataframe(integ, use_container_width=True)
+    # Security & Logs (org-scoped; hide auth.login for non-admin)
+    with t_security:
+        st.subheader("Security & Compliance")
+        base_query = """
+            SELECT timestamp, actor, action_type, object_type, object_id, details
+            FROM activity_logs
+            WHERE team_id=?
+        """
+        params = [team_id]
+        if current_role != "admin":
+            base_query += " AND action_type NOT IN ('auth.login')"
+        base_query += " ORDER BY id DESC LIMIT 300"
 
-    with a_security:
-        st.subheader("Security & Compliance (Audit trails, usage monitoring)")
         with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
-            df = pd.read_sql_query(
-                "SELECT timestamp, actor, action_type, object_type, object_id, details "
-                "FROM activity_logs WHERE team_id=? ORDER BY id DESC LIMIT 400",
-                conn,
-                params=(team_id,)
-            )
-        st.dataframe(df, use_container_width=True)
+            logs_df = pd.read_sql_query(base_query, conn, params=tuple(params))
+
+        st.dataframe(logs_df, use_container_width=True)
+        st.info("SSO/MFA are placeholders in this Streamlit build. For real SaaS, enforce SSO+MFA at the IdP.")
 
 
 # ============================================================
-# 9) RENDER TABS
+# 11) OTHER TABS (GUIDE / AGENTS / VISION / VEO / ADMIN)
+# ============================================================
+AGENT_SPECS = {
+    "analyst": "🕵️ **Market Analyst**: competitor gaps, pricing, positioning.",
+    "ads": "📺 **Ads Architect**: deployable ads for Google/Meta.",
+    "creative": "🎨 **Creative Director**: concepts + prompt packs.",
+    "strategist": "📝 **Strategist**: 30-day execution roadmap.",
+    "social": "📱 **Social**: engagement content calendar.",
+    "geo": "📍 **GEO**: local visibility and citations.",
+    "audit": "🔍 **Audit**: website conversion friction.",
+    "seo": "📝 **SEO**: authority article."
+}
+
+DEPLOY_GUIDES = {
+    "analyst": "Identify price gaps and positioning opportunities.",
+    "ads": "Build ad headlines, descriptions, hooks.",
+    "creative": "Create concepts + Midjourney/Canva prompt packs.",
+    "strategist": "Synthesize into CEO-ready roadmap.",
+    "social": "Build a 30-day plan with hooks and CTAs.",
+    "geo": "Local plan: citations, GBP, near-me targeting.",
+    "audit": "Audit for friction and fixes.",
+    "seo": "Write local SEO authority article."
+}
+
+def show_deploy_guide(title: str, key: str):
+    st.markdown(
+        f"""
+        <div style="background-color:#f0f2f6; padding:14px; border-radius:10px;
+                    border-left: 5px solid #2563EB; margin-bottom: 14px;">
+            <b style="color:#0f172a;">🚀 {title.upper()} GUIDE:</b><br>
+            <span style="color:#334155;">{DEPLOY_GUIDES.get(key, "")}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def render_social_push_panel():
+    st.markdown("### 🚀 Publish / Push")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.link_button("Google Ads", "https://ads.google.com/home/")
+        st.link_button("Google Business Profile", "https://business.google.com/")
+    with c2:
+        st.link_button("Meta Business Suite", "https://business.facebook.com/latest/")
+        st.link_button("Facebook Ads Manager", "https://www.facebook.com/adsmanager/manage/")
+    with c3:
+        st.link_button("YouTube Studio", "https://studio.youtube.com/")
+        st.link_button("LinkedIn Campaign Manager", "https://www.linkedin.com/campaignmanager/")
+
+def render_guide():
+    st.header("📖 Agent Intelligence Manual")
+    st.info(f"Command Center Active for: {biz_name or 'Global Mission'}")
+    for _, desc in AGENT_SPECS.items():
+        st.markdown(desc)
+
+def render_agent_seat(title: str, key: str):
+    st.subheader(f"🚀 {title} Seat")
+    show_deploy_guide(title, key)
+
+    report = st.session_state.get("report") or {}
+    if st.session_state.get("gen") and report and report.get(key):
+        edited = st.text_area("Refine Intel", value=str(report.get(key)), height=420, key=f"ed_{key}")
+
+        if key in {"ads", "creative", "social"}:
+            st.write("---")
+            render_social_push_panel()
+
+        st.write("---")
+        c1, c2 = st.columns(2)
+        with c1:
+            if can("export.data") or current_role == "admin":
+                st.download_button("📄 Download Word", export_word(edited, title), file_name=f"{key}.docx", key=f"w_{key}", use_container_width=True)
+                log_event(current_user, "export.word", "agent_output", key, "", team_id)
+            else:
+                st.info("Export requires Editor/Admin.")
+        with c2:
+            if can("export.data") or current_role == "admin":
+                st.download_button("📕 Download PDF", export_pdf(edited, title), file_name=f"{key}.pdf", key=f"p_{key}", use_container_width=True)
+                log_event(current_user, "export.pdf", "agent_output", key, "", team_id)
+            else:
+                st.info("Export requires Editor/Admin.")
+    else:
+        st.info("Agent not selected for this run. Launch from sidebar.")
+
+def render_vision():
+    st.header("👁️ Visual Intelligence")
+    st.write("Visual audits and image analysis results appear here.")
+
+def render_veo():
+    st.header("🎬 Veo Video Studio")
+    st.write("AI video generation assets appear here.")
+
+def render_admin():
+    st.header("⚙ Admin Console")
+    st.caption("Platform governance. (Organization-scoped in this build.)")
+    if current_role != "admin":
+        st.info("Admin-only view.")
+        return
+    st.info("Admin features are available inside Team Intel. This tab is reserved for platform-level controls.")
+    with sqlite3.connect(DB_PATH, check_same_thread=False) as conn:
+        df = pd.read_sql_query(
+            "SELECT timestamp, actor, action_type, object_type, object_id, details FROM activity_logs WHERE team_id=? ORDER BY id DESC LIMIT 200",
+            conn, params=(team_id,)
+        )
+    st.dataframe(df, use_container_width=True)
+
+
+# ============================================================
+# 12) TABS
 # ============================================================
 agent_titles = [a[0] for a in agent_map]
 tab_labels = ["📖 Guide"] + agent_titles + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
