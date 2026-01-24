@@ -1,7 +1,7 @@
 import os
 import time
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 import streamlit as st
 
 from crewai import Agent, Task, Crew, Process, LLM
-from crewai.flow.flow import Flow, listen, start
 from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 
 # ============================================================
@@ -18,6 +17,7 @@ from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 load_dotenv(override=True)
 
 def _get_secret(name: str, default: Optional[str] = None) -> Optional[str]:
+    """Streamlit secrets first, then environment variables."""
     try:
         if hasattr(st, "secrets") and name in st.secrets and st.secrets[name]:
             return str(st.secrets[name])
@@ -30,24 +30,26 @@ def _is_429(err: Exception) -> bool:
     return ("429" in msg) or ("RESOURCE_EXHAUSTED" in msg)
 
 def kickoff_with_retry(crew: Crew, retries: int = 2, base_sleep: int = 15):
+    """Retry Crew kickoff on common Gemini/GCP 429 rate-limit errors."""
     for attempt in range(retries + 1):
         try:
             return crew.kickoff()
         except Exception as e:
             if _is_429(e) and attempt < retries:
                 wait = base_sleep * (attempt + 1)
-                st.warning(f"⚠️ Rate limited (429). Retrying in {wait}s...")
+                try:
+                    st.warning(f"⚠️ Rate limited (429). Retrying in {wait}s...")
+                except Exception:
+                    pass
                 time.sleep(wait)
                 continue
             raise
 
-# ✅ Add new seats here (must match app.py keys)
+# ============================================================
+# TOGGLES (must match app.py keys)
+# ============================================================
 TOGGLE_KEYS = {
     "analyst",
-    "marketing_adviser",
-    "market_researcher",
-    "ecommerce_marketer",
-    "guest_posting",
     "ads",
     "creative",
     "strategist",
@@ -55,6 +57,10 @@ TOGGLE_KEYS = {
     "geo",
     "audit",
     "seo",
+    "marketing_adviser",
+    "ecommerce_marketer",
+    "guest_posting",
+    "market_researcher",
 }
 
 # ============================================================
@@ -66,36 +72,40 @@ class SwarmState(BaseModel):
     directives: str = ""
     url: str = ""
 
-    # Outputs
-    market_data: str = "Agent not selected for this run."
-    marketing_advice: str = "Agent not selected for this run."
-    market_research: str = "Agent not selected for this run."
-    ecommerce_plan: str = "Agent not selected for this run."
-    guest_posting_plan: str = "Agent not selected for this run."
+    # Outputs (map to app keys)
+    analyst: str = "Agent not selected for this run."
+    ads: str = "Agent not selected for this run."
+    creative: str = "Agent not selected for this run."
+    strategist: str = "Agent not selected for this run."
+    audit: str = "Agent not selected for this run."
+    seo: str = "Agent not selected for this run."
+    social: str = "Agent not selected for this run."
+    geo: str = "Agent not selected for this run."
 
-    ads_output: str = "Agent not selected for this run."
-    creative_pack: str = "Agent not selected for this run."
-    strategist_brief: str = "Agent not selected for this run."
-    website_audit: str = "Agent not selected for this run."
-    social_plan: str = "Agent not selected for this run."
-    geo_intel: str = "Agent not selected for this run."
-    seo_article: str = "Agent not selected for this run."
+    marketing_adviser: str = "Agent not selected for this run."
+    ecommerce_marketer: str = "Agent not selected for this run."
+    guest_posting: str = "Agent not selected for this run."
+    market_researcher: str = "Agent not selected for this run."
 
     full_report: str = "Full report not generated."
 
 # ============================================================
 # LLM + TOOLS
 # ============================================================
-GOOGLE_API_KEY = _get_secret("GOOGLE_API_KEY") or _get_secret("GEMINI_API_KEY") or _get_secret("GENAI_API_KEY")
+GOOGLE_API_KEY = (
+    _get_secret("GOOGLE_API_KEY")
+    or _get_secret("GEMINI_API_KEY")
+    or _get_secret("GENAI_API_KEY")
+)
 SERPER_API_KEY = _get_secret("SERPER_API_KEY")
 
 if not GOOGLE_API_KEY:
-    raise RuntimeError("Missing GOOGLE_API_KEY in secrets or env.")
+    raise RuntimeError("Missing GOOGLE_API_KEY in Streamlit secrets or environment variables.")
 
 gemini_llm = LLM(
     model="google/gemini-2.0-flash",
     api_key=GOOGLE_API_KEY,
-    temperature=0.2,  # lower to reduce hallucinations
+    temperature=0.2,  # lower = less hallucination / more deterministic
 )
 
 scrape_tool = ScrapeWebsiteTool()
@@ -103,11 +113,10 @@ search_tool = SerperDevTool(api_key=SERPER_API_KEY) if SERPER_API_KEY else None
 
 SAFETY_INSTRUCTIONS = (
     "Important rules:\n"
-    "- Do NOT invent facts, citations, or metrics.\n"
-    "- If data is missing, say what you would need.\n"
+    "- Do NOT invent facts, citations, customer counts, revenue, market share, or performance metrics.\n"
+    "- If data is missing, say what you would need and give a conservative, assumption-based plan.\n"
     "- If you use web search results, summarize them and note uncertainty.\n"
-    "- Prefer concise, executive-ready bullets and tables.\n"
-    "- If you cannot verify, label as assumption.\n"
+    "- Prefer concise, executive-ready bullets. Avoid long essays.\n"
 )
 
 # ============================================================
@@ -116,436 +125,340 @@ SAFETY_INSTRUCTIONS = (
 def get_swarm_agents(inputs: Dict[str, Any]) -> Dict[str, Agent]:
     biz = inputs.get("biz_name", "The Business")
     city = inputs.get("city", "the local area")
-    url = inputs.get("url") or inputs.get("website") or ""
+    url = (inputs.get("url") or inputs.get("website") or "").strip()
     directives = inputs.get("directives") or "Standard growth optimization."
 
-    # Tools policy
-    base_tools = [scrape_tool]
+    research_tools = [scrape_tool]
     if search_tool:
-        base_tools = [search_tool, scrape_tool]
+        research_tools = [search_tool, scrape_tool]
 
     return {
+        "market_researcher": Agent(
+            role="Market Researcher",
+            goal=f"Produce a sharp, executive market research snapshot for {biz} in {city}.",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nDirectives: {directives}\nUse search/scrape when available. If SERPER key is missing, state limitations.",
+            tools=research_tools,
+            llm=gemini_llm,
+            verbose=True,
+        ),
         "analyst": Agent(
             role="Chief Market Strategist (McKinsey Level)",
             goal=f"Identify high-value market entry gaps for {biz} in {city}.",
             backstory=f"{SAFETY_INSTRUCTIONS}\nYou quantify pricing gaps, positioning, and quick wins.\nDirectives: {directives}",
-            tools=base_tools,
+            tools=research_tools,
             llm=gemini_llm,
-            verbose=True
+            verbose=True,
         ),
-
         "marketing_adviser": Agent(
-            role="Marketing Adviser (CMO-level)",
-            goal=f"Create a clear marketing direction for {biz} in {city}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nReturn a practical channel plan, messaging, offers, and next steps.\nDirectives: {directives}",
-            tools=base_tools if search_tool else [],
+            role="Marketing Adviser",
+            goal=f"Create a pragmatic marketing plan for {biz} in {city}.",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nYou recommend the best channels, messaging, and a weekly execution cadence.\nDirectives: {directives}",
             llm=gemini_llm,
-            verbose=True
+            verbose=True,
         ),
-
-        "market_researcher": Agent(
-            role="Market Researcher",
-            goal=f"Produce market research insights for {biz} in {city}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nProvide segments, competitor scan, and demand indicators. Use assumptions clearly.\nDirectives: {directives}",
-            tools=base_tools,
-            llm=gemini_llm,
-            verbose=True
-        ),
-
-        "ecommerce_marketer": Agent(
-            role="E‑Commerce Marketer (Lifecycle + CRO)",
-            goal=f"Generate an e‑commerce growth plan for {biz} (if applicable) or a lead-gen funnel plan.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nFocus on funnel steps, email/SMS, upsells, and CRO. If not e‑commerce, adapt to lead funnel.\nDirectives: {directives}",
-            llm=gemini_llm,
-            verbose=True
-        ),
-
-        "guest_posting": Agent(
-            role="Guest Posting & Partnerships Lead",
-            goal=f"Create a guest posting plan for {biz} to build authority in {city}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nReturn a target list blueprint, outreach templates, and topic angles.\nDirectives: {directives}",
-            tools=[search_tool] if search_tool else [],
-            llm=gemini_llm,
-            verbose=True
-        ),
-
-        "audit": Agent(
-            role="Conversion UX Auditor",
-            goal=f"Diagnose conversion leaks for {biz}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nYou audit websites for speed, trust, mobile UX, and conversion friction.\nIf URL is missing, ask for it.",
-            tools=[scrape_tool],
-            llm=gemini_llm,
-            verbose=True
-        ),
-
         "strategist": Agent(
             role="Chief Growth Officer",
-            goal=f"Synthesize into a CEO-ready 30-day execution plan for {biz} in {city}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nYou produce a weekly roadmap, KPIs, and priorities.\nDirectives: {directives}",
+            goal=f"Synthesize into a CEO-ready 30-day execution plan for {biz}.",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nYou produce a weekly roadmap, KPIs, priorities, and owner/operator tasks.",
             llm=gemini_llm,
-            verbose=True
+            verbose=True,
         ),
-
+        "ecommerce_marketer": Agent(
+            role="E-Commerce Marketer",
+            goal=f"Design an e-commerce growth system for {biz} (or a store-ready funnel if not e-commerce).",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nYou deliver funnel steps, email/SMS flows, product page optimizations, offers, and retention tactics.\nIf the business isn't e-commerce, adapt the plan to lead-gen.",
+            llm=gemini_llm,
+            verbose=True,
+        ),
         "ads": Agent(
             role="Performance Ads Architect",
             goal=f"Generate deployable ad copy for {biz} targeting {city}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nGoogle Search + Meta copy in tables. Don’t fabricate claims.\nDirectives: {directives}",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nGoogle Search + Meta copy in tables. Don’t fabricate claims.",
             llm=gemini_llm,
-            verbose=True
+            verbose=True,
         ),
-
         "creative": Agent(
             role="Creative Director (Assets & Prompts)",
             goal=f"Create creative direction + prompt packs for {biz}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nReturn concepts, angles, prompt packs + ad variants.\nDirectives: {directives}",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nReturn 5 concepts, angles, and prompt packs + ad variants. Be specific.",
             llm=gemini_llm,
-            verbose=True
+            verbose=True,
         ),
-
         "seo": Agent(
-            role="SEO Content Architect",
+            role="Search Engine Marketing (SEO)",
             goal=f"Write a local SEO authority article for {biz} in {city}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nE-E-A-T, local intent, FAQs, clear CTA. No fake stats.\nDirectives: {directives}",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nE-E-A-T, local intent, FAQs, clear CTA. No fake stats.",
             llm=gemini_llm,
-            verbose=True
+            verbose=True,
         ),
-
+        "guest_posting": Agent(
+            role="Guest Posting Specialist",
+            goal=f"Build a guest posting plan to earn relevant backlinks and referral traffic for {biz}.",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nYou produce targets, outreach templates, topic angles, and a safe anchor-text plan.\nIf you cannot validate sites, state that targets are examples and require verification.",
+            llm=gemini_llm,
+            verbose=True,
+        ),
         "social": Agent(
             role="Social Distribution Architect",
             goal=f"Create a 30-day social plan for {biz} in {city}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nDaily topics, hooks, captions, CTAs. Avoid unverifiable claims.\nDirectives: {directives}",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nDaily topics, hooks, captions, CTAs. Avoid unverifiable claims.",
             llm=gemini_llm,
-            verbose=True
+            verbose=True,
         ),
-
         "geo": Agent(
             role="GEO / Local Search Specialist",
             goal=f"Create a local GEO plan for {biz} in {city}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nCitations, GBP optimization, near-me targeting steps.\nDirectives: {directives}",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nCitations, GBP optimization, near-me targeting steps.",
             llm=gemini_llm,
-            verbose=True
+            verbose=True,
+        ),
+        "audit": Agent(
+            role="Conversion UX Auditor",
+            goal=f"Diagnose conversion leaks for {biz} based on the provided website.",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nYou audit websites for speed, trust, mobile UX, and conversion friction.\nIf URL is missing, ask for it clearly.\nURL: {url or '[missing]'}",
+            tools=[scrape_tool],
+            llm=gemini_llm,
+            verbose=True,
         ),
     }
 
-def _task_text(task: Task) -> str:
-    out = getattr(task, "output", None)
-    if out is None:
-        return ""
-    raw = getattr(out, "raw", None)
-    if raw:
-        return str(raw)
-    try:
-        return str(out)
-    except Exception:
-        return ""
+def _run_one(agent_key: str, agent: Agent, state: SwarmState) -> str:
+    """Run exactly one task and return its output as text."""
+    biz = state.biz_name
+    city = state.location
+    url = state.url.strip()
 
-# ============================================================
-# FLOW
-# ============================================================
-class MarketingSwarmFlow(Flow[SwarmState]):
-    def __init__(self, inputs: Dict[str, Any]):
-        super().__init__()
-        self.inputs = inputs or {}
-
-        self.state.biz_name = self.inputs.get("biz_name", "Unknown Brand")
-        self.state.location = self.inputs.get("city", "USA")
-        self.state.directives = self.inputs.get("directives", "")
-        self.state.url = self.inputs.get("url") or self.inputs.get("website") or ""
-
-        active = self.inputs.get("active_swarm", []) or []
-        self.active_swarm = [str(k).strip() for k in active if str(k).strip() in TOGGLE_KEYS]
-
-        self.agents = get_swarm_agents(self.inputs)
-
-    @start()
-    def phase_1(self):
-        tasks: Dict[str, Task] = {}
-
-        if "analyst" in self.active_swarm:
-            tasks["analyst"] = Task(
-                description=(
-                    f"Market analysis for {self.state.biz_name} in {self.state.location}.\n"
-                    "Return executive bullets:\n"
-                    "1) Pricing gaps\n2) Positioning\n3) Top 3 offers\n4) Quick wins\n"
-                ),
-                agent=self.agents["analyst"],
-                expected_output="Structured market analysis."
-            )
-
-        if "market_researcher" in self.active_swarm:
-            tasks["market_researcher"] = Task(
-                description=(
-                    f"Market research for {self.state.biz_name} in {self.state.location}.\n"
-                    "Return executive sections:\n"
-                    "- Who buys + why (segments)\n"
-                    "- Competitors (top 5) + differentiators\n"
-                    "- Demand indicators (qualitative) + assumptions\n"
-                    "- 5 customer interview questions\n"
-                ),
-                agent=self.agents["market_researcher"],
-                expected_output="Executive market research."
-            )
-
-        if "audit" in self.active_swarm:
-            if not self.state.url.strip():
-                self.state.website_audit = "Missing website URL. Please provide a business website URL in the sidebar."
-            else:
-                tasks["audit"] = Task(
-                    description=(
-                        f"Audit this website for conversion friction: {self.state.url}\n"
-                        "Return executive output:\n"
-                        "- Top issues\n- Impact\n- Fixes\n"
-                        "Do NOT dump raw HTML."
-                    ),
-                    agent=self.agents["audit"],
-                    expected_output="Executive audit."
-                )
-
-        if tasks:
-            crew = Crew(
-                agents=[t.agent for t in tasks.values()],
-                tasks=list(tasks.values()),
-                process=Process.sequential
-            )
-            kickoff_with_retry(crew, retries=2, base_sleep=15)
-
-            if "analyst" in tasks:
-                txt = _task_text(tasks["analyst"]).strip()
-                if txt:
-                    self.state.market_data = txt
-
-            if "market_researcher" in tasks:
-                txt = _task_text(tasks["market_researcher"]).strip()
-                if txt:
-                    self.state.market_research = txt
-
-            if "audit" in tasks:
-                txt = _task_text(tasks["audit"]).strip()
-                if txt:
-                    self.state.website_audit = txt[:4500] + ("\n\n[Truncated]" if len(txt) > 4500 else "")
-
-        return "phase_2"
-
-    @listen("phase_2")
-    def phase_2(self):
-        tasks: Dict[str, Task] = {}
-
-        if "marketing_adviser" in self.active_swarm:
-            tasks["marketing_adviser"] = Task(
-                description=(
-                    f"Act as a Marketing Adviser for {self.state.biz_name} in {self.state.location}.\n"
-                    "Return an executive report:\n"
-                    "1) Best channel mix (ranked) + why\n"
-                    "2) Core messaging (headline + 3 proof points)\n"
-                    "3) Offer design (2 offers)\n"
-                    "4) 7-day quick-start checklist\n"
-                ),
-                agent=self.agents["marketing_adviser"],
-                expected_output="Executive marketing direction."
-            )
-
-        if "ecommerce_marketer" in self.active_swarm:
-            tasks["ecommerce_marketer"] = Task(
-                description=(
-                    f"Create an e-commerce growth plan for {self.state.biz_name}.\n"
-                    "If not e-commerce, create an equivalent lead-gen funnel plan.\n"
-                    "Return:\n"
-                    "- Funnel stages + key improvements\n"
-                    "- Email/SMS flows (welcome, abandoned cart/lead, winback)\n"
-                    "- Upsell/cross-sell ideas\n"
-                    "- 2 A/B tests with metrics\n"
-                ),
-                agent=self.agents["ecommerce_marketer"],
-                expected_output="E-commerce (or funnel) plan."
-            )
-
-        if "guest_posting" in self.active_swarm:
-            tasks["guest_posting"] = Task(
-                description=(
-                    f"Create a guest posting plan for {self.state.biz_name} focusing on {self.state.location}.\n"
-                    "Return:\n"
-                    "- 25 target site criteria + examples of niches\n"
-                    "- 10 topic angles\n"
-                    "- 3 outreach templates\n"
-                    "- Tracking sheet columns (what to track)\n"
-                ),
-                agent=self.agents["guest_posting"],
-                expected_output="Guest posting plan."
-            )
-
-        if "strategist" in self.active_swarm:
-            tasks["strategist"] = Task(
-                description=(
-                    f"Create a CEO-ready 30-day execution roadmap for {self.state.biz_name} in {self.state.location}.\n"
-                    "Include:\n- Weekly plan\n- KPIs\n- Quick wins\n- Priorities\n"
-                ),
-                agent=self.agents["strategist"],
-                expected_output="CEO-ready roadmap."
-            )
-
-        if "ads" in self.active_swarm:
-            tasks["ads"] = Task(
-                description=(
-                    f"Generate deployable ad copy for {self.state.biz_name} targeting {self.state.location}.\n"
-                    "Return Markdown tables:\n"
-                    "- Google Search: 10 headlines + 6 descriptions\n"
-                    "- Meta: 8 hooks + 6 primary texts + 5 CTAs\n"
-                    "No fake claims."
-                ),
-                agent=self.agents["ads"],
-                expected_output="Ad tables."
-            )
-
-        if "creative" in self.active_swarm:
-            tasks["creative"] = Task(
-                description=(
-                    f"Creative direction for {self.state.biz_name}.\n"
-                    "Deliver:\n"
-                    "1) 5 creative concepts (name + angle + who it's for)\n"
-                    "2) 3 ad variants per concept (headline + body + CTA)\n"
-                    "3) Prompt pack (at least 10 prompts)\n"
-                    "4) Canva layout directions (2 layouts)\n"
-                    "Be specific. Avoid unverifiable claims."
-                ),
-                agent=self.agents["creative"],
-                expected_output="Creative pack."
-            )
-
-        if "seo" in self.active_swarm:
-            tasks["seo"] = Task(
-                description=(
-                    f"Write an SEO authority article for {self.state.biz_name} in {self.state.location}.\n"
-                    "Include headings, FAQs, local intent, and a clear CTA.\n"
-                    "Do not invent statistics."
-                ),
-                agent=self.agents["seo"],
-                expected_output="SEO article."
-            )
-
-        if "social" in self.active_swarm:
-            tasks["social"] = Task(
-                description=(
-                    f"Create a 30-day social content calendar for {self.state.biz_name} in {self.state.location}.\n"
-                    "Include daily topic, hook, caption, CTA."
-                ),
-                agent=self.agents["social"],
-                expected_output="30-day social calendar."
-            )
-
-        if "geo" in self.active_swarm:
-            tasks["geo"] = Task(
-                description=(
-                    f"Create a local GEO plan for {self.state.biz_name} in {self.state.location}.\n"
-                    "Include citations strategy, GBP optimization, near-me targeting steps.\n"
-                    "If citations are not verifiable, describe the method instead of listing fake sources."
-                ),
-                agent=self.agents["geo"],
-                expected_output="Local GEO plan."
-            )
-
-        if tasks:
-            crew = Crew(
-                agents=[t.agent for t in tasks.values()],
-                tasks=list(tasks.values()),
-                process=Process.sequential
-            )
-            kickoff_with_retry(crew, retries=2, base_sleep=15)
-
-            if "marketing_adviser" in tasks:
-                txt = _task_text(tasks["marketing_adviser"]).strip()
-                if txt:
-                    self.state.marketing_advice = txt
-
-            if "ecommerce_marketer" in tasks:
-                txt = _task_text(tasks["ecommerce_marketer"]).strip()
-                if txt:
-                    self.state.ecommerce_plan = txt
-
-            if "guest_posting" in tasks:
-                txt = _task_text(tasks["guest_posting"]).strip()
-                if txt:
-                    self.state.guest_posting_plan = txt
-
-            if "strategist" in tasks:
-                txt = _task_text(tasks["strategist"]).strip()
-                if txt:
-                    self.state.strategist_brief = txt
-
-            if "ads" in tasks:
-                txt = _task_text(tasks["ads"]).strip()
-                if txt:
-                    self.state.ads_output = txt
-
-            if "creative" in tasks:
-                txt = _task_text(tasks["creative"]).strip()
-                if txt:
-                    self.state.creative_pack = txt
-
-            if "seo" in tasks:
-                txt = _task_text(tasks["seo"]).strip()
-                if txt:
-                    self.state.seo_article = txt
-
-            if "social" in tasks:
-                txt = _task_text(tasks["social"]).strip()
-                if txt:
-                    self.state.social_plan = txt
-
-            if "geo" in tasks:
-                txt = _task_text(tasks["geo"]).strip()
-                if txt:
-                    self.state.geo_intel = txt
-
-        return "finalize"
-
-    @listen("finalize")
-    def finalize(self):
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        package = self.inputs.get("package", "Lite")
-
-        self.state.full_report = (
-            f"# {self.state.biz_name} Intelligence Report\n"
-            f"**Date:** {now} | **Location:** {self.state.location} | **Plan:** {package}\n"
-            f"---\n\n"
-            f"## 🕵️ Market Analysis\n{self.state.market_data}\n\n"
-            f"## 🧭 Marketing Adviser\n{self.state.marketing_advice}\n\n"
-            f"## 📊 Market Research\n{self.state.market_research}\n\n"
-            f"## 🛒 E‑Commerce\n{self.state.ecommerce_plan}\n\n"
-            f"## 🌐 Website Audit\n{self.state.website_audit}\n\n"
-            f"## 👔 Executive Strategy\n{self.state.strategist_brief}\n\n"
-            f"## 📺 Ads Output\n{self.state.ads_output}\n\n"
-            f"## 🎨 Creative Pack\n{self.state.creative_pack}\n\n"
-            f"## 📰 Guest Posting\n{self.state.guest_posting_plan}\n\n"
-            f"## ✍️ SEO\n{self.state.seo_article}\n\n"
-            f"## 📍 GEO\n{self.state.geo_intel}\n\n"
-            f"## 📱 Social\n{self.state.social_plan}\n"
+    # Task prompts per agent
+    if agent_key == "market_researcher":
+        desc = (
+            f"Market research snapshot for {biz} in {city}.\n"
+            "Return:\n"
+            "1) ICP segments (3)\n"
+            "2) Problem intensity + buyer triggers\n"
+            "3) Competitor landscape (types + what they lead with)\n"
+            "4) Pricing/offer patterns (no made-up numbers)\n"
+            "5) Demand signals + top keywords (if tools available)\n"
+            "6) 5 opportunity angles + why\n"
         )
-        return "done"
+        expected = "Executive market research snapshot."
+    elif agent_key == "analyst":
+        desc = (
+            f"Market analysis for {biz} in {city}.\n"
+            "Return bullets:\n"
+            "1) Pricing gaps\n2) Positioning\n3) Top 3 offers\n4) Quick wins\n"
+        )
+        expected = "Structured market analysis."
+    elif agent_key == "marketing_adviser":
+        desc = (
+            f"Marketing adviser plan for {biz} in {city}.\n"
+            "Return:\n"
+            "- Best 3 channels + why\n"
+            "- Messaging (3 value props + proof ideas)\n"
+            "- Weekly execution plan (4 weeks)\n"
+            "- Budget tiers (low/med/high) with what to do (no fabricated costs)\n"
+            "- KPI checklist\n"
+        )
+        expected = "Pragmatic marketing plan."
+    elif agent_key == "strategist":
+        desc = (
+            f"Create a CEO-ready 30-day execution roadmap for {biz} in {city}.\n"
+            "Include:\n- Weekly plan\n- KPIs\n- Quick wins\n- Priorities\n- Owner/operator checklist\n"
+        )
+        expected = "CEO-ready roadmap."
+    elif agent_key == "ecommerce_marketer":
+        desc = (
+            f"E-commerce growth plan for {biz} in {city}.\n"
+            "If the business is NOT e-commerce, adapt the plan to lead-gen.\n"
+            "Return:\n"
+            "1) Offer structure (AOV + bundles/upsells)\n"
+            "2) Conversion rate levers (PDP/checkout)\n"
+            "3) Email/SMS flows (welcome, abandon, post-purchase, winback)\n"
+            "4) Retention tactics\n"
+            "5) 7-day sprint checklist\n"
+        )
+        expected = "E-commerce growth system."
+    elif agent_key == "ads":
+        desc = (
+            f"Generate deployable ad copy for {biz} targeting {city}.\n"
+            "Return Markdown tables:\n"
+            "- Google Search: 10 headlines + 6 descriptions\n"
+            "- Meta: 8 hooks + 6 primary texts + 5 CTAs\n"
+            "No fake claims."
+        )
+        expected = "Ad copy tables."
+    elif agent_key == "creative":
+        desc = (
+            f"Creative direction for {biz}.\n"
+            "Deliver:\n"
+            "1) 5 creative concepts (name + angle + who it's for)\n"
+            "2) 3 ad variants per concept (headline + body + CTA)\n"
+            "3) Prompt pack (at least 12 prompts) for Midjourney/Runway/Canva\n"
+            "4) Canva layout directions (2 layouts)\n"
+            "Be specific. Avoid unverifiable claims."
+        )
+        expected = "Creative pack."
+    elif agent_key == "seo":
+        desc = (
+            f"Write a local SEO authority article for {biz} in {city}.\n"
+            "Include headings, FAQs, local intent, and a clear CTA.\n"
+            "Do not invent statistics."
+        )
+        expected = "SEO authority article."
+    elif agent_key == "guest_posting":
+        desc = (
+            f"Guest posting plan for {biz} in {city}.\n"
+            "Return:\n"
+            "1) Target types (industry blogs, local media, partners)\n"
+            "2) 15 example targets with what angle fits them (mark as 'examples' if not verified)\n"
+            "3) 10 article topic ideas (with suggested titles)\n"
+            "4) Outreach email template + follow-up\n"
+            "5) Anchor-text plan (safe mix) + tracking checklist\n"
+        )
+        expected = "Guest posting plan."
+    elif agent_key == "social":
+        desc = (
+            f"Create a 30-day social content calendar for {biz} in {city}.\n"
+            "Include daily topic, hook, caption, CTA.\n"
+            "Prefer short, scannable rows (Day 1..30)."
+        )
+        expected = "30-day social calendar."
+    elif agent_key == "geo":
+        desc = (
+            f"Create a local GEO plan for {biz} in {city}.\n"
+            "Include citations if tools are available; otherwise mark items as 'to verify'.\n"
+            "Return:\n- GBP optimization\n- Near-me targeting steps\n- Citations/citation sources checklist\n- Review strategy\n- Local content plan\n"
+        )
+        expected = "Local GEO plan."
+    elif agent_key == "audit":
+        if not url:
+            return "Missing website URL. Please provide a business website URL in the sidebar."
+        desc = (
+            f"Audit this website for conversion friction: {url}\n"
+            "Return executive output:\n"
+            "- Top issues (prioritized)\n- Impact\n- Fixes\n"
+            "Do NOT dump raw HTML."
+        )
+        expected = "Executive conversion audit."
+    else:
+        desc = f"Generate an executive report for {biz} in {city}."
+        expected = "Executive report."
 
+    task = Task(description=desc, agent=agent, expected_output=expected)
+    crew = Crew(agents=[agent], tasks=[task], process=Process.sequential)
 
+    result = kickoff_with_retry(crew, retries=2, base_sleep=15)
+    # Crew kickoff often returns a string (esp. single-task crews). Fall back safely.
+    try:
+        txt = str(result).strip() if result is not None else ""
+    except Exception:
+        txt = ""
+
+    if not txt:
+        # Fallback to task.output if available
+        out = getattr(task, "output", None)
+        raw = getattr(out, "raw", None) if out is not None else None
+        txt = str(raw).strip() if raw else (str(out).strip() if out is not None else "")
+
+    return txt or "No output returned (empty response)."
+
+def _build_full_report(state: SwarmState, package: str) -> str:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    header = (
+        f"# {state.biz_name} Intelligence Report\n"
+        f"**Date:** {now} | **Location:** {state.location} | **Plan:** {package}\n"
+        f"---\n\n"
+    )
+
+    sections = [
+        ("🔎 Market Research", state.market_researcher),
+        ("🕵️ Market Analysis", state.analyst),
+        ("🧭 Marketing Adviser", state.marketing_adviser),
+        ("👔 Executive Strategy", state.strategist),
+        ("🛒 E-Commerce Marketer", state.ecommerce_marketer),
+        ("📺 Ads Output", state.ads),
+        ("🎨 Creative Pack", state.creative),
+        ("✍️ SEO (SEM)", state.seo),
+        ("🧩 Guest Posting", state.guest_posting),
+        ("📍 GEO Intelligence", state.geo),
+        ("📱 Social Roadmap", state.social),
+        ("🌐 Website Audit", state.audit),
+    ]
+
+    body = ""
+    for title, content in sections:
+        body += f"## {title}\n{content}\n\n"
+
+    return header + body.strip()
+
+# ============================================================
+# PUBLIC WRAPPER (used by app.py)
+# ============================================================
 def run_marketing_swarm(inputs: Dict[str, Any]) -> Dict[str, str]:
-    flow = MarketingSwarmFlow(inputs)
-    flow.kickoff()
+    """
+    Returns keys that match app.py toggles exactly:
+    analyst, ads, creative, strategist, social, geo, audit, seo,
+    marketing_adviser, ecommerce_marketer, guest_posting, market_researcher,
+    plus full_report.
+    """
+    inputs = inputs or {}
+    active_list = inputs.get("active_swarm", []) or []
+    active = [str(k).strip() for k in active_list if str(k).strip()]
+    active = [k for k in active if k in TOGGLE_KEYS]
 
-    master = {
-        "analyst": flow.state.market_data,
-        "marketing_adviser": flow.state.marketing_advice,
-        "market_researcher": flow.state.market_research,
-        "ecommerce_marketer": flow.state.ecommerce_plan,
-        "guest_posting": flow.state.guest_posting_plan,
+    state = SwarmState(
+        biz_name=inputs.get("biz_name", "Unknown Brand"),
+        location=inputs.get("city", "USA"),
+        directives=inputs.get("directives", ""),
+        url=(inputs.get("url") or inputs.get("website") or ""),
+    )
 
-        "audit": flow.state.website_audit,
-        "strategist": flow.state.strategist_brief,
-        "ads": flow.state.ads_output,
-        "creative": flow.state.creative_pack,
-        "seo": flow.state.seo_article,
-        "social": flow.state.social_plan,
-        "geo": flow.state.geo_intel,
+    package = inputs.get("package", "Lite")
+    agents = get_swarm_agents(inputs)
 
-        "full_report": flow.state.full_report,
+    # Deterministic order so reports feel consistent
+    RUN_ORDER: List[str] = [
+        "market_researcher",
+        "analyst",
+        "marketing_adviser",
+        "strategist",
+        "ecommerce_marketer",
+        "ads",
+        "creative",
+        "seo",
+        "guest_posting",
+        "geo",
+        "social",
+        "audit",
+    ]
+
+    for key in RUN_ORDER:
+        if key not in active:
+            continue
+        txt = _run_one(key, agents[key], state)
+
+        # write to state attribute with same name
+        try:
+            setattr(state, key, txt)
+        except Exception:
+            pass
+
+    state.full_report = _build_full_report(state, package)
+
+    master: Dict[str, str] = {
+        "analyst": state.analyst,
+        "audit": state.audit,
+        "strategist": state.strategist,
+        "ads": state.ads,
+        "creative": state.creative,
+        "seo": state.seo,
+        "social": state.social,
+        "geo": state.geo,
+        "marketing_adviser": state.marketing_adviser,
+        "ecommerce_marketer": state.ecommerce_marketer,
+        "guest_posting": state.guest_posting,
+        "market_researcher": state.market_researcher,
+        "full_report": state.full_report,
     }
 
-    active_list = inputs.get("active_swarm", []) or []
-    active_list = [str(k).strip() for k in active_list]
-
-    return {k: v for k, v in master.items() if (k in active_list) or (k == "full_report")}
+    # always return full_report; return selected agents too
+    return {k: v for k, v in master.items() if (k in active) or (k == "full_report")}
