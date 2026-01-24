@@ -49,16 +49,16 @@ AGENT_SPECS = {
     "strategist": "30-day execution roadmap.",
     "social": "Engagement content calendar.",
     "geo": "Local visibility and citations.",
-    "audit": "Website conversion friction.",
+    "audit": "Website conversion friction + fixes.",
     "seo": "Authority article + cluster plan.",
 }
 
 DEPLOY_PROTOCOL = [
-    "Configure mission in the sidebar (Brand, Location, Directives).",
+    "Configure mission in the sidebar (Brand, Location, Directives, Website URL).",
     "Agents are locked by plan (upgrade to unlock more).",
     "Click LAUNCH OMNI-SWARM.",
-    "Review/refine outputs in each seat.",
-    "Export as Word/PDF and publish via platform consoles.",
+    "You can Pause/Resume or Stop between agents.",
+    "Review/refine outputs in each seat; export Word/PDF; publish.",
 ]
 
 SOCIAL_PUSH_PLATFORMS = [
@@ -108,24 +108,6 @@ def inject_css_once():
         animation: ms-slide 1.2s infinite;
       }}
       @keyframes ms-slide {{ 0%{{left:-40%}} 100%{{left:100%}} }}
-
-      .bg {{
-        position: fixed; inset: 0;
-        background:
-          radial-gradient(1200px 600px at 50% 0%, rgba(99,102,241,0.18), transparent 60%),
-          radial-gradient(900px 500px at 10% 30%, rgba(16,185,129,0.14), transparent 60%),
-          radial-gradient(900px 500px at 90% 30%, rgba(236,72,153,0.12), transparent 60%),
-          linear-gradient(180deg, #ffffff 0%, #fafafe 60%, #ffffff 100%);
-        z-index: -1;
-      }}
-      .shell {{ max-width: 1120px; margin: 0 auto; padding: 26px 12px 40px; }}
-      .title {{ font-size: 44px; font-weight: 850; letter-spacing:-0.02em; margin: 6px 0 8px; color:#0f172a; }}
-      .sub {{ color:#334155; font-size:14px; margin:0 0 16px; }}
-      .grid {{ display:grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; }}
-      .pricing {{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }}
-      .pricecard {{ border:1px solid rgba(15,23,42,0.10); border-radius: 16px; padding: 12px; background: rgba(255,255,255,0.92); }}
-      .price {{ font-size: 26px; font-weight: 900; }}
-      @media (max-width: 980px){{ .grid {{ grid-template-columns: 1fr; }} .pricing {{ grid-template-columns: 1fr; }} .title{{font-size:34px;}} }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -150,7 +132,6 @@ def init_db_once() -> None:
     conn = db_conn()
     cur = conn.cursor()
 
-    # Orgs
     cur.execute("""
         CREATE TABLE IF NOT EXISTS orgs (
             team_id TEXT PRIMARY KEY,
@@ -164,15 +145,13 @@ def init_db_once() -> None:
             stripe_subscription_id TEXT
         )
     """)
-
-    # Users
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             username TEXT PRIMARY KEY,
             email TEXT,
             name TEXT,
             password TEXT,
-            role TEXT DEFAULT 'viewer',          -- viewer/editor/admin/root
+            role TEXT DEFAULT 'viewer',
             active INTEGER DEFAULT 1,
             plan TEXT DEFAULT 'Lite',
             credits INTEGER DEFAULT 10,
@@ -182,8 +161,6 @@ def init_db_once() -> None:
             last_login_at TEXT
         )
     """)
-
-    # Audit logs
     cur.execute("""
         CREATE TABLE IF NOT EXISTS audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -197,8 +174,6 @@ def init_db_once() -> None:
             details TEXT
         )
     """)
-
-    # Team tools
     cur.execute("""
         CREATE TABLE IF NOT EXISTS leads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -206,7 +181,7 @@ def init_db_once() -> None:
             title TEXT,
             city TEXT,
             service TEXT,
-            status TEXT DEFAULT 'Discovery',       -- Discovery | Execution | ROI Verified
+            status TEXT DEFAULT 'Discovery',
             created_at TEXT DEFAULT (datetime('now'))
         )
     """)
@@ -264,12 +239,10 @@ def init_db_once() -> None:
         )
     """)
 
-    # Migrations
     ensure_column(conn, "orgs", "allowed_agents_json", "TEXT DEFAULT '[]'")
     ensure_column(conn, "orgs", "seats_allowed", "INTEGER DEFAULT 1")
-    ensure_column(conn, "users", "role", "TEXT DEFAULT 'viewer'")
 
-    # Root org + root user
+    # ROOT
     cur.execute("""
         INSERT OR IGNORE INTO orgs (team_id, org_name, plan, seats_allowed, allowed_agents_json, status)
         VALUES ('ROOT', 'SaaS Root', 'Unlimited', 9999, '[]', 'active')
@@ -281,7 +254,7 @@ def init_db_once() -> None:
         VALUES ('root','root@tech.ai','Root Admin',?, 'root', 1, 'Unlimited', 9999, 1, 'ROOT')
     """, (root_pw,))
 
-    # Demo org
+    # demo org
     cur.execute("SELECT COUNT(*) FROM orgs WHERE team_id != 'ROOT'")
     if int(cur.fetchone()[0] or 0) == 0:
         default_allowed = json.dumps(["analyst", "creative", "strategist"])
@@ -351,13 +324,6 @@ def allowed_agents_for_org(team_id: str) -> List[str]:
     except Exception:
         return []
 
-def set_allowed_agents_for_org(team_id: str, agents: List[str]) -> None:
-    agents = [a for a in agents if a in ALL_AGENT_KEYS]
-    conn = db_conn()
-    conn.execute("UPDATE orgs SET allowed_agents_json=? WHERE team_id=?", (json.dumps(agents), team_id))
-    conn.commit()
-    conn.close()
-
 def set_org_plan(team_id: str, plan: str) -> None:
     plan = plan.strip()
     seats = PLAN_SEATS.get(plan, 1)
@@ -399,33 +365,6 @@ def create_user(team_id: str, username: str, name: str, email: str, password_pla
         return False, "Username already exists."
     finally:
         conn.close()
-
-def set_user_active(team_id: str, username: str, active: int) -> None:
-    conn = db_conn()
-    conn.execute("UPDATE users SET active=? WHERE username=? AND team_id=? AND role!='root'", (int(active), username, team_id))
-    conn.commit()
-    conn.close()
-
-def update_user_role(team_id: str, username: str, role: str) -> None:
-    role = normalize_role(role)
-    if role == "root":
-        return
-    conn = db_conn()
-    conn.execute("UPDATE users SET role=? WHERE username=? AND team_id=? AND role!='root'", (role, username, team_id))
-    conn.commit()
-    conn.close()
-
-def add_credits(username: str, amount: int) -> None:
-    conn = db_conn()
-    conn.execute("UPDATE users SET credits = COALESCE(credits,0) + ? WHERE username=?", (int(amount), username))
-    conn.commit()
-    conn.close()
-
-def set_credits(username: str, amount: int) -> None:
-    conn = db_conn()
-    conn.execute("UPDATE users SET credits = ? WHERE username=?", (int(amount), username))
-    conn.commit()
-    conn.close()
 
 def bulk_import_users(team_id: str, csv_bytes: bytes) -> Tuple[int, List[str]]:
     errors = []
@@ -489,8 +428,6 @@ def is_placeholder_output(val: Any) -> bool:
         return True
     if "not selected for this run" in low:
         return True
-    if "not generated" in low:
-        return True
     return False
 
 init_db_once()
@@ -499,17 +436,6 @@ init_db_once()
 # ============================================================
 # EXPORT
 # ============================================================
-_original_putpages = fpdf.fpdf.FPDF._putpages
-def _patched_putpages(self):
-    pages = self.pages
-    self.pages = {}
-    for k, v in pages.items():
-        if isinstance(v, str):
-            v = v.encode("latin-1","ignore").decode("latin-1","ignore")
-        self.pages[k] = v
-    _original_putpages(self)
-fpdf.fpdf.FPDF._putpages = _patched_putpages
-
 def export_pdf(content: str, title: str) -> bytes:
     pdf = FPDF()
     pdf.add_page()
@@ -530,7 +456,7 @@ def export_word(content: str, title: str) -> bytes:
 
 
 # ============================================================
-# AUTH (fresh creds when unauth to avoid stale root)
+# AUTH (fresh creds when unauth)
 # ============================================================
 def get_db_creds() -> Dict[str, Any]:
     conn = db_conn()
@@ -555,22 +481,6 @@ def login_page():
         st.image(APP_LOGO_PATH, width=70)
     st.markdown('<div class="title">Marketing Swarm Intelligence</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub">Root login: <b>root / root123</b></div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="grid">', unsafe_allow_html=True)
-
-    st.markdown('<div class="ms-card">', unsafe_allow_html=True)
-    st.markdown("### Pricing")
-    st.markdown('<div class="pricing">', unsafe_allow_html=True)
-    st.markdown('<div class="pricecard"><b>🥉 Lite</b><div class="price">$99/mo</div><div style="color:#475569;font-size:13px;">Seats: 1 • Agents: 3</div></div>', unsafe_allow_html=True)
-    st.markdown('<div class="pricecard"><b>🥈 Pro</b><div class="price">$299/mo</div><div style="color:#475569;font-size:13px;">Seats: 5 • Agents: 5</div></div>', unsafe_allow_html=True)
-    st.markdown('<div class="pricecard"><b>🥇 Enterprise</b><div class="price">$999/mo</div><div style="color:#475569;font-size:13px;">Seats: 20 • Agents: 8</div></div>', unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("---")
-    st.markdown("### What you get")
-    st.markdown("- Org isolation (Team ID)\n- RBAC\n- Audit logs\n- Locked agents by plan\n- Admin tools")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown('<div class="ms-card">', unsafe_allow_html=True)
     tabs = st.tabs(["Login", "Forgot Password", "Refresh Credentials"])
     with tabs[0]:
         authenticator.login(location="main")
@@ -588,9 +498,6 @@ def login_page():
             st.session_state.pop("authenticator", None)
             st.session_state["authentication_status"] = None
             st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("</div></div>", unsafe_allow_html=True)
     st.stop()
 
 if not st.session_state.get("authentication_status"):
@@ -609,7 +516,6 @@ org_plan = str(org.get("plan", "Lite"))
 
 allowed_agents = allowed_agents_for_org(my_team)
 if not allowed_agents and not is_root:
-    # Fix missing allowed agents by auto-setting based on current plan
     set_org_plan(my_team, org_plan)
     allowed_agents = allowed_agents_for_org(my_team)
 
@@ -617,7 +523,24 @@ visible_agent_keys = ALL_AGENT_KEYS if is_root else allowed_agents
 
 
 # ============================================================
-# SIDEBAR (dynamic city + locked agents)
+# STEP RUNNER STATE (Stop/Pause/Resume)
+# ============================================================
+if "run_in_progress" not in st.session_state:
+    st.session_state.run_in_progress = False
+if "run_queue" not in st.session_state:
+    st.session_state.run_queue = []
+if "run_results" not in st.session_state:
+    st.session_state.run_results = {}
+if "stop_requested" not in st.session_state:
+    st.session_state.stop_requested = False
+if "paused" not in st.session_state:
+    st.session_state.paused = False
+if "auto_advance" not in st.session_state:
+    st.session_state.auto_advance = True
+
+
+# ============================================================
+# SIDEBAR (URL input + stop/pause controls + dynamic city)
 # ============================================================
 @st.cache_data(ttl=3600)
 def default_geo_data():
@@ -644,6 +567,10 @@ with st.sidebar:
 
     biz_name = st.text_input("🏢 Brand Name", value=st.session_state.get("biz_name", ""))
     st.session_state["biz_name"] = biz_name
+
+    # ✅ Website URL input (Auditor)
+    website_url = st.text_input("🌐 Business Website URL (Auditor)", value=st.session_state.get("website_url", ""), placeholder="https://example.com")
+    st.session_state["website_url"] = website_url
 
     custom_logo = st.file_uploader("📤 Brand Logo", type=["png", "jpg", "jpeg"])
 
@@ -673,12 +600,46 @@ with st.sidebar:
         )
 
     st.divider()
-    run_btn = st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True)
+
+    # Controls
+    if st.session_state.run_in_progress:
+        st.warning("Swarm is running.")
+        st.session_state.auto_advance = st.checkbox("Auto-run remaining agents", value=st.session_state.auto_advance)
+        st.session_state.paused = st.checkbox("Pause", value=st.session_state.paused)
+        if st.button("🛑 Stop after current agent", use_container_width=True):
+            st.session_state.stop_requested = True
+    else:
+        if st.button("🚀 LAUNCH OMNI-SWARM", type="primary", use_container_width=True):
+            active_agents = [k for k, v in toggles.items() if v]
+            st.session_state["last_active_swarm"] = active_agents
+
+            if not biz_name:
+                st.error("Enter Brand Name first.")
+            elif not active_agents:
+                st.warning("Select at least one agent.")
+            else:
+                st.session_state.run_queue = list(active_agents)
+                st.session_state.run_results = {}
+                st.session_state.run_in_progress = True
+                st.session_state.stop_requested = False
+                st.session_state.paused = False
+                st.session_state["last_report_keys"] = []
+                st.rerun()
+
     authenticator.logout("Sign Out", "sidebar")
 
 
 # ============================================================
-# RUN SWARM
+# TOP PROGRESS BANNER (navigate while running)
+# ============================================================
+if st.session_state.run_in_progress:
+    done = len([k for k in st.session_state.run_results.keys() if k != "full_report"])
+    remaining = len(st.session_state.run_queue)
+    st.info(f"🚀 Swarm running • Done: {done} • Remaining: {remaining} • Paused: {st.session_state.paused} • Stop requested: {st.session_state.stop_requested}")
+
+
+# ============================================================
+# RUNNER (ONE-BY-ONE so stop/pause works)
 # ============================================================
 def safe_run(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
@@ -688,53 +649,62 @@ def safe_run(payload: Dict[str, Any]) -> Dict[str, Any]:
         log_audit(my_team, me["username"], my_role, "swarm.error", "swarm", "", str(e)[:2000])
         return {}
 
-if run_btn:
-    active_agents = [k for k, v in toggles.items() if v]
-    st.session_state["last_active_swarm"] = active_agents
+def merge_results(dst: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(dst)
+    for k, v in src.items():
+        if k == "full_report":
+            out["full_report"] = v
+            continue
+        if not is_placeholder_output(v):
+            out[k] = v
+    return out
 
-    if not biz_name:
-        st.error("Enter Brand Name first.")
-    elif not active_agents:
-        st.warning("Select at least one agent.")
-    else:
-        with st.status("🚀 Running Swarm…", expanded=True) as status:
+# Run next agent if allowed
+if st.session_state.run_in_progress and (not st.session_state.paused) and (not st.session_state.stop_requested):
+    if st.session_state.auto_advance and len(st.session_state.run_queue) > 0:
+        agent_key = st.session_state.run_queue.pop(0)
+
+        with st.status(f"Running agent: {agent_key}", expanded=True) as status:
             st.markdown('<div class="ms-card">', unsafe_allow_html=True)
-            st.markdown("### 🚀 Running Swarm")
+            st.markdown("### Running Swarm")
             st.markdown('<div class="ms-bar"></div>', unsafe_allow_html=True)
-            st.write("Selected agents:", active_agents)
+            st.write("Now running:", agent_key)
+            st.write("Remaining queue:", st.session_state.run_queue)
             st.markdown("</div>", unsafe_allow_html=True)
 
             report = safe_run({
                 "city": full_loc,
-                "biz_name": biz_name,
-                "active_swarm": active_agents,
+                "biz_name": st.session_state.get("biz_name", ""),
+                "active_swarm": [agent_key],
                 "package": org_plan,
                 "custom_logo": custom_logo,
                 "directives": directives,
+                "url": st.session_state.get("website_url", ""),
             })
+
             report = normalize_report(report)
+            st.session_state.run_results = merge_results(st.session_state.run_results, report)
+            st.session_state["last_report_keys"] = sorted(list(st.session_state.run_results.keys()))
 
-            cleaned = {}
-            for k, v in report.items():
-                if k == "full_report":
-                    cleaned[k] = v
-                    continue
-                if not is_placeholder_output(v):
-                    cleaned[k] = v
-
-            st.session_state["last_report_keys"] = sorted(list(cleaned.keys()))
-            if cleaned:
-                st.session_state["report"] = cleaned
-                st.session_state["gen"] = True
-                log_audit(my_team, me["username"], my_role, "swarm.run", "swarm", biz_name, f"agents={active_agents}")
-                status.update(label="✅ Swarm Complete", state="complete", expanded=False)
-            else:
-                st.session_state["report"] = {}
-                st.session_state["gen"] = False
-                log_audit(my_team, me["username"], my_role, "swarm.empty", "swarm", biz_name, f"agents={active_agents}")
-                status.update(label="❌ No real output returned (placeholders)", state="error", expanded=True)
+            log_audit(my_team, me["username"], my_role, "agent.run", "agent", agent_key, "")
+            status.update(label=f"✅ Agent complete: {agent_key}", state="complete", expanded=False)
 
         st.rerun()
+
+# Finish if queue empty or stop requested
+if st.session_state.run_in_progress:
+    if st.session_state.stop_requested or len(st.session_state.run_queue) == 0:
+        st.session_state.run_in_progress = False
+
+        st.session_state["report"] = dict(st.session_state.run_results)
+        st.session_state["gen"] = True if st.session_state.run_results else False
+
+        try:
+            st.toast("✅ Swarm complete!", icon="✅")
+        except Exception:
+            st.success("✅ Swarm complete!")
+
+        st.session_state["swarm_completed_at"] = datetime.utcnow().isoformat()
 
 
 # ============================================================
@@ -749,6 +719,8 @@ def render_guide():
     st.markdown("---")
     st.subheader("Unlocked Agents")
     st.write(visible_agent_keys)
+    if st.session_state.get("swarm_completed_at"):
+        st.success(f"✅ Last run completed at {st.session_state['swarm_completed_at']}")
 
 def render_agent_seat(title: str, key: str):
     st.subheader(f"{title} Seat")
@@ -760,15 +732,17 @@ def render_agent_seat(title: str, key: str):
     st.caption(f"Last report keys: {st.session_state.get('last_report_keys', [])}")
 
     if key in selected and st.session_state.get("gen") and (key not in report or is_placeholder_output(report.get(key))):
-        st.error("Selected, but returned placeholder/empty output. Check provider limits or main.py.")
+        st.error("Selected, but returned placeholder/empty output. This points to provider limits or main.py mapping.")
         return
 
     if st.session_state.get("gen") and report.get(key) and not is_placeholder_output(report.get(key)):
         edited = st.text_area("Refine Intel", value=str(report.get(key)), height=420, key=f"ed_{key}")
+
         c1, c2 = st.columns(2)
         with c1:
             st.download_button("📄 Word", export_word(edited, title), file_name=f"{key}.docx", key=f"w_{key}", use_container_width=True)
         with c2:
+:
             st.download_button("📕 PDF", export_pdf(edited, title), file_name=f"{key}.pdf", key=f"p_{key}", use_container_width=True)
 
         if key in {"ads", "creative", "social"}:
@@ -795,13 +769,10 @@ def render_team_intel():
     st.header("🤝 Team Intel")
     st.caption("Org-scoped tools for managing your team, leads, and saved reports.")
 
-    # Kanban + Reports Vault + Campaigns + Assets + Workflows + Integrations + Logs
-    tabs = st.tabs(["🗂️ Kanban Leads", "📁 Reports Vault", "👥 Users & RBAC", "📣 Campaigns", "🧩 Assets", "⚙️ Workflows", "🔌 Integrations", "🔐 Security Logs"])
+    tabs = st.tabs(["🗂️ Kanban Leads", "📁 Reports Vault", "👥 Users & RBAC", "🔐 Security Logs"])
 
-    # Kanban
     with tabs[0]:
         st.subheader("Kanban Board")
-        st.caption("Track leads through stages.")
         conn = db_conn()
         leads_df = pd.read_sql_query("SELECT * FROM leads WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
         conn.close()
@@ -838,17 +809,14 @@ def render_team_intel():
             st.success("Lead created.")
             st.rerun()
 
-    # Reports Vault
     with tabs[1]:
         st.subheader("Reports Vault")
-        st.caption("Save and manage agent outputs for your team.")
-
         conn = db_conn()
         vault_df = pd.read_sql_query("SELECT id, seat_key, title, created_at, created_by FROM reports_vault WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
         conn.close()
         st.dataframe(vault_df, width="stretch")
 
-        st.markdown("### Save current seat output")
+        st.markdown("### Save current report output")
         current_report = st.session_state.get("report") or {}
         seat = st.selectbox("Seat to save", options=list(current_report.keys()) if current_report else ["(none)"])
         title = st.text_input("Save title", value=f"{seat} report" if seat else "")
@@ -864,7 +832,6 @@ def render_team_intel():
             st.success("Saved.")
             st.rerun()
 
-    # Users & RBAC
     with tabs[2]:
         st.subheader("Users & RBAC (Seats enforced)")
         seats = seats_allowed_for_team(my_team)
@@ -895,7 +862,7 @@ def render_team_intel():
                 else:
                     st.error(msg)
 
-            st.markdown("### Bulk import CSV (headers: username,name,email,role,password)")
+            st.markdown("### Bulk import CSV (username,name,email,role,password)")
             up = st.file_uploader("Upload CSV", type=["csv"], key="bulk_users")
             if up and st.button("Import Users", use_container_width=True):
                 created, errs = bulk_import_users(my_team, up.getvalue())
@@ -908,40 +875,7 @@ def render_team_intel():
                         st.write(f"- {x}")
                 st.rerun()
 
-    # Campaigns
     with tabs[3]:
-        st.subheader("Campaigns")
-        conn = db_conn()
-        df = pd.read_sql_query("SELECT id,name,channel,status,created_at FROM campaigns WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
-        conn.close()
-        st.dataframe(df, width="stretch")
-
-    # Assets
-    with tabs[4]:
-        st.subheader("Assets")
-        conn = db_conn()
-        df = pd.read_sql_query("SELECT id,name,asset_type,created_at FROM assets WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
-        conn.close()
-        st.dataframe(df, width="stretch")
-
-    # Workflows
-    with tabs[5]:
-        st.subheader("Workflows")
-        conn = db_conn()
-        df = pd.read_sql_query("SELECT id,name,enabled,trigger,created_at FROM workflows WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
-        conn.close()
-        st.dataframe(df, width="stretch")
-
-    # Integrations
-    with tabs[6]:
-        st.subheader("Integrations")
-        conn = db_conn()
-        df = pd.read_sql_query("SELECT id,name,enabled,created_at FROM integrations WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
-        conn.close()
-        st.dataframe(df, width="stretch")
-
-    # Logs
-    with tabs[7]:
         st.subheader("Security Logs")
         conn = db_conn()
         df = pd.read_sql_query(
@@ -963,35 +897,11 @@ def render_root_admin():
         conn.close()
         st.dataframe(df, width="stretch")
 
-        st.markdown("### Create / Update Org")
-        with st.form("root_org"):
-            team_id = st.text_input("Team ID")
-            org_name = st.text_input("Org name")
-            plan = st.selectbox("Plan", ["Lite","Pro","Enterprise","Unlimited"], index=0)
-            status = st.selectbox("Status", ["active","suspended"], index=0)
-            submit = st.form_submit_button("Save Org", use_container_width=True)
-        if submit:
-            set_org_plan(team_id, plan)
-            conn = db_conn()
-            conn.execute("UPDATE orgs SET org_name=?, status=? WHERE team_id=?", (org_name, status, team_id))
-            conn.commit(); conn.close()
-            log_audit("ROOT", me["username"], my_role, "root.org_save", "org", team_id, f"plan={plan} status={status}")
-            st.success("Saved."); st.rerun()
-
     with tabs[1]:
         conn = db_conn()
         df = pd.read_sql_query("SELECT username,name,email,role,active,team_id,plan,credits FROM users ORDER BY created_at DESC", conn)
         conn.close()
         st.dataframe(df, width="stretch")
-
-        st.markdown("### Deactivate user")
-        u = st.selectbox("Username", df["username"].tolist() if not df.empty else [])
-        if st.button("Deactivate", use_container_width=True, disabled=(not u)):
-            conn = db_conn()
-            conn.execute("UPDATE users SET active=0 WHERE username=? AND role!='root'", (u,))
-            conn.commit(); conn.close()
-            log_audit("ROOT", me["username"], my_role, "root.user_deactivate", "user", u, "")
-            st.success("Deactivated."); st.rerun()
 
     with tabs[2]:
         conn = db_conn()
@@ -1037,12 +947,12 @@ def render_root_admin():
         st.subheader("Site Health")
         st.write("DB path:", DB_PATH)
         st.write("Logo exists:", os.path.exists(APP_LOGO_PATH))
-        st.write("Python time:", datetime.utcnow().isoformat())
-        st.info("For production, add uptime checks and webhook monitors here.")
+        st.write("UTC time:", datetime.utcnow().isoformat())
+        st.info("For production: webhook monitors + uptime checks go here.")
 
 
 # ============================================================
-# MAIN TABS (only unlocked agent tabs for customers)
+# MAIN TABS (layout preserved; customers see unlocked agents + standard tabs)
 # ============================================================
 agent_tabs = [AGENT_LABELS[k] for k in visible_agent_keys]
 tab_labels = ["📖 Guide"] + agent_tabs + ["👁️ Vision", "🎬 Veo Studio", "🤝 Team Intel"]
