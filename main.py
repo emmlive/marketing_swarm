@@ -1,4 +1,5 @@
 import os
+import json
 import time
 from datetime import datetime
 from typing import Dict, Any, Optional, List
@@ -61,6 +62,7 @@ TOGGLE_KEYS = {
     "ecommerce_marketer",
     "guest_posting",
     "market_researcher",
+    "gbp_growth",  # ✅ NEW
 }
 
 # ============================================================
@@ -87,6 +89,8 @@ class SwarmState(BaseModel):
     guest_posting: str = "Agent not selected for this run."
     market_researcher: str = "Agent not selected for this run."
 
+    gbp_growth: str = "Agent not selected for this run."  # ✅ NEW
+
     full_report: str = "Full report not generated."
 
 # ============================================================
@@ -105,7 +109,7 @@ if not GOOGLE_API_KEY:
 gemini_llm = LLM(
     model="google/gemini-2.0-flash",
     api_key=GOOGLE_API_KEY,
-    temperature=0.2,  # lower = less hallucination / more deterministic
+    temperature=0.2,  # lower = less hallucination
 )
 
 scrape_tool = ScrapeWebsiteTool()
@@ -135,7 +139,7 @@ def get_swarm_agents(inputs: Dict[str, Any]) -> Dict[str, Agent]:
     return {
         "market_researcher": Agent(
             role="Market Researcher",
-            goal=f"Produce a sharp, executive market research snapshot for {biz} in {city}.",
+            goal=f"Produce an executive market research snapshot for {biz} in {city}.",
             backstory=f"{SAFETY_INSTRUCTIONS}\nDirectives: {directives}\nUse search/scrape when available. If SERPER key is missing, state limitations.",
             tools=research_tools,
             llm=gemini_llm,
@@ -152,7 +156,7 @@ def get_swarm_agents(inputs: Dict[str, Any]) -> Dict[str, Agent]:
         "marketing_adviser": Agent(
             role="Marketing Adviser",
             goal=f"Create a pragmatic marketing plan for {biz} in {city}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nYou recommend the best channels, messaging, and a weekly execution cadence.\nDirectives: {directives}",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nYou recommend channels, messaging, and a weekly execution cadence.\nDirectives: {directives}",
             llm=gemini_llm,
             verbose=True,
         ),
@@ -166,7 +170,7 @@ def get_swarm_agents(inputs: Dict[str, Any]) -> Dict[str, Agent]:
         "ecommerce_marketer": Agent(
             role="E-Commerce Marketer",
             goal=f"Design an e-commerce growth system for {biz} (or a store-ready funnel if not e-commerce).",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nYou deliver funnel steps, email/SMS flows, product page optimizations, offers, and retention tactics.\nIf the business isn't e-commerce, adapt the plan to lead-gen.",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nYou deliver funnel steps, email/SMS flows, offers, retention.\nIf not e-commerce, adapt to lead-gen.",
             llm=gemini_llm,
             verbose=True,
         ),
@@ -180,21 +184,22 @@ def get_swarm_agents(inputs: Dict[str, Any]) -> Dict[str, Agent]:
         "creative": Agent(
             role="Creative Director (Assets & Prompts)",
             goal=f"Create creative direction + prompt packs for {biz}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nReturn 5 concepts, angles, and prompt packs + ad variants. Be specific.",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nReturn concepts, angles, prompts + ad variants. Be specific.",
             llm=gemini_llm,
             verbose=True,
         ),
         "seo": Agent(
             role="Search Engine Marketing (SEO)",
             goal=f"Write a local SEO authority article for {biz} in {city}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nE-E-A-T, local intent, FAQs, clear CTA. No fake stats.",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nE-E-A-T, local intent, FAQs, CTA. No fake stats.",
             llm=gemini_llm,
             verbose=True,
         ),
         "guest_posting": Agent(
             role="Guest Posting Specialist",
             goal=f"Build a guest posting plan to earn relevant backlinks and referral traffic for {biz}.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nYou produce targets, outreach templates, topic angles, and a safe anchor-text plan.\nIf you cannot validate sites, state that targets are examples and require verification.",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nYou produce targets, outreach templates, topic angles, and safe anchors.\nIf sites not validated, mark as examples.",
+            tools=research_tools,
             llm=gemini_llm,
             verbose=True,
         ),
@@ -212,15 +217,73 @@ def get_swarm_agents(inputs: Dict[str, Any]) -> Dict[str, Agent]:
             llm=gemini_llm,
             verbose=True,
         ),
+        "gbp_growth": Agent(
+            role="Google Business Profile (GBP) Growth Agent",
+            goal=f"Grow Google Business Profile visibility for {biz} in {city}.",
+            backstory=(
+                f"{SAFETY_INSTRUCTIONS}\n"
+                "You deliver:\n"
+                "- Weekly GBP posts\n"
+                "- Review reply templates (positive & negative)\n"
+                "- Keyword/service suggestions\n"
+                "- Ranking drop triage checklist (no fake rank data)\n"
+                f"Directives: {directives}\n"
+                f"URL: {url or '[missing]'}"
+            ),
+            llm=gemini_llm,
+            verbose=True,
+        ),
         "audit": Agent(
             role="Conversion UX Auditor",
             goal=f"Diagnose conversion leaks for {biz} based on the provided website.",
-            backstory=f"{SAFETY_INSTRUCTIONS}\nYou audit websites for speed, trust, mobile UX, and conversion friction.\nIf URL is missing, ask for it clearly.\nURL: {url or '[missing]'}",
+            backstory=f"{SAFETY_INSTRUCTIONS}\nAudit speed, trust, mobile UX, conversion friction.\nIf URL missing, ask for it clearly.\nURL: {url or '[missing]'}",
             tools=[scrape_tool],
             llm=gemini_llm,
             verbose=True,
         ),
     }
+
+# ============================================================
+# ROBUST OUTPUT EXTRACTION
+# ============================================================
+def _extract_output(task: Task, kickoff_result: Any) -> str:
+    # 1) crew kickoff result (often string)
+    try:
+        if kickoff_result is not None:
+            txt = str(kickoff_result).strip()
+            if txt:
+                return txt
+    except Exception:
+        pass
+
+    # 2) task.output raw-like fields
+    out = getattr(task, "output", None)
+    if out is None:
+        return ""
+
+    for attr in ("raw", "result", "text", "final", "content", "message"):
+        try:
+            v = getattr(out, attr, None)
+            if v:
+                return str(v).strip()
+        except Exception:
+            pass
+
+    # 3) dict-like
+    try:
+        if isinstance(out, dict):
+            for k in ("raw", "result", "text", "final", "content"):
+                if out.get(k):
+                    return str(out.get(k)).strip()
+            return json.dumps(out)
+    except Exception:
+        pass
+
+    # 4) last resort
+    try:
+        return str(out).strip()
+    except Exception:
+        return ""
 
 def _run_one(agent_key: str, agent: Agent, state: SwarmState) -> str:
     """Run exactly one task and return its output as text."""
@@ -228,16 +291,16 @@ def _run_one(agent_key: str, agent: Agent, state: SwarmState) -> str:
     city = state.location
     url = state.url.strip()
 
-    # Task prompts per agent
+    # Task prompts per agent (executive-ready)
     if agent_key == "market_researcher":
         desc = (
             f"Market research snapshot for {biz} in {city}.\n"
             "Return:\n"
             "1) ICP segments (3)\n"
-            "2) Problem intensity + buyer triggers\n"
-            "3) Competitor landscape (types + what they lead with)\n"
-            "4) Pricing/offer patterns (no made-up numbers)\n"
-            "5) Demand signals + top keywords (if tools available)\n"
+            "2) Buyer triggers & pains\n"
+            "3) Competitor landscape (types + positioning themes)\n"
+            "4) Offer/pricing patterns (no invented numbers)\n"
+            "5) Demand themes + keyword buckets (no fake volume)\n"
             "6) 5 opportunity angles + why\n"
         )
         expected = "Executive market research snapshot."
@@ -270,8 +333,8 @@ def _run_one(agent_key: str, agent: Agent, state: SwarmState) -> str:
             f"E-commerce growth plan for {biz} in {city}.\n"
             "If the business is NOT e-commerce, adapt the plan to lead-gen.\n"
             "Return:\n"
-            "1) Offer structure (AOV + bundles/upsells)\n"
-            "2) Conversion rate levers (PDP/checkout)\n"
+            "1) Offer structure (bundles/upsells)\n"
+            "2) Conversion levers (product/landing/checkout)\n"
             "3) Email/SMS flows (welcome, abandon, post-purchase, winback)\n"
             "4) Retention tactics\n"
             "5) 7-day sprint checklist\n"
@@ -308,10 +371,10 @@ def _run_one(agent_key: str, agent: Agent, state: SwarmState) -> str:
         desc = (
             f"Guest posting plan for {biz} in {city}.\n"
             "Return:\n"
-            "1) Target types (industry blogs, local media, partners)\n"
-            "2) 15 example targets with what angle fits them (mark as 'examples' if not verified)\n"
-            "3) 10 article topic ideas (with suggested titles)\n"
-            "4) Outreach email template + follow-up\n"
+            "1) Target site categories + how to find them\n"
+            "2) 10 pitch angles\n"
+            "3) 12 article topic titles\n"
+            "4) Outreach email template + 2 follow-ups\n"
             "5) Anchor-text plan (safe mix) + tracking checklist\n"
         )
         expected = "Guest posting plan."
@@ -325,10 +388,28 @@ def _run_one(agent_key: str, agent: Agent, state: SwarmState) -> str:
     elif agent_key == "geo":
         desc = (
             f"Create a local GEO plan for {biz} in {city}.\n"
-            "Include citations if tools are available; otherwise mark items as 'to verify'.\n"
-            "Return:\n- GBP optimization\n- Near-me targeting steps\n- Citations/citation sources checklist\n- Review strategy\n- Local content plan\n"
+            "Return:\n- GBP optimization checklist\n- Citation checklist\n- Review strategy\n- Near-me targeting steps\n- Local content ideas\n"
+            "If uncertain, explain how to verify."
         )
         expected = "Local GEO plan."
+    elif agent_key == "gbp_growth":
+        desc = (
+            f"Create a GBP Growth Pack for {biz} in {city}.\n\n"
+            "Return EXECUTIVE format with these sections:\n"
+            "1) Weekly GBP Posts (7 drafts): title + 80-150 word copy + CTA + photo idea\n"
+            "2) Review Replies:\n"
+            "   - 5 positive reply templates\n"
+            "   - 5 negative reply templates (de-escalation + resolution)\n"
+            "3) GBP Keywords & Services:\n"
+            "   - 15 keyword phrases (service + city + intent)\n"
+            "   - Primary/secondary category suggestions (state uncertainty if unknown)\n"
+            "4) Ranking Drop Triage:\n"
+            "   - Checklist (what to check)\n"
+            "   - Likely causes\n"
+            "   - Immediate actions (48 hours) + follow-up (14 days)\n\n"
+            "Rules: Do NOT invent rankings/metrics. If you need data, list it under 'Data Needed'."
+        )
+        expected = "Executive GBP Growth Pack."
     elif agent_key == "audit":
         if not url:
             return "Missing website URL. Please provide a business website URL in the sidebar."
@@ -346,20 +427,9 @@ def _run_one(agent_key: str, agent: Agent, state: SwarmState) -> str:
     task = Task(description=desc, agent=agent, expected_output=expected)
     crew = Crew(agents=[agent], tasks=[task], process=Process.sequential)
 
-    result = kickoff_with_retry(crew, retries=2, base_sleep=15)
-    # Crew kickoff often returns a string (esp. single-task crews). Fall back safely.
-    try:
-        txt = str(result).strip() if result is not None else ""
-    except Exception:
-        txt = ""
-
-    if not txt:
-        # Fallback to task.output if available
-        out = getattr(task, "output", None)
-        raw = getattr(out, "raw", None) if out is not None else None
-        txt = str(raw).strip() if raw else (str(out).strip() if out is not None else "")
-
-    return txt or "No output returned (empty response)."
+    kickoff_result = kickoff_with_retry(crew, retries=2, base_sleep=15)
+    txt = _extract_output(task, kickoff_result)
+    return txt if txt else "No output returned (empty response)."
 
 def _build_full_report(state: SwarmState, package: str) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -380,6 +450,7 @@ def _build_full_report(state: SwarmState, package: str) -> str:
         ("✍️ SEO (SEM)", state.seo),
         ("🧩 Guest Posting", state.guest_posting),
         ("📍 GEO Intelligence", state.geo),
+        ("📍 GBP Growth Pack", state.gbp_growth),
         ("📱 Social Roadmap", state.social),
         ("🌐 Website Audit", state.audit),
     ]
@@ -398,6 +469,7 @@ def run_marketing_swarm(inputs: Dict[str, Any]) -> Dict[str, str]:
     Returns keys that match app.py toggles exactly:
     analyst, ads, creative, strategist, social, geo, audit, seo,
     marketing_adviser, ecommerce_marketer, guest_posting, market_researcher,
+    gbp_growth,
     plus full_report.
     """
     inputs = inputs or {}
@@ -415,7 +487,7 @@ def run_marketing_swarm(inputs: Dict[str, Any]) -> Dict[str, str]:
     package = inputs.get("package", "Lite")
     agents = get_swarm_agents(inputs)
 
-    # Deterministic order so reports feel consistent
+    # deterministic order
     RUN_ORDER: List[str] = [
         "market_researcher",
         "analyst",
@@ -427,6 +499,7 @@ def run_marketing_swarm(inputs: Dict[str, Any]) -> Dict[str, str]:
         "seo",
         "guest_posting",
         "geo",
+        "gbp_growth",
         "social",
         "audit",
     ]
@@ -435,8 +508,6 @@ def run_marketing_swarm(inputs: Dict[str, Any]) -> Dict[str, str]:
         if key not in active:
             continue
         txt = _run_one(key, agents[key], state)
-
-        # write to state attribute with same name
         try:
             setattr(state, key, txt)
         except Exception:
@@ -457,8 +528,9 @@ def run_marketing_swarm(inputs: Dict[str, Any]) -> Dict[str, str]:
         "ecommerce_marketer": state.ecommerce_marketer,
         "guest_posting": state.guest_posting,
         "market_researcher": state.market_researcher,
+        "gbp_growth": state.gbp_growth,
         "full_report": state.full_report,
     }
 
-    # always return full_report; return selected agents too
+    # Always return full_report; return selected agents too
     return {k: v for k, v in master.items() if (k in active) or (k == "full_report")}
