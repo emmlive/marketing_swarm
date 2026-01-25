@@ -736,6 +736,39 @@ def render_guide():
     st.markdown("---")
     st.write("Unlocked agents:", unlocked_agents)
 
+# ============================================================
+# EXPORT HELPERS (FIXES NameError)
+# ============================================================
+def export_word(content: str, title: str) -> bytes:
+    doc = Document()
+    doc.add_heading(str(title), 0)
+
+    # split long text safely
+    for chunk in str(content).split("\n"):
+        doc.add_paragraph(chunk)
+
+    bio = BytesIO()
+    doc.save(bio)
+    bio.seek(0)
+    return bio.getvalue()
+
+
+def export_pdf(content: str, title: str) -> bytes:
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, str(title), ln=True)
+
+    pdf.ln(4)
+    pdf.set_font("Arial", size=10)
+
+    safe_text = str(content).encode("latin-1", "ignore").decode("latin-1")
+    pdf.multi_cell(0, 6, safe_text)
+
+    return pdf.output(dest="S").encode("latin-1")
+
 def render_seat(label: str, key: str):
     st.subheader(f"{label} Seat")
     st.caption(AGENT_SPECS.get(key, ""))
