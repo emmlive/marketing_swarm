@@ -1,9 +1,7 @@
 # ===========================
-# SwarmDigiz — app.py (Full)
+# SwarmDigiz — app.py (Robust)
 # ===========================
 import os
-import re
-import csv
 import json
 import time
 import sqlite3
@@ -32,7 +30,7 @@ PLAN_AGENT_LIMITS = {"Lite": 3, "Basic": 3, "Pro": 5, "Enterprise": 8, "Unlimite
 st.set_page_config(page_title=APP_NAME, layout="wide", initial_sidebar_state="expanded")
 
 # ============================================================
-# SESSION INIT (must occur before widgets)
+# SESSION INIT (prevents StreamlitAPIException)
 # ============================================================
 def ss_init(key: str, default):
     if key not in st.session_state:
@@ -46,7 +44,7 @@ ss_init("biz_name", "")
 ss_init("directives", "")
 ss_init("website_url", "")
 
-# swarm runner
+# Swarm runner state
 ss_init("swarm_running", False)
 ss_init("swarm_paused", False)
 ss_init("swarm_stop", False)
@@ -76,7 +74,7 @@ AGENT_UI: List[Tuple[str, str]] = [
     ("👔 Strategist", "strategist"),
     ("📱 Social", "social"),
     ("📍 GEO", "geo"),
-    ("📍 GBP Growth", "gbp_growth"),          # ✅ NEW seat
+    ("📍 GBP Growth", "gbp_growth"),
     ("🌐 Website Audit", "audit"),
     ("✍ SEO", "seo"),
 ]
@@ -98,9 +96,9 @@ AGENT_SPECS: Dict[str, str] = {
 }
 
 DEPLOY_PROTOCOL = [
-    "Configure your mission: Brand + Location + Directives + Website URL (for Audit).",
-    "Select which unlocked agents to run for this mission.",
-    "Launch Swarm. Agents run sequentially; you can Pause/Stop between agents.",
+    "Configure mission: Brand + Location + Directives + Website URL (for Audit).",
+    "Pick unlocked agents for this mission.",
+    "Launch Swarm. Agents run sequentially; you can Pause/Stop.",
     "Review each seat, refine, export Word/PDF, and save to Reports Vault.",
     "Manage execution in Team Intel (Projects + Kanban).",
 ]
@@ -113,7 +111,7 @@ SOCIAL_PUSH_PLATFORMS = [
 ]
 
 # ============================================================
-# THEME (Night/Day + compact spacing + animated sidebar width)
+# THEME CSS (readable input text + tight sidebar + animation)
 # ============================================================
 def inject_theme_css():
     mode = st.session_state.get("theme_mode", "Night")
@@ -152,13 +150,11 @@ def inject_theme_css():
           linear-gradient(180deg, {bg} 0%, {bg} 100%);
       }}
 
-      /* readable text */
       .stApp, .stApp p, .stApp li, .stApp h1, .stApp h2, .stApp h3, .stApp h4 {{
         color: {text} !important;
       }}
       .ms-muted {{ color: {muted} !important; }}
 
-      /* cards */
       .ms-card {{
         border: 1px solid {border};
         border-radius: 16px;
@@ -177,7 +173,7 @@ def inject_theme_css():
         font-size:12px;
       }}
 
-      /* inputs visible in dark mode */
+      /* inputs visible */
       .stTextInput input,
       .stTextArea textarea {{
         background: {input_bg} !important;
@@ -197,7 +193,6 @@ def inject_theme_css():
         border-radius: 10px !important;
       }}
 
-      /* sidebar sizing + animation */
       section[data-testid="stSidebar"] {{
         width: {sbw} !important;
         transition: width 240ms ease-in-out;
@@ -208,7 +203,6 @@ def inject_theme_css():
         padding: {pad};
       }}
 
-      /* tighter sidebar spacing */
       section[data-testid="stSidebar"] .stMarkdown,
       section[data-testid="stSidebar"] .stTextInput,
       section[data-testid="stSidebar"] .stTextArea,
@@ -219,17 +213,7 @@ def inject_theme_css():
       section[data-testid="stSidebar"] .stCheckbox {{
         margin-bottom: {widget_gap} !important;
       }}
-      section[data-testid="stSidebar"] label {{
-        margin-bottom: 0.15rem !important;
-        font-size: 0.85rem !important;
-        opacity: .96 !important;
-      }}
-      section[data-testid="stSidebar"] hr {{
-        margin: 0.7rem 0 !important;
-        border-color: {border};
-      }}
 
-      /* tabs spacing */
       .stTabs [data-baseweb="tab-list"] {{ gap: 6px; }}
 
       #MainMenu {{visibility:hidden;}}
@@ -240,7 +224,7 @@ def inject_theme_css():
 inject_theme_css()
 
 # ============================================================
-# DB
+# DB + HELPERS
 # ============================================================
 def db_conn() -> sqlite3.Connection:
     return sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -438,13 +422,23 @@ def normalize_role(role: str) -> str:
     role = (role or "").strip().lower()
     return role if role in {"viewer","editor","admin","root"} else "viewer"
 
+def active_user_count(team_id: str) -> int:
+    conn = db_conn()
+    df = pd.read_sql_query("SELECT COUNT(*) AS n FROM users WHERE team_id=? AND active=1 AND role!='root'", conn, params=(team_id,))
+    conn.close()
+    return int(df.iloc[0]["n"] or 0)
+
+def seats_allowed_for_team(team_id: str) -> int:
+    org = get_org(team_id)
+    plan = str(org.get("plan", "Lite"))
+    return int(org.get("seats_allowed") or PLAN_SEATS.get(plan, 1))
+
 PERMISSIONS = {
     "viewer": {"read"},
     "editor": {"read"},
     "admin": {"read", "user_manage", "export", "project_manage"},
     "root": {"*"},
 }
-
 def can(role: str, perm: str) -> bool:
     perms = PERMISSIONS.get(normalize_role(role), {"read"})
     return "*" in perms or perm in perms or perm == "read"
@@ -474,6 +468,31 @@ def get_allowed_agents(team_id: str) -> List[str]:
     return auto
 
 # ============================================================
+# EXPORT HELPERS
+# ============================================================
+def export_word(content: str, title: str) -> bytes:
+    doc = Document()
+    doc.add_heading(str(title), 0)
+    for line in str(content).split("\n"):
+        doc.add_paragraph(line)
+    bio = BytesIO()
+    doc.save(bio)
+    bio.seek(0)
+    return bio.getvalue()
+
+def export_pdf(content: str, title: str) -> bytes:
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, str(title), ln=True)
+    pdf.ln(4)
+    pdf.set_font("Arial", size=10)
+    safe_text = str(content).encode("latin-1", "ignore").decode("latin-1")
+    pdf.multi_cell(0, 6, safe_text)
+    return pdf.output(dest="S").encode("latin-1")
+
+# ============================================================
 # AUTH
 # ============================================================
 def get_db_creds():
@@ -500,12 +519,15 @@ def login_page():
     </div>
     """, unsafe_allow_html=True)
 
-    tabs = st.tabs(["Login", "Forgot Password", "Pricing (placeholder)"])
+    tabs = st.tabs(["Login", "Forgot Password", "Team Intel Login", "Pricing (placeholder)"])
     with tabs[0]:
         authenticator.login(location="main")
     with tabs[1]:
         authenticator.forgot_password(location="main")
     with tabs[2]:
+        st.info("Team Intel is available after login. Your Org Admin provides your username/password and Team ID.")
+        st.markdown("- If you are a Viewer: read-only access.\n- If you are an Admin: full org management tools.")
+    with tabs[3]:
         st.markdown("""
         <div class="ms-card">
           <b>Pricing (placeholder)</b> <span class="ms-chip">Move to Landing Page</span>
@@ -577,14 +599,12 @@ with st.sidebar:
     st.selectbox("⏱ Auto-run delay", [1,3,5], key="swarm_autodelay")
 
     with st.expander("🤖 Swarm Personnel", expanded=True):
-        st.caption("Pick unlocked agents for this mission (locked agents grayed out).")
+        st.caption("Pick unlocked agents (locked agents grayed out).")
         for label, key in AGENT_UI:
             k = f"tg_{key}"
             ss_init(k, False)
             locked = (not is_root) and (key not in unlocked_agents)
             st.toggle(label, key=k, disabled=locked)
-            if locked:
-                st.caption(f"🔒 Locked: {key}")
 
     st.divider()
 
@@ -636,7 +656,7 @@ with st.sidebar:
     authenticator.logout("🔒 Sign Out", "sidebar")
 
 # ============================================================
-# SWARM RUNNER (one-by-one + delay)
+# SWARM RUNNER
 # ============================================================
 def is_placeholder(val: Any) -> bool:
     if val is None:
@@ -658,7 +678,7 @@ def run_one(agent_key: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     p["active_swarm"] = [agent_key]
     return run_marketing_swarm(p) or {}
 
-# progress banner on main page
+# banner
 if st.session_state["swarm_running"]:
     q = st.session_state["swarm_queue"]
     idx = int(st.session_state["swarm_idx"])
@@ -666,7 +686,7 @@ if st.session_state["swarm_running"]:
     st.markdown(f"""
     <div class="ms-card">
       <b>🚀 Swarm Running</b> <span class="ms-chip">Next: {nxt}</span>
-      <div class="ms-muted">You can navigate seats while it runs. Enable/disable notification in sidebar.</div>
+      <div class="ms-muted">Navigate seats while it runs. Toggle completion notification in sidebar.</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -699,13 +719,43 @@ if st.session_state["swarm_running"] and (not st.session_state["swarm_paused"]) 
         st.session_state["report"] = rep
 
         st.session_state["swarm_idx"] = idx + 1
-
-        if st.session_state["swarm_autorun"]:
-            st.session_state["swarm_next_ts"] = time.time() + float(st.session_state["swarm_autodelay"])
-        else:
+        st.session_state["swarm_next_ts"] = time.time() + float(st.session_state["swarm_autodelay"]) if st.session_state["swarm_autorun"] else 10**12
+        if not st.session_state["swarm_autorun"]:
             st.session_state["swarm_paused"] = True
 
         st.rerun()
+
+# ============================================================
+# NEW: REPORT INTEGRITY CHECK + PER-AGENT RETRY
+# ============================================================
+def report_integrity(report: Dict[str, Any], selected: List[str]) -> pd.DataFrame:
+    rows = []
+    for _lbl, k in AGENT_UI:
+        if k not in selected:
+            continue
+        val = report.get(k, "")
+        status = "OK" if (val and not is_placeholder(val)) else "EMPTY"
+        rows.append({
+            "agent": k,
+            "status": status,
+            "chars": len(str(val or "")),
+        })
+    return pd.DataFrame(rows)
+
+def retry_agent(agent_key: str):
+    payload = dict(st.session_state.get("swarm_payload") or {})
+    if not payload:
+        st.error("No mission payload found. Launch a swarm first.")
+        return
+    with st.status(f"Retrying {agent_key}…", expanded=False):
+        out = run_one(agent_key, payload)
+    rep = dict(st.session_state.get("report") or {})
+    if agent_key in out:
+        rep[agent_key] = out.get(agent_key)
+    rep["full_report"] = build_full_report(payload, rep)
+    st.session_state["report"] = rep
+    st.toast(f"✅ Retried {agent_key}", icon="✅")
+    st.rerun()
 
 # ============================================================
 # GUIDE + SEATS
@@ -714,15 +764,15 @@ def seat_how_to_use(agent_key: str) -> str:
     guides = {
         "analyst": "Set pricing & offers based on competitor gaps, then pick a 30-day push.",
         "marketing_adviser": "Pick channel priorities + messaging pillars + weekly KPIs.",
-        "market_researcher": "Refine ICP + segments + demand themes. Use for content + ads targeting.",
-        "ecommerce_marketer": "Implement offer ladder + flows (welcome/abandon/winback) + remarketing.",
-        "ads": "Paste tables into Google/Meta. Replace claims with proof points.",
+        "market_researcher": "Refine ICP + segments + demand themes. Use for targeting.",
+        "ecommerce_marketer": "Implement offers + flows + remarketing.",
+        "ads": "Paste into Google/Meta. Replace claims with proof points.",
         "creative": "Brief designers + use prompts in Canva/Midjourney/Runway.",
-        "guest_posting": "Pitch sites using templates; track outreach in Projects.",
-        "strategist": "Turn roadmap into tasks and weekly reviews.",
-        "social": "Schedule calendar; recycle best hooks into ads.",
+        "guest_posting": "Use templates to pitch sites; track outreach in Projects.",
+        "strategist": "Convert roadmap into tasks + weekly reviews.",
+        "social": "Schedule calendar; recycle hooks into ads.",
         "geo": "Apply GBP checklist + citations + review system weekly.",
-        "gbp_growth": "Post weekly on GBP, reply to reviews, monitor ranking signals and triage drops.",
+        "gbp_growth": "Post weekly on GBP, reply to reviews, triage ranking drops.",
         "audit": "Fix top friction; re-run after changes.",
         "seo": "Publish pillar + build supporting cluster pages.",
     }
@@ -733,41 +783,24 @@ def render_guide():
     st.markdown("### How to deploy agent outputs")
     for line in DEPLOY_PROTOCOL:
         st.markdown(f"- {line}")
+
     st.markdown("---")
-    st.write("Unlocked agents:", unlocked_agents)
+    st.subheader("Report Integrity Check")
+    rep = st.session_state.get("report", {}) or {}
+    selected = st.session_state.get("last_active_swarm", []) or []
+    if not selected:
+        st.info("Run a swarm to see integrity.")
+        return
 
-# ============================================================
-# EXPORT HELPERS (FIXES NameError)
-# ============================================================
-def export_word(content: str, title: str) -> bytes:
-    doc = Document()
-    doc.add_heading(str(title), 0)
+    df = report_integrity(rep, selected)
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
-    # split long text safely
-    for chunk in str(content).split("\n"):
-        doc.add_paragraph(chunk)
-
-    bio = BytesIO()
-    doc.save(bio)
-    bio.seek(0)
-    return bio.getvalue()
-
-
-def export_pdf(content: str, title: str) -> bytes:
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=14)
-    pdf.add_page()
-
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, str(title), ln=True)
-
-    pdf.ln(4)
-    pdf.set_font("Arial", size=10)
-
-    safe_text = str(content).encode("latin-1", "ignore").decode("latin-1")
-    pdf.multi_cell(0, 6, safe_text)
-
-    return pdf.output(dest="S").encode("latin-1")
+    st.caption("Retry any EMPTY agent below:")
+    cols = st.columns(4)
+    empty = [r["agent"] for r in df.to_dict("records") if r["status"] == "EMPTY"]
+    for i, a in enumerate(empty):
+        with cols[i % 4]:
+            st.button(f"Retry {a}", key=f"retry_from_integrity_{a}", on_click=retry_agent, args=(a,), use_container_width=True)
 
 def render_seat(label: str, key: str):
     st.subheader(f"{label} Seat")
@@ -776,15 +809,20 @@ def render_seat(label: str, key: str):
 
     rep = st.session_state.get("report", {}) or {}
     if key not in rep or is_placeholder(rep.get(key)):
-        st.warning("No report yet. Select agent + run Swarm.")
+        st.warning("No report yet for this seat. Select agent + run Swarm.")
+        # Per-agent retry if it was selected
+        if key in (st.session_state.get("last_active_swarm") or []):
+            st.button("🔁 Retry this agent", key=f"retry_in_seat_{key}", on_click=retry_agent, args=(key,))
         return
 
     edited = st.text_area("Refine Intel", value=str(rep.get(key)), height=380, key=f"ed_{key}")
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     with c1:
         st.download_button("📄 Word", export_word(edited, label), file_name=f"{key}.docx", key=f"w_{key}", use_container_width=True)
     with c2:
         st.download_button("📕 PDF", export_pdf(edited, label), file_name=f"{key}.pdf", key=f"p_{key}", use_container_width=True)
+    with c3:
+        st.button("🔁 Retry", key=f"retry_btn_{key}", on_click=retry_agent, args=(key,), use_container_width=True)
 
     if key in {"ads", "creative", "social", "gbp_growth"}:
         st.markdown("---")
@@ -796,7 +834,59 @@ def render_seat(label: str, key: str):
                 st.link_button(nm, url)
 
 # ============================================================
-# TEAM INTEL (same layout; viewers read-only)
+# DRAG-LIKE KANBAN (no custom component needed)
+# ============================================================
+def kanban_board(team_id: str, editable: bool):
+    stages = ["Discovery", "Execution", "ROI Verified"]
+    conn = db_conn()
+    df = pd.read_sql_query("SELECT id,title,city,service,stage,created_at FROM leads WHERE team_id=? ORDER BY id DESC", conn, params=(team_id,))
+    conn.close()
+
+    cols = st.columns(3)
+    for i, stage in enumerate(stages):
+        with cols[i]:
+            st.markdown(f"### {stage}")
+            sdf = df[df["stage"] == stage] if not df.empty else pd.DataFrame()
+            for _, r in sdf.iterrows():
+                st.markdown(
+                    f"<div class='ms-card'><b>{r['title']}</b><br>"
+                    f"<span class='ms-muted'>{r.get('city','')} • {r.get('service','')}</span></div>",
+                    unsafe_allow_html=True
+                )
+                if editable:
+                    next_stage = stages[i+1] if i < 2 else stages[i]
+                    prev_stage = stages[i-1] if i > 0 else stages[i]
+                    b1, b2 = st.columns(2)
+                    with b1:
+                        if st.button("⬅ Move", key=f"move_back_{r['id']}"):
+                            conn = db_conn()
+                            conn.execute("UPDATE leads SET stage=? WHERE id=? AND team_id=?", (prev_stage, int(r["id"]), team_id))
+                            conn.commit(); conn.close()
+                            st.rerun()
+                    with b2:
+                        if st.button("Move ➡", key=f"move_fwd_{r['id']}"):
+                            conn = db_conn()
+                            conn.execute("UPDATE leads SET stage=? WHERE id=? AND team_id=?", (next_stage, int(r["id"]), team_id))
+                            conn.commit(); conn.close()
+                            st.rerun()
+
+    st.markdown("---")
+    st.subheader("Bulk move (fast)")
+    if df.empty:
+        st.info("No leads.")
+        return
+    editable_df = df[["id","title","stage"]].copy()
+    edited = st.data_editor(editable_df, use_container_width=True, hide_index=True, disabled=(not editable))
+    if editable and st.button("Save stage changes", use_container_width=True):
+        conn = db_conn()
+        for _, row in edited.iterrows():
+            conn.execute("UPDATE leads SET stage=? WHERE id=? AND team_id=?", (row["stage"], int(row["id"]), team_id))
+        conn.commit(); conn.close()
+        st.success("Updated.")
+        st.rerun()
+
+# ============================================================
+# TEAM INTEL (viewer minimal, admin full — same layout)
 # ============================================================
 def render_team_intel():
     st.header("🤝 Team Intel")
@@ -808,16 +898,13 @@ def render_team_intel():
     def viewer_notice():
         st.info("Viewer access: read-only. Ask Org Admin for create/edit access.")
 
-    # Projects
     with tabs[0]:
         conn = db_conn()
         df = pd.read_sql_query("SELECT id,name,owner,status,created_at FROM projects WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
         conn.close()
         st.dataframe(df, use_container_width=True, hide_index=True)
 
-        if not is_admin_like:
-            viewer_notice()
-        else:
+        if is_admin_like:
             with st.expander("➕ New Project", expanded=False):
                 with st.form("proj_new"):
                     name = st.text_input("Project name")
@@ -833,22 +920,11 @@ def render_team_intel():
                     log_audit(my_team, me["username"], my_role, "project.create", "project", "", name)
                     st.success("Created.")
                     st.rerun()
+        else:
+            viewer_notice()
 
-    # Kanban
     with tabs[1]:
-        stages = ["Discovery","Execution","ROI Verified"]
-        conn = db_conn()
-        ldf = pd.read_sql_query("SELECT * FROM leads WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
-        conn.close()
-
-        cols = st.columns(3)
-        for i, stage in enumerate(stages):
-            with cols[i]:
-                st.markdown(f"### {stage}")
-                sdf = ldf[ldf["stage"] == stage] if not ldf.empty else pd.DataFrame()
-                for _, r in sdf.iterrows():
-                    st.markdown(f"<div class='ms-card'><b>{r.get('title','')}</b><br><span class='ms-muted'>{r.get('city','')} • {r.get('service','')}</span></div>", unsafe_allow_html=True)
-
+        kanban_board(my_team, editable=is_admin_like)
         if not is_admin_like:
             viewer_notice()
         else:
@@ -857,7 +933,7 @@ def render_team_intel():
                     title = st.text_input("Lead title")
                     city = st.text_input("City")
                     service = st.text_input("Service")
-                    stage = st.selectbox("Stage", stages, index=0)
+                    stage = st.selectbox("Stage", ["Discovery","Execution","ROI Verified"], index=0)
                     submit = st.form_submit_button("Create", use_container_width=True)
                 if submit:
                     conn = db_conn()
@@ -865,47 +941,43 @@ def render_team_intel():
                                  (my_team,title,city,service,stage))
                     conn.commit(); conn.close()
                     log_audit(my_team, me["username"], my_role, "lead.create", "lead", "", title)
-                    st.success("Created.")
+                    st.success("Lead created.")
                     st.rerun()
 
-    # Vault
     with tabs[2]:
         conn = db_conn()
         vdf = pd.read_sql_query("SELECT id,name,biz_name,location,created_by,created_at FROM reports_vault WHERE team_id=? ORDER BY id DESC", conn, params=(my_team,))
         conn.close()
         st.dataframe(vdf, use_container_width=True, hide_index=True)
 
-        if not is_admin_like:
+        rep = st.session_state.get("report", {}) or {}
+        if is_admin_like and rep:
+            with st.form("vault_save"):
+                name = st.text_input("Report name", value=f"{st.session_state.get('biz_name','Report')} • {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+                submit = st.form_submit_button("Save Current Report", use_container_width=True)
+            if submit:
+                payload = st.session_state.get("swarm_payload", {}) or {}
+                conn = db_conn()
+                conn.execute("""
+                    INSERT INTO reports_vault (team_id,name,created_by,location,biz_name,selected_agents_json,report_json,full_report)
+                    VALUES (?,?,?,?,?,?,?,?)
+                """, (my_team,name,me["username"],payload.get("city",""),payload.get("biz_name",""),
+                      json.dumps(st.session_state.get("last_active_swarm",[])), json.dumps(rep), rep.get("full_report","")))
+                conn.commit(); conn.close()
+                log_audit(my_team, me["username"], my_role, "vault.save", "report", "", name)
+                st.success("Saved.")
+                st.rerun()
+        elif not is_admin_like:
             viewer_notice()
-        else:
-            rep = st.session_state.get("report", {}) or {}
-            if rep:
-                with st.form("vault_save"):
-                    name = st.text_input("Report name", value=f"{st.session_state.get('biz_name','Report')} • {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-                    submit = st.form_submit_button("Save Current Report", use_container_width=True)
-                if submit:
-                    conn = db_conn()
-                    conn.execute("""
-                        INSERT INTO reports_vault (team_id,name,created_by,location,biz_name,selected_agents_json,report_json,full_report)
-                        VALUES (?,?,?,?,?,?,?,?)
-                    """, (my_team,name,me["username"],st.session_state["swarm_payload"].get("city",""),st.session_state.get("biz_name",""),
-                          json.dumps(st.session_state.get("last_active_swarm",[])), json.dumps(rep), rep.get("full_report","")))
-                    conn.commit(); conn.close()
-                    log_audit(my_team, me["username"], my_role, "vault.save", "report", "", name)
-                    st.success("Saved.")
-                    st.rerun()
 
-    # Users/RBAC
     with tabs[3]:
         conn = db_conn()
         udf = pd.read_sql_query("SELECT username,name,email,role,credits,active,last_login_at,created_at FROM users WHERE team_id=? AND role!='root' ORDER BY created_at DESC", conn, params=(my_team,))
         conn.close()
         st.dataframe(udf, use_container_width=True, hide_index=True)
 
-        if not is_admin_like:
-            viewer_notice()
-        else:
-            st.caption(f"Seats: {active_user_count(my_team)}/{get_org(my_team).get('seats_allowed',1)}")
+        if is_admin_like:
+            st.caption(f"Seats: {active_user_count(my_team)}/{seats_allowed_for_team(my_team)}")
             with st.expander("➕ Add User", expanded=False):
                 with st.form("add_user"):
                     u = st.text_input("Username")
@@ -922,8 +994,9 @@ def render_team_intel():
                     log_audit(my_team, me["username"], my_role, "user.create", "user", u, f"role={r}")
                     st.success("User created.")
                     st.rerun()
+        else:
+            viewer_notice()
 
-    # Logs
     with tabs[4]:
         conn = db_conn()
         logs = pd.read_sql_query("SELECT timestamp,actor,actor_role,action_type,object_type,object_id,details FROM audit_logs WHERE team_id=? ORDER BY id DESC LIMIT 250", conn, params=(my_team,))
@@ -938,7 +1011,6 @@ def render_root_admin():
     st.caption("Manage orgs, plans, allowed agents, and logs.")
 
     tabs = st.tabs(["🏢 Orgs", "🪄 Plan → Auto Agents", "📜 Global Logs"])
-
     with tabs[0]:
         conn = db_conn()
         odf = pd.read_sql_query("SELECT team_id,org_name,plan,seats_allowed,status,allowed_agents_json,created_at FROM orgs ORDER BY created_at DESC", conn)
@@ -965,7 +1037,7 @@ def render_root_admin():
         st.dataframe(gdf, use_container_width=True, hide_index=True)
 
 # ============================================================
-# MAIN TABS (easy navigation)
+# MAIN TABS
 # ============================================================
 tab_labels = ["📖 Guide"] + [lbl for lbl, _ in AGENT_UI] + ["🤝 Team Intel"]
 if my_role in {"admin","root"}:
